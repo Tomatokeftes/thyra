@@ -3,7 +3,7 @@ import zarr
 import numpy as np
 from pathlib import Path
 from collections import defaultdict
-from imzml2zarr.imzml.convertor import convert_to_store, _get_xarray_axes, ImzMLToZarrConvertor
+from msiconvert.imzml.convertor import convert_to_store, _get_xarray_axes, ImzMLToZarrConvertor
 
 @pytest.fixture
 def continuous_imzml_files():

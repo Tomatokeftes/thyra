@@ -1,7 +1,7 @@
 import pytest
 from pathlib import Path
 from lxml import etree
-from imzml2zarr.imzml.checker import ImzMLChecker, check_uuid
+from msiconvert.imzml.checker import ImzMLChecker, check_uuid
 
 MZML_PREFIX = '{http://psi.hupo.org/ms/mzml}'
 IMZML_UUID_ACCESSOR = 'IMS:1000080'

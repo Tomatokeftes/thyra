@@ -1,6 +1,6 @@
 import pytest
 from pathlib import Path
-from imzml2zarr.imzml.format import ImzMLFormat, NotImplementedClass
+from msiconvert.imzml.format import ImzMLFormat, NotImplementedClass
 
 def test_imzml_format_initialization():
     """Test ImzMLFormat initialization and basic properties."""

@@ -1,7 +1,7 @@
 import pytest
 import zarr
 from pathlib import Path
-from imzml2zarr.utils.temp_store import multi_temp_stores, single_temp_store, temp_store_factory
+from msiconvert.utils.temp_store import multi_temp_stores, single_temp_store, temp_store_factory
 
 def test_single_temp_store():
     """Test that single_temp_store creates and cleans up a single TempStore."""

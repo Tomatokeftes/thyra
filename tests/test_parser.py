@@ -1,6 +1,6 @@
 import pytest
 from pathlib import Path
-from imzml2zarr.imzml.parser import ImzMLParser, ImageChannel
+from msiconvert.imzml.parser import ImzMLParser, ImageChannel
 
 @pytest.fixture
 def imzml_file(tmp_path):
