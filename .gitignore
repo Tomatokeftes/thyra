@@ -1,0 +1,4 @@
+*.pyc
+.vscode
+.pytest_cache
+*zarr
