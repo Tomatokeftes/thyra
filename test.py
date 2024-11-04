@@ -119,20 +119,16 @@
 import logging
 from pathlib import Path
 import cProfile
-import pstats
-from imzml2zarr.imzml.convertor import ImzMLToZarrConvertor
+from msiconvert.imzml.convertor import ImzMLToZarrConvertor
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
-
-
-
 
 def main():
     # Paths to your actual imzML and ibd files
     imzml_file = Path(r"C:\Users\tvisv\OneDrive\Desktop\Taste of MSI\rsc Taste of MSI\Ingredient Classification MALDI\Downbinned\20240605_pea_pos.imzML")
     ibd_file = Path(r"C:\Users\tvisv\OneDrive\Desktop\Taste of MSI\rsc Taste of MSI\Ingredient Classification MALDI\Downbinned\20240605_pea_pos.ibd")
-    output_dir = Path("pea_continuous_dask.zarr")
+    output_dir = Path("pea_downbinned_rechunker.zarr")
 
     # Initialize converter
     converter = ImzMLToZarrConvertor(imzml_file, ibd_file)
@@ -151,14 +147,9 @@ if __name__ == "__main__":
     profiler.disable()
 
     # Save profile results to a file
-    profile_path = "conversion_profile_dask.prof"
+    profile_path = "profile_rechunker.prof"
     profiler.dump_stats(profile_path)
     logging.info(f"Profiling results saved to {profile_path}")
-
-    # Optionally, print top results to the console
-    stats = pstats.Stats(profiler).sort_stats('cumulative')
-    stats.print_stats(20)  # Show the top 20 results by cumulative time
-
 
 
 ##############################################
@@ -169,7 +160,7 @@ if __name__ == "__main__":
 # import xarray as xr
 
 # # Load the Zarr store
-# zarr_path = r"C:\Users\tvisv\Downloads\MSIConverter\test_processed.zarr"  # Replace with your actual Zarr path
+# zarr_path = r"C:\Users\tvisv\Downloads\MSIConverter\pea_original_dask.zarr"  # Replace with your actual Zarr path
 # # Load the Zarr data into an Xarray dataset
 # ds = xr.open_zarr(zarr_path)
 
@@ -190,7 +181,7 @@ if __name__ == "__main__":
 # import xarray as xr
 
 # # Load the Zarr file (assuming it's in a folder named 'output.zarr')
-# zarr_path = r"C:\Users\tvisv\Downloads\MSIConverter\pea_processed.zarr"
+# zarr_path = r"C:\Users\tvisv\Downloads\MSIConverter\pea_downbinned_dask.zarr"
 # ds = xr.open_zarr(zarr_path)
 
 # # Print metadata from the Dataset's attributes

@@ -6,8 +6,12 @@ from typing import List, Tuple
 
 import numpy as np
 import zarr
+from numcodecs import Blosc
+from rechunker import rechunk
 
 from pyimzml.ImzMLParser import ImzMLParser as PyImzMLParser
+import dask.array as da
+from dask.diagnostics import ProgressBar
 
 from ..utils.temp_store import single_temp_store
 from .utils import get_imzml_pair
@@ -40,27 +44,64 @@ def load_parser(imzml: Path, ibd: Path):
         yield PyImzMLParser(
             filename=str(imzml),
             parse_lib="lxml",
-            ibd_file=ibd_file  # the ibd file must be opened manually
+            ibd_file=ibd_file 
         )
 
 
-def copy_array(source: zarr.Array, destination: zarr.Array) -> None:
+def copy_array(source: zarr.Array, destination: zarr.Array, optimal_chunk_size=("auto", "auto", "auto", "auto")) -> None:
     """
-    Copy an array; ragged arrays not supported.
-
+    Copy an array using Dask for better parallelism and chunk management, with a progress bar.
+    
     Parameters:
     -----------
     source : zarr.Array
         The source array to copy from.
     destination : zarr.Array
         The destination array to copy to.
+    optimal_chunk_size : tuple
+        The optimal chunk size to use for reducing task graph overhead.
     """
-    if source.nbytes <= _DISK_COPY_THRESHOLD:
-        # Load all data in memory then write at once for speed
-        destination[:] = source[:]
-    else:
-        # Chunk-by-chunk loading for smaller memory footprint
-        destination[:] = source
+    # Convert the source Zarr array to a Dask array
+    dask_source = da.from_zarr(source)
+
+    # Rechunk the array to a more optimal size if necessary
+    if dask_source.chunksize != optimal_chunk_size:
+        dask_source = dask_source.rechunk(optimal_chunk_size)
+
+    # Copy the Dask array to the destination Zarr store
+    da.store(dask_source, destination, lock=False)
+
+    
+
+def convert_to_store(name: str, source_dir: Path, dest_store: zarr.DirectoryStore, imzml_filename: str, ibd_filename: str) -> None:
+    """Convert a specific imzML file pair to a Zarr group."""
+    pair = get_imzml_pair(source_dir, imzml_filename, ibd_filename)
+
+    if pair is None:
+        raise ValueError("The specified imzML and ibd files were not found in the directory.")
+
+    with load_parser(*pair) as parser:
+        is_continuous = "continuous" in parser.metadata.file_description.param_by_name
+        is_processed = "processed" in parser.metadata.file_description.param_by_name
+
+        print(f"File identified as {'processed' if is_processed else 'continuous'}")
+
+        if is_continuous == is_processed:
+            raise ValueError("Invalid file mode, expected either 'continuous' or 'processed'.")
+
+        root = zarr.group(store=dest_store)
+
+        if is_continuous:
+            _ContinuousImzMLConvertor(root, name, parser).run()
+        else:
+            _ProcessedImzMLConvertor(root, name, parser).run()
+            
+
+
+
+def _get_xarray_axes(root: zarr.Group) -> List[str]:
+    """Return axes metadata for Xarray compatibility."""
+    return root.attrs['multiscales'][0]['axes']
 
 
 class _BaseImzMLConvertor(abc.ABC):
@@ -152,15 +193,17 @@ class _ContinuousImzMLConvertor(_BaseImzMLConvertor):
             shape=self.get_intensity_shape(),
             dtype=self.parser.intensityPrecision,
         )
+        compressor = zarr.Blosc(cname='zstd', clevel=5, shuffle=Blosc.BITSHUFFLE)
         intensities.attrs['_ARRAY_DIMENSIONS'] = _get_xarray_axes(self.root)
         self.root.zeros(
             'labels/mzs/0',
             shape=self.get_intensity_shape(),
             dtype=self.parser.mzPrecision,
-            compressor=None,
+            compressor=compressor,
         )
 
     def read_binary_data(self) -> None:
+        compressor = zarr.Blosc(cname='zstd', clevel=5, shuffle=Blosc.BITSHUFFLE)
         intensities = self.root[0]
         mzs = self.root['labels/mzs/0']
         with single_temp_store() as fast_store:
@@ -169,7 +212,7 @@ class _ContinuousImzMLConvertor(_BaseImzMLConvertor):
                 shape=intensities.shape,
                 dtype=intensities.dtype,
                 chunks=(-1, 1, 1, 1),
-                compressor=None,
+                compressor=compressor,
             )
             self.parser.m.seek(self.parser.mzOffsets[0])
             mzs[:, 0, 0, 0] = np.fromfile(
@@ -180,7 +223,8 @@ class _ContinuousImzMLConvertor(_BaseImzMLConvertor):
                 fast_intensities[:, 0, y - 1, x - 1] = np.fromfile(
                     self.parser.m, count=self.parser.intensityLengths[idx], dtype=self.parser.intensityPrecision
                 )
-            copy_array(fast_intensities, intensities)
+            with ProgressBar():
+                copy_array(fast_intensities, intensities)
 
 
 class _ProcessedImzMLConvertor(_BaseImzMLConvertor):
@@ -201,22 +245,24 @@ class _ProcessedImzMLConvertor(_BaseImzMLConvertor):
             shape=self.get_intensity_shape(),
             dtype=self.parser.intensityPrecision,
         )
+        compressor = zarr.Blosc(cname='zstd', clevel=5, shuffle=Blosc.BITSHUFFLE)
         intensities.attrs['_ARRAY_DIMENSIONS'] = _get_xarray_axes(self.root)
         self.root.zeros(
             'labels/mzs/0',
             shape=self.get_intensity_shape(),
             dtype=self.parser.mzPrecision,
-            compressor=None,
+            compressor=compressor,
         )
         # Adjust the shape of lengths array
         self.root.zeros(
             'labels/lengths/0',
             shape=(1, 1, self.parser.imzmldict['max count of pixels y'], self.parser.imzmldict['max count of pixels x']),
             dtype=np.uint32,
-            compressor=None,
+            compressor=compressor,
         )
 
     def read_binary_data(self) -> None:
+        compressor = zarr.Blosc(cname='zstd', clevel=5, shuffle=Blosc.BITSHUFFLE)
         intensities = self.root[0]
         mzs = self.root['labels/mzs/0']
         lengths = self.root['labels/lengths/0']
@@ -228,14 +274,14 @@ class _ProcessedImzMLConvertor(_BaseImzMLConvertor):
                 shape=intensities.shape,
                 dtype=intensities.dtype,
                 chunks=(-1, 1, 1, 1),
-                compressor=None,
+                compressor=compressor,
             )
             fast_mzs = fast_group.zeros(
                 'mzs',
                 shape=mzs.shape,
                 dtype=mzs.dtype,
                 chunks=(-1, 1, 1, 1),
-                compressor=None,
+                compressor=compressor,
             )
             for idx, (x, y, _) in enumerate(self.parser.coordinates):
                 length = self.parser.mzLengths[idx]
@@ -244,38 +290,10 @@ class _ProcessedImzMLConvertor(_BaseImzMLConvertor):
                 spectra = self.parser.getspectrum(idx)
                 fast_mzs[:length, 0, y - 1, x - 1] = spectra[0]
                 fast_intensities[:length, 0, y - 1, x - 1] = spectra[1]
-            copy_array(fast_intensities, intensities)
-            copy_array(fast_mzs, mzs)
+            with ProgressBar():
+                copy_array(fast_intensities, intensities)
+                copy_array(fast_mzs, mzs)   
 
-
-
-def convert_to_store(name: str, source_dir: Path, dest_store: zarr.DirectoryStore, imzml_filename: str, ibd_filename: str) -> None:
-    """Convert a specific imzML file pair to a Zarr group."""
-    pair = get_imzml_pair(source_dir, imzml_filename, ibd_filename)
-
-    if pair is None:
-        raise ValueError("The specified imzML and ibd files were not found in the directory.")
-
-    with load_parser(*pair) as parser:
-        is_continuous = "continuous" in parser.metadata.file_description.param_by_name
-        is_processed = "processed" in parser.metadata.file_description.param_by_name
-
-        if is_continuous == is_processed:
-            raise ValueError("Invalid file mode, expected either 'continuous' or 'processed'.")
-
-        root = zarr.group(store=dest_store)
-
-        if is_continuous:
-            _ContinuousImzMLConvertor(root, name, parser).run()
-        else:
-            _ProcessedImzMLConvertor(root, name, parser).run()
-            
-    print(f"File identified as {'processed' if is_processed else 'continuous'}")
-
-
-def _get_xarray_axes(root: zarr.Group) -> List[str]:
-    """Return axes metadata for Xarray compatibility."""
-    return root.attrs['multiscales'][0]['axes']
 
 class ImzMLToZarrConvertor:
     """Standalone converter class for converting ImzML to Zarr format."""
@@ -322,8 +340,17 @@ class ImzMLToZarrConvertor:
 
             try:
                 # Execute the actual conversion with specific filenames
-                convert_to_store(name, self.imzml_file.parent, dest_store, 
-                                 self.imzml_file.name, self.ibd_file.name)
+                convert_to_store(
+                    name,
+                    self.imzml_file.parent,
+                    dest_store,
+                    self.imzml_file.name,
+                    self.ibd_file.name,
+                )
+
+                # **Consolidate metadata after successful conversion**
+                zarr.consolidate_metadata(str(dest_path))
+
             except (ValueError, KeyError) as error:
                 logging.error("Conversion error", exc_info=error)
                 return False
