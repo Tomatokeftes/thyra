@@ -116,40 +116,40 @@
 
 ##################################################################
 
-import logging
-from pathlib import Path
-import cProfile
-from msiconvert.imzml.convertor import ImzMLToZarrConvertor
+# import logging
+# from pathlib import Path
+# import cProfile
+# from msiconvert.imzml.convertor import ImzMLToZarrConvertor
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
+# # Configure logging
+# logging.basicConfig(level=logging.INFO)
 
-def main():
-    # Paths to your actual imzML and ibd files
-    imzml_file = Path(r"C:\Users\tvisv\OneDrive\Desktop\Taste of MSI\rsc Taste of MSI\Ingredient Classification MALDI\Downbinned\20240605_pea_pos.imzML")
-    ibd_file = Path(r"C:\Users\tvisv\OneDrive\Desktop\Taste of MSI\rsc Taste of MSI\Ingredient Classification MALDI\Downbinned\20240605_pea_pos.ibd")
-    output_dir = Path("pea_downbinned_rechunker.zarr")
+# def main():
+#     # Paths to your actual imzML and ibd files
+#     imzml_file = Path(r"C:\Users\tvisv\Downloads\Dataset\20240826_Xenium_0041899\20240826_xenium_0041899.imzML")
+#     ibd_file = Path(r"C:\Users\tvisv\Downloads\Dataset\20240826_Xenium_0041899\20240826_xenium_0041899.ibd")
+#     output_dir = Path("20240826_xenium_0041899.zarr")
 
-    # Initialize converter
-    converter = ImzMLToZarrConvertor(imzml_file, ibd_file)
+#     # Initialize converter
+#     converter = ImzMLToZarrConvertor(imzml_file, ibd_file)
 
-    # Run conversion and log the outcome
-    success = converter.convert(output_dir)
-    if success:
-        logging.info(f"Conversion completed successfully. Zarr output stored at {output_dir}")
-    else:
-        logging.error("Conversion failed.")
+#     # Run conversion and log the outcome
+#     success = converter.convert(output_dir)
+#     if success:
+#         logging.info(f"Conversion completed successfully. Zarr output stored at {output_dir}")
+#     else:
+#         logging.error("Conversion failed.")
 
-if __name__ == "__main__":
-    profiler = cProfile.Profile()
-    profiler.enable()
-    main()
-    profiler.disable()
+# if __name__ == "__main__":
+#     profiler = cProfile.Profile()
+#     profiler.enable()
+#     main()
+#     profiler.disable()
 
-    # Save profile results to a file
-    profile_path = "profile_rechunker.prof"
-    profiler.dump_stats(profile_path)
-    logging.info(f"Profiling results saved to {profile_path}")
+#     # Save profile results to a file
+#     profile_path = "profile_rechunker.prof"
+#     profiler.dump_stats(profile_path)
+#     logging.info(f"Profiling results saved to {profile_path}")
 
 
 ##############################################
@@ -160,7 +160,7 @@ if __name__ == "__main__":
 # import xarray as xr
 
 # # Load the Zarr store
-# zarr_path = r"C:\Users\tvisv\Downloads\MSIConverter\pea_original_dask.zarr"  # Replace with your actual Zarr path
+# zarr_path = r"C:\Users\tvisv\Downloads\MSIConverter\20240826_xenium_0041899.zarr"  # Replace with your actual Zarr path
 # # Load the Zarr data into an Xarray dataset
 # ds = xr.open_zarr(zarr_path)
 
@@ -177,30 +177,142 @@ if __name__ == "__main__":
 
 # plt.show()
 
+########################################
 
+# import zarr
+# import numpy as np
+# import matplotlib.pyplot as plt
 # import xarray as xr
 
-# # Load the Zarr file (assuming it's in a folder named 'output.zarr')
-# zarr_path = r"C:\Users\tvisv\Downloads\MSIConverter\pea_downbinned_dask.zarr"
+# # Load the Zarr store
+# zarr_path = r"C:\Users\tvisv\Downloads\MSIConverter\20240826_xenium_0041899.zarr"  # Replace with your actual Zarr path
 # ds = xr.open_zarr(zarr_path)
 
-# # Print metadata from the Dataset's attributes
-# print("=== Global Metadata ===")
-# for key, value in ds.attrs.items():
-#     print(f"{key}: {value}")
+# # Compute the total ion current (TIC) image by summing across the m/z (c) dimension
+# tic_image = ds['0'].sum(dim='c')
 
-# # Print metadata for each data variable (e.g., intensity values)
-# print("\n=== Data Variables ===")
-# for var_name, var_data in ds.data_vars.items():
-#     print(f"\nData Variable: {var_name}")
-#     print(f"Dimensions: {var_data.dims}")
-#     print(f"Shape: {var_data.shape}")
-#     print(f"Dtype: {var_data.dtype}")
-#     print("Attributes:")
-#     for attr_key, attr_value in var_data.attrs.items():
-#         print(f"  {attr_key}: {attr_value}")
+# # Replace zero or null values with NaN for visualization purposes
+# tic_image = tic_image.where(tic_image > 0, np.nan)
 
-# # Print information about dimensions
-# print("\n=== Dimensions ===")
-# for dim_name, dim_size in ds.dims.items():
-#     print(f"{dim_name}: {dim_size}")
+# # Plot the TIC image with adjusted color limits
+# plt.figure(figsize=(8, 6))
+# tic_image.plot(cmap='viridis', vmin=np.nanpercentile(tic_image, 1), vmax=np.nanpercentile(tic_image, 99))  # Set color limits to 1st and 99th percentile
+
+# # Rotate 180 degrees if needed
+# plt.gca().invert_yaxis()
+
+# plt.title("Median-Normalized Total Ion Image (TIC) with Improved Color Scaling")
+# plt.show()
+
+
+################################################
+
+import zarr
+import numpy as np
+import matplotlib.pyplot as plt
+
+# Load the Zarr store
+zarr_path = r"C:\Users\tvisv\Downloads\MSIConverter\20240826_xenium_0041899.zarr"
+zarr_store = zarr.open_group(zarr_path, mode='r')
+
+# Access the intensity, m/z, and lengths data
+intensities = zarr_store['0']  # (c, z, y, x)
+mzs = zarr_store['labels/mzs/0']  # (c, z, y, x)
+lengths = zarr_store['labels/lengths/0']  # (1, 1, y, x)
+
+# Initialize a dictionary to accumulate intensities for each m/z value
+mass_spectrum_accumulator = {}
+
+# Iterate over the y and x coordinates to access each pixel's m/z and intensity data
+for y in range(intensities.shape[2]):  # Loop over the y dimension
+    for x in range(intensities.shape[3]):  # Loop over the x dimension
+        length = lengths[0, 0, y, x]  # Get the length for the current pixel
+        mz_values = mzs[:length, 0, y, x]  # Get m/z values for the current pixel up to `length`
+        intensity_values = intensities[:length, 0, y, x]  # Get intensity values for the current pixel up to `length`
+
+        # Accumulate intensities in the dictionary
+        for mz, intensity in zip(mz_values, intensity_values):
+            if mz not in mass_spectrum_accumulator:
+                mass_spectrum_accumulator[mz] = 0
+            mass_spectrum_accumulator[mz] += intensity
+
+# Convert the accumulator dictionary to sorted arrays for plotting
+sorted_mz = np.array(sorted(mass_spectrum_accumulator.keys()))
+sorted_intensity = np.array([mass_spectrum_accumulator[mz] for mz in sorted_mz])
+
+# Plot the total mass spectrum using a stem plot
+plt.figure(figsize=(14, 6))
+plt.stem(sorted_mz, sorted_intensity, linefmt='b-', markerfmt='bo', basefmt='r-')
+plt.xlabel('m/z')
+plt.ylabel('Total Intensity')
+plt.title('Total Mass Spectrum (Processed Data)')
+plt.grid(True)
+
+plt.show()
+
+
+
+###############################################
+
+# from dask.distributed import Client
+# import dask.array as da
+# import zarr
+# from numcodecs import Blosc
+
+# if __name__ == "__main__":
+#     # Start the Dask client to create a dashboard for monitoring
+#     client = Client()
+#     print("Dask dashboard is running. Visit the following URL: ", client.dashboard_link)
+
+#     # Open the root of the Zarr store in append mode
+#     zarr_store = zarr.open_group(r'C:\Users\tvisv\Downloads\MSIConverter\20240826_xenium_0041899.zarr', mode='a')
+
+#     # Define a compressor (e.g., Blosc with specific settings)
+#     compressor = Blosc(cname='zstd', clevel=5, shuffle=Blosc.SHUFFLE)
+
+#     # Rechunk and write the intensity data in the '0' folder with compression
+#     intensity_array = da.from_array(zarr_store['0'], chunks=zarr_store['0'].chunks)
+#     rechunked_intensity = intensity_array.rechunk((1000, 1, 256, 256))  # Adjust chunk size as needed
+#     da.to_zarr(rechunked_intensity, r'C:\Users\tvisv\Downloads\MSIConverter\20240826_xenium_0041899.zarr/2', compressor=compressor)
+
+#     # Rechunk and write the m/z data in the 'labels/mzs' folder with compression
+#     mzs_array = da.from_array(zarr_store['labels/mzs/0'], chunks=zarr_store['labels/mzs/0'].chunks)
+#     rechunked_mzs = mzs_array.rechunk((1000, 1, 256, 256))  # Adjust chunk size as needed
+#     da.to_zarr(rechunked_mzs, r'C:\Users\tvisv\Downloads\MSIConverter\20240826_xenium_0041899.zarr/labels/mzs3', compressor=compressor)
+
+#     # Rechunk and write the m/z data in the 'labels/mzs' folder with compression
+#     lengths_array = da.from_array(zarr_store['labels/lengths/0'], chunks=zarr_store['labels/lengths/0'].chunks)
+#     rechunked_mzs = lengths_array.rechunk((1, 1, 256, 256))  # Adjust chunk size as needed
+#     da.to_zarr(rechunked_mzs, r'C:\Users\tvisv\Downloads\MSIConverter\20240826_xenium_0041899.zarr/labels/lengths2', compressor=compressor)
+
+
+
+####################
+
+# import os
+# import csv
+
+# def save_folder_file_sizes(folder_path, output_csv_path):
+#     # Collect file sizes
+#     file_sizes = []
+#     for root, _, files in os.walk(folder_path):
+#         for file in files:
+#             file_path = os.path.join(root, file)
+#             file_size = os.path.getsize(file_path)
+#             file_sizes.append((file_path, file_size))
+    
+#     # Save to CSV
+#     with open(output_csv_path, mode='w', newline='', encoding='utf-8') as csv_file:
+#         writer = csv.writer(csv_file)
+#         writer.writerow(['File Path', 'File Size (Bytes)'])
+#         for file_path, file_size in file_sizes:
+#             writer.writerow([file_path, file_size])
+    
+#     print(f"File sizes saved to {output_csv_path}")
+
+# # Specify the folder path and output CSV path
+# folder_path = r"20240826_xenium_0041899.zarr/1"  # Replace with the folder you want to scan
+# output_csv_path = 'filesizes_intensities2.csv'  # Replace with your desired CSV output path
+
+# # Run the function
+# save_folder_file_sizes(folder_path, output_csv_path)

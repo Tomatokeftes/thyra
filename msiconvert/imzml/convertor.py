@@ -7,7 +7,6 @@ from typing import List, Tuple
 import numpy as np
 import zarr
 from numcodecs import Blosc
-from rechunker import rechunk
 
 from pyimzml.ImzMLParser import ImzMLParser as PyImzMLParser
 import dask.array as da
@@ -48,7 +47,7 @@ def load_parser(imzml: Path, ibd: Path):
         )
 
 
-def copy_array(source: zarr.Array, destination: zarr.Array, optimal_chunk_size=("auto", "auto", "auto", "auto")) -> None:
+def copy_array(source: zarr.Array, destination: zarr.Array, optimal_chunk_size=(1000, 1, 256, 256)) -> None:
     """
     Copy an array using Dask for better parallelism and chunk management, with a progress bar.
     
