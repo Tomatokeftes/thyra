@@ -116,40 +116,40 @@
 
 ##################################################################
 
-import logging
-from pathlib import Path
-import cProfile
-from msiconvert.imzml.convertor import ImzMLToZarrConvertor
+# import logging
+# from pathlib import Path
+# import cProfile
+# from msiconvert.imzml.convertor import ImzMLToZarrConvertor
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
+# # Configure logging
+# logging.basicConfig(level=logging.INFO)
 
-def main():
-    # Paths to your actual imzML and ibd files
-    imzml_file = Path(r"C:\Users\tvisv\OneDrive\Desktop\Taste of MSI\rsc Taste of MSI\Ingredient Classification MALDI\Original\20240605_pea_pos.imzML")
-    ibd_file = Path(r"C:\Users\tvisv\OneDrive\Desktop\Taste of MSI\rsc Taste of MSI\Ingredient Classification MALDI\Original\20240605_pea_pos.ibd")
-    output_dir = Path("pea_processed_new.zarr")
+# def main():
+#     # Paths to your actual imzML and ibd files
+#     imzml_file = Path(r"C:\Users\tvisv\OneDrive\Desktop\Taste of MSI\rsc Taste of MSI\Ingredient Classification MALDI\Original\20240605_pea_pos.imzML")
+#     ibd_file = Path(r"C:\Users\tvisv\OneDrive\Desktop\Taste of MSI\rsc Taste of MSI\Ingredient Classification MALDI\Original\20240605_pea_pos.ibd")
+#     output_dir = Path("pea_processed_new.zarr")
 
-    # Initialize converter
-    converter = ImzMLToZarrConvertor(imzml_file, ibd_file)
+#     # Initialize converter
+#     converter = ImzMLToZarrConvertor(imzml_file, ibd_file)
 
-    # Run conversion and log the outcome
-    success = converter.convert(output_dir)
-    if success:
-        logging.info(f"Conversion completed successfully. Zarr output stored at {output_dir}")
-    else:
-        logging.error("Conversion failed.")
+#     # Run conversion and log the outcome
+#     success = converter.convert(output_dir)
+#     if success:
+#         logging.info(f"Conversion completed successfully. Zarr output stored at {output_dir}")
+#     else:
+#         logging.error("Conversion failed.")
 
-if __name__ == "__main__":
-    profiler = cProfile.Profile()
-    profiler.enable()
-    main()
-    profiler.disable()
+# if __name__ == "__main__":
+#     profiler = cProfile.Profile()
+#     profiler.enable()
+#     main()
+#     profiler.disable()
 
-    # Save profile results to a file
-    profile_path = "profile_rechunker.prof"
-    profiler.dump_stats(profile_path)
-    logging.info(f"Profiling results saved to {profile_path}")
+#     # Save profile results to a file
+#     profile_path = "profile_rechunker.prof"
+#     profiler.dump_stats(profile_path)
+#     logging.info(f"Profiling results saved to {profile_path}")
 
 ##################################################################
 
@@ -272,26 +272,51 @@ if __name__ == "__main__":
 
 # import zarr
 # import numpy as np
-# import matplotlib.pyplot as plt  # or plotly for interactivity
-# import xarray as xr
+# import matplotlib.pyplot as plt
 
-# # Load the Zarr store
-# zarr_path = r"C:\Users\tvisv\Downloads\MSIConverter\20240826_xenium_0041899.zarr"  # Replace with your actual Zarr path
-# # Load the Zarr data into an Xarray dataset
-# ds = xr.open_zarr(zarr_path)
+# def plot_total_mass_spectrum_and_total_ion_image(zarr_store_path: str):
+#     """
+#     Plot the total mass spectrum and total ion image from the processed MSI data.
+    
+#     Parameters:
+#     -----------
+#     zarr_store_path : str
+#         Path to the Zarr file store containing the processed MSI data.
+#     """
+#     # Open the Zarr file store
+#     zarr_store = zarr.open(zarr_store_path, mode='r')
+    
+#     # Access the m/z values and intensity data
+#     mzs = zarr_store['labels']['mzs']['0'][:, 0, 0, 0]  # 1D array of m/z values
+#     intensities = zarr_store['0']  # 4D array: (c, 1, y, x)
+    
+#     # Calculate the total mass spectrum
+#     total_mass_spectrum = np.sum(intensities, axis=(1, 2, 3))  # Sum over all pixels
+#     # Plot the total mass spectrum
+#     plt.figure(figsize=(10, 5))
+#     plt.plot(mzs, total_mass_spectrum, color='blue')
+#     plt.xlabel('m/z')
+#     plt.ylabel('Total Intensity')
+#     plt.title('Total Mass Spectrum')
+#     plt.grid(True)
+#     plt.show()
+    
+#     # Calculate the total ion image
+#     total_ion_image = np.sum(intensities, axis=0).reshape(intensities.shape[2], intensities.shape[3])  # Sum over m/z axis
+#     # Plot the total ion image
+#     plt.figure(figsize=(8, 8))
+#     plt.imshow(total_ion_image, cmap='viridis', origin='lower')
+#     plt.colorbar(label='Total Intensity')
+#     plt.title('Total Ion Image')
+#     plt.xlabel('X')
+#     plt.ylabel('Y')
+#     plt.show()
 
-# # Display the structure of the dataset
-# print(ds)
+# # Example usage
+# zarr_store_path = 'pea_processed_new.zarr'
+# plot_total_mass_spectrum_and_total_ion_image(zarr_store_path)
 
-# total_ion_image = ds['0'].sum(dim='c')  # Summing across the m/z (channel) dimension for a TII
 
-# # Plot the total ion image
-# total_ion_image.plot()
-
-# # Rotate 180 degrees
-# plt.gca().invert_yaxis()
-
-# plt.show()
 
 ########################################
 
@@ -485,3 +510,52 @@ if __name__ == "__main__":
 # fig.add_trace(go.Scatter(x=mzs_filtered_computed, y=intensities_filtered_computed, mode='lines'))
 # fig.update_layout(title='Total Mass Spectrum (200-250 m/z)', xaxis_title='m/z', yaxis_title='Intensity')
 # fig.show()
+
+################################################################
+
+import zarr
+import numpy as np
+import matplotlib.pyplot as plt
+
+def plot_mass_spectrum_of_pixel(zarr_store_path, y, x):
+    """
+    Plot the mass spectrum of the pixel at the specified (y, x) coordinates from the processed Zarr store.
+
+    Parameters:
+    -----------
+    zarr_store_path : str
+        Path to the processed Zarr store.
+    y : int
+        The y-coordinate of the pixel.
+    x : int
+        The x-coordinate of the pixel.
+    """
+    # Open the Zarr store
+    zarr_store = zarr.open(zarr_store_path, mode='r')
+    
+    # Access the Zarr arrays
+    mzs_array = zarr_store['labels']['mzs']['0']
+    intensities_array = zarr_store['0']
+    lengths_array = zarr_store['labels/lengths']['0']
+    
+    # Get the length of the m/z values for the selected pixel
+    length = lengths_array[0, 0, y, x]
+    
+    # Extract the m/z values and intensities for the selected pixel
+    mz_values = mzs_array[:length, 0, y, x]
+    intensity_values = intensities_array[:length, 0, y, x]
+    
+    # Plot the mass spectrum as a stemplot
+    plt.figure(figsize=(10, 5))
+    plt.stem(mz_values, intensity_values, linefmt='b-', markerfmt='bo', basefmt='r-')
+    plt.xlabel('m/z')
+    plt.ylabel('Intensity')
+    plt.title(f'Mass Spectrum of Pixel ({y}, {x})')
+    plt.grid(True)
+    plt.show()
+
+# Example usage
+zarr_store_path = '20240826_xenium_0041899.zarr'
+y, x = 100, 50  # The coordinates of the pixel to plot
+plot_mass_spectrum_of_pixel(zarr_store_path, y, x)
+

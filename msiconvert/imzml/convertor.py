@@ -315,7 +315,6 @@ class _ProcessedImzMLConvertor(_BaseImzMLConvertor):
                 copy_array(fast_intensities, intensities)
                 copy_array(fast_mzs, mzs)   
 
-
 class ImzMLToZarrConvertor:
     """Standalone converter class for converting ImzML to Zarr format."""
 
