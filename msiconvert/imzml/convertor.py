@@ -185,6 +185,15 @@ class _ContinuousImzMLConvertor(_BaseImzMLConvertor):
             self.parser.imzmldict['max count of pixels y'],
             self.parser.imzmldict['max count of pixels x'],
         )
+    
+    def get_mz_shape(self) -> SHAPE:
+        "return an int tuple describing the shape of the mzs array"
+        return (
+            self.parser.mzLengths[0],  # c = m/Z
+            1,                         # z
+            1,                         # y
+            1,                         # x
+        )
 
     def create_zarr_arrays(self):
         intensities = self.root.zeros(
@@ -196,7 +205,7 @@ class _ContinuousImzMLConvertor(_BaseImzMLConvertor):
         intensities.attrs['_ARRAY_DIMENSIONS'] = _get_xarray_axes(self.root)
         self.root.zeros(
             'labels/mzs/0',
-            shape=self.get_intensity_shape(),
+            shape=self.get_mz_shape(),
             dtype=self.parser.mzPrecision,
             compressor=compressor,
         )
@@ -238,6 +247,19 @@ class _ProcessedImzMLConvertor(_BaseImzMLConvertor):
             self.parser.imzmldict['max count of pixels x'],
         )
 
+    def get_mz_shape(self) -> SHAPE:
+        "return an int tuple describing the shape of the mzs array"
+        return self.get_intensity_shape()
+
+    def get_lengths_shape(self) -> SHAPE:
+        "return an int tuple describing the shape of the lengths array"
+        return (
+            1,                                               # c = m/Z
+            1,                                               # z = 1
+            self.parser.imzmldict['max count of pixels y'],  # y
+            self.parser.imzmldict['max count of pixels x'],  # x
+        )
+    
     def create_zarr_arrays(self):
         intensities = self.root.zeros(
             '0',
@@ -246,16 +268,17 @@ class _ProcessedImzMLConvertor(_BaseImzMLConvertor):
         )
         compressor = zarr.Blosc(cname='zstd', clevel=5, shuffle=Blosc.BITSHUFFLE)
         intensities.attrs['_ARRAY_DIMENSIONS'] = _get_xarray_axes(self.root)
+
         self.root.zeros(
             'labels/mzs/0',
-            shape=self.get_intensity_shape(),
+            shape=self.get_mz_shape(),
             dtype=self.parser.mzPrecision,
             compressor=compressor,
         )
         # Adjust the shape of lengths array
         self.root.zeros(
             'labels/lengths/0',
-            shape=(1, 1, self.parser.imzmldict['max count of pixels y'], self.parser.imzmldict['max count of pixels x']),
+            shape=self.get_lengths_shape(),
             dtype=np.uint32,
             compressor=compressor,
         )
@@ -284,7 +307,6 @@ class _ProcessedImzMLConvertor(_BaseImzMLConvertor):
             )
             for idx, (x, y, _) in enumerate(self.parser.coordinates):
                 length = self.parser.mzLengths[idx]
-                # Adjusted indexing for lengths array
                 lengths[0, 0, y - 1, x - 1] = length
                 spectra = self.parser.getspectrum(idx)
                 fast_mzs[:length, 0, y - 1, x - 1] = spectra[0]

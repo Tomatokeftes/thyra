@@ -116,40 +116,156 @@
 
 ##################################################################
 
-# import logging
-# from pathlib import Path
-# import cProfile
-# from msiconvert.imzml.convertor import ImzMLToZarrConvertor
+import logging
+from pathlib import Path
+import cProfile
+from msiconvert.imzml.convertor import ImzMLToZarrConvertor
 
-# # Configure logging
-# logging.basicConfig(level=logging.INFO)
+# Configure logging
+logging.basicConfig(level=logging.INFO)
 
-# def main():
-#     # Paths to your actual imzML and ibd files
-#     imzml_file = Path(r"C:\Users\tvisv\Downloads\Dataset\20240826_Xenium_0041899\20240826_xenium_0041899.imzML")
-#     ibd_file = Path(r"C:\Users\tvisv\Downloads\Dataset\20240826_Xenium_0041899\20240826_xenium_0041899.ibd")
-#     output_dir = Path("20240826_xenium_0041899.zarr")
+def main():
+    # Paths to your actual imzML and ibd files
+    imzml_file = Path(r"C:\Users\tvisv\OneDrive\Desktop\Taste of MSI\rsc Taste of MSI\Ingredient Classification MALDI\Original\20240605_pea_pos.imzML")
+    ibd_file = Path(r"C:\Users\tvisv\OneDrive\Desktop\Taste of MSI\rsc Taste of MSI\Ingredient Classification MALDI\Original\20240605_pea_pos.ibd")
+    output_dir = Path("pea_processed_new.zarr")
 
-#     # Initialize converter
-#     converter = ImzMLToZarrConvertor(imzml_file, ibd_file)
+    # Initialize converter
+    converter = ImzMLToZarrConvertor(imzml_file, ibd_file)
 
-#     # Run conversion and log the outcome
-#     success = converter.convert(output_dir)
-#     if success:
-#         logging.info(f"Conversion completed successfully. Zarr output stored at {output_dir}")
+    # Run conversion and log the outcome
+    success = converter.convert(output_dir)
+    if success:
+        logging.info(f"Conversion completed successfully. Zarr output stored at {output_dir}")
+    else:
+        logging.error("Conversion failed.")
+
+if __name__ == "__main__":
+    profiler = cProfile.Profile()
+    profiler.enable()
+    main()
+    profiler.disable()
+
+    # Save profile results to a file
+    profile_path = "profile_rechunker.prof"
+    profiler.dump_stats(profile_path)
+    logging.info(f"Profiling results saved to {profile_path}")
+
+##################################################################
+
+# import zarr
+# import numpy as np
+
+# def check_mzs_chunks_for_duplicates(zarr_store_path: str):
+#     """
+#     Check the chunks of the mzs array in a Zarr file store for duplicates.
+    
+#     Parameters:
+#     -----------
+#     zarr_store_path : str
+#         Path to the Zarr file store.
+        
+#     Returns:
+#     --------
+#     bool
+#         True if duplicates are found across chunks, False otherwise.
+#     """
+#     # Open the Zarr file store
+#     zarr_store = zarr.open(zarr_store_path, mode='r')
+    
+#     # Navigate to the mzs array
+#     try:
+#         mzs_array = zarr_store['labels']['mzs']['0']  # Adjusted path based on your structure
+#     except KeyError:
+#         raise KeyError("The 'mzs' array was not found in the expected location within the Zarr store.")
+    
+#     # Retrieve shape and chunk sizes
+#     shape = mzs_array.shape
+#     chunk_sizes = mzs_array.chunks
+
+#     print(f"mzs array shape: {shape}")
+#     print(f"Chunk sizes: {chunk_sizes}")
+
+#     # Generate slices for each chunk along each dimension
+#     def get_chunk_slices(shape, chunk_sizes):
+#         """Generate slices for each chunk along each dimension."""
+#         slices = []
+#         for dim_size, chunk_size in zip(shape, chunk_sizes):
+#             dim_slices = [slice(i, min(i + chunk_size, dim_size)) for i in range(0, dim_size, chunk_size)]
+#             slices.append(dim_slices)
+#         return slices
+
+#     # Generate all combinations of chunk slices
+#     chunk_slices = get_chunk_slices(shape, chunk_sizes)
+#     all_chunk_combinations = np.array(np.meshgrid(*chunk_slices, indexing='ij')).T.reshape(-1, len(shape))
+
+#     # Collect all m/z values from each chunk
+#     chunk_contents = []
+#     for chunk_slice in all_chunk_combinations:
+#         chunk = mzs_array.oindex[tuple(chunk_slice)]
+#         chunk_contents.append(chunk.flatten())
+
+#     # Check for duplicates
+#     all_mzs = np.concatenate(chunk_contents)
+#     unique_mzs = np.unique(all_mzs)
+    
+#     if len(unique_mzs) < len(all_mzs):
+#         print("Duplicates found in the mzs chunks.")
+#         return True
 #     else:
-#         logging.error("Conversion failed.")
+#         print("No duplicates found in the mzs chunks.")
+#         return False
 
-# if __name__ == "__main__":
-#     profiler = cProfile.Profile()
-#     profiler.enable()
-#     main()
-#     profiler.disable()
+# # Example usage
+# zarr_store_path = "pea_continuous.zarr"
+# duplicates_found = check_mzs_chunks_for_duplicates(zarr_store_path)
+# print(f"Duplicates found: {duplicates_found}")
 
-#     # Save profile results to a file
-#     profile_path = "profile_rechunker.prof"
-#     profiler.dump_stats(profile_path)
-#     logging.info(f"Profiling results saved to {profile_path}")
+##################################################################
+# import zarr
+# import pandas as pd
+
+# def export_first_chunk_mzs_to_csv(zarr_store_path: str, output_csv_path: str):
+#     """
+#     Export the m/z values from the first chunk of the mzs array in a Zarr file store to a CSV file.
+    
+#     Parameters:
+#     -----------
+#     zarr_store_path : str
+#         Path to the Zarr file store.
+#     output_csv_path : str
+#         Path to save the output CSV file.
+#     """
+#     # Open the Zarr file store
+#     zarr_store = zarr.open(zarr_store_path, mode='r')
+    
+#     # Navigate to the mzs array
+#     try:
+#         mzs_array = zarr_store['labels']['mzs']['0']  # Adjusted path based on your structure
+#     except KeyError:
+#         raise KeyError("The 'mzs' array was not found in the expected location within the Zarr store.")
+    
+#     # Extract the first chunk size along the m/z axis
+#     mz_chunk_size = mzs_array.chunks[0]  # Size of the first chunk along the m/z axis
+
+#     # Extract the first chunk and flatten spatial dimensions
+#     first_chunk = mzs_array[:mz_chunk_size, 0, :17, :17].reshape(mz_chunk_size, -1)
+
+#     # Create a DataFrame with each pixel as a row and m/z values as columns
+#     df = pd.DataFrame(first_chunk.T)  # Transpose to have pixels as rows
+
+#     # Save the DataFrame to a CSV file
+#     df.to_csv(output_csv_path, index=False)
+
+# # Define the paths
+# zarr_store_path = "pea_continuous.zarr"
+# output_csv_path = "first_chunk_mzs.csv"
+
+# # Export the first chunk to CSV
+# export_first_chunk_mzs_to_csv(zarr_store_path, output_csv_path)
+
+# # Provide the path to the saved CSV file
+# output_csv_path
 
 
 ##############################################
@@ -207,48 +323,48 @@
 
 ################################################
 
-import zarr
-import numpy as np
-import matplotlib.pyplot as plt
+# import zarr
+# import numpy as np
+# import matplotlib.pyplot as plt
 
-# Load the Zarr store
-zarr_path = r"C:\Users\tvisv\Downloads\MSIConverter\20240826_xenium_0041899.zarr"
-zarr_store = zarr.open_group(zarr_path, mode='r')
+# # Load the Zarr store
+# zarr_path = r"C:\Users\tvisv\Downloads\MSIConverter\20240826_xenium_0041899.zarr"
+# zarr_store = zarr.open_group(zarr_path, mode='r')
 
-# Access the intensity, m/z, and lengths data
-intensities = zarr_store['0']  # (c, z, y, x)
-mzs = zarr_store['labels/mzs/0']  # (c, z, y, x)
-lengths = zarr_store['labels/lengths/0']  # (1, 1, y, x)
+# # Access the intensity, m/z, and lengths data
+# intensities = zarr_store['0']  # (c, z, y, x)
+# mzs = zarr_store['labels/mzs/0']  # (c, z, y, x)
+# lengths = zarr_store['labels/lengths/0']  # (1, 1, y, x)
 
-# Initialize a dictionary to accumulate intensities for each m/z value
-mass_spectrum_accumulator = {}
+# # Initialize a dictionary to accumulate intensities for each m/z value
+# mass_spectrum_accumulator = {}
 
-# Iterate over the y and x coordinates to access each pixel's m/z and intensity data
-for y in range(intensities.shape[2]):  # Loop over the y dimension
-    for x in range(intensities.shape[3]):  # Loop over the x dimension
-        length = lengths[0, 0, y, x]  # Get the length for the current pixel
-        mz_values = mzs[:length, 0, y, x]  # Get m/z values for the current pixel up to `length`
-        intensity_values = intensities[:length, 0, y, x]  # Get intensity values for the current pixel up to `length`
+# # Iterate over the y and x coordinates to access each pixel's m/z and intensity data
+# for y in range(intensities.shape[2]):  # Loop over the y dimension
+#     for x in range(intensities.shape[3]):  # Loop over the x dimension
+#         length = lengths[0, 0, y, x]  # Get the length for the current pixel
+#         mz_values = mzs[:length, 0, y, x]  # Get m/z values for the current pixel up to `length`
+#         intensity_values = intensities[:length, 0, y, x]  # Get intensity values for the current pixel up to `length`
 
-        # Accumulate intensities in the dictionary
-        for mz, intensity in zip(mz_values, intensity_values):
-            if mz not in mass_spectrum_accumulator:
-                mass_spectrum_accumulator[mz] = 0
-            mass_spectrum_accumulator[mz] += intensity
+#         # Accumulate intensities in the dictionary
+#         for mz, intensity in zip(mz_values, intensity_values):
+#             if mz not in mass_spectrum_accumulator:
+#                 mass_spectrum_accumulator[mz] = 0
+#             mass_spectrum_accumulator[mz] += intensity
 
-# Convert the accumulator dictionary to sorted arrays for plotting
-sorted_mz = np.array(sorted(mass_spectrum_accumulator.keys()))
-sorted_intensity = np.array([mass_spectrum_accumulator[mz] for mz in sorted_mz])
+# # Convert the accumulator dictionary to sorted arrays for plotting
+# sorted_mz = np.array(sorted(mass_spectrum_accumulator.keys()))
+# sorted_intensity = np.array([mass_spectrum_accumulator[mz] for mz in sorted_mz])
 
-# Plot the total mass spectrum using a stem plot
-plt.figure(figsize=(14, 6))
-plt.stem(sorted_mz, sorted_intensity, linefmt='b-', markerfmt='bo', basefmt='r-')
-plt.xlabel('m/z')
-plt.ylabel('Total Intensity')
-plt.title('Total Mass Spectrum (Processed Data)')
-plt.grid(True)
+# # Plot the total mass spectrum using a stem plot
+# plt.figure(figsize=(14, 6))
+# plt.stem(sorted_mz, sorted_intensity, linefmt='b-', markerfmt='bo', basefmt='r-')
+# plt.xlabel('m/z')
+# plt.ylabel('Total Intensity')
+# plt.title('Total Mass Spectrum (Processed Data)')
+# plt.grid(True)
 
-plt.show()
+# plt.show()
 
 
 
@@ -316,3 +432,56 @@ plt.show()
 
 # # Run the function
 # save_folder_file_sizes(folder_path, output_csv_path)
+
+##############################################
+
+# import zarr
+# import dask.array as da
+
+# # Load the Zarr store
+# zarr_path = "20240826_xenium_0041899.zarr"  # Replace with your Zarr store path
+# zarr_group = zarr.open_group(zarr_path, mode='r')
+
+# import dask.array as da
+# import numpy as np
+
+# # Load the m/z values and intensity data lazily
+# mzs = da.from_zarr(zarr_group['labels/mzs/0'])
+# intensities = da.from_zarr(zarr_group['0'])
+
+# # Define the m/z range
+# mz_min, mz_max = 200, 250
+
+# # Function to process each chunk
+# def process_chunk(mzs_chunk, intensities_chunk):
+#     # Create a mask for the m/z range within this chunk
+#     mask = (mzs_chunk >= mz_min) & (mzs_chunk <= mz_max)
+    
+#     # Apply the mask to filter m/z values and corresponding intensities
+#     mzs_filtered = mzs_chunk[mask]
+#     intensities_filtered = intensities_chunk[mask].sum(axis=(1, 2, 3))
+    
+#     # Ensure the output arrays have consistent shapes
+#     if mzs_filtered.size == 0:
+#         mzs_filtered = np.array([], dtype=mzs_chunk.dtype)
+#         intensities_filtered = np.array([], dtype=intensities_chunk.dtype)
+    
+#     return mzs_filtered, intensities_filtered
+
+# # Use Dask's map_blocks to process data in chunks
+# mzs_filtered, intensities_filtered = da.map_blocks(
+#     process_chunk, mzs, intensities, 
+#     dtype=(mzs.dtype, intensities.dtype),
+#     chunks=(mzs.chunks[0],)  # Specify chunks for the output
+# )
+
+# # Compute the results
+# mzs_filtered_computed = mzs_filtered.compute()
+# intensities_filtered_computed = intensities_filtered.compute()
+
+# import plotly.graph_objects as go
+
+# fig = go.Figure()
+# fig.add_trace(go.Scatter(x=mzs_filtered_computed, y=intensities_filtered_computed, mode='lines'))
+# fig.update_layout(title='Total Mass Spectrum (200-250 m/z)', xaxis_title='m/z', yaxis_title='Intensity')
+# fig.show()
