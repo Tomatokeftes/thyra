@@ -1,9 +1,9 @@
 from functools import cached_property
 from pathlib import Path
 
-from imzml2zarr.imzml.checker import ImzMLChecker
-from imzml2zarr.imzml.convertor import ImzMLToZarrConvertor
-from imzml2zarr.imzml.parser import ImzMLParser
+from msiconvert.imzml.checker import ImzMLChecker
+from msiconvert.imzml.convertor import ImzMLToZarrConvertor
+from msiconvert.imzml.parser import ImzMLParser
 
 class NotImplementedClass:
     """Class that does nothing and raises NotImplementedError on access."""

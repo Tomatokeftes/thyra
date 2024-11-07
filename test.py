@@ -115,41 +115,41 @@
 
 
 ##################################################################
+import logging
+from pathlib import Path
+import cProfile
 
-# import logging
-# from pathlib import Path
-# import cProfile
-# from msiconvert.imzml.convertor import ImzMLToZarrConvertor
+from msiconvert.imzml.convertor import MSIToZarrConvertor
 
-# # Configure logging
-# logging.basicConfig(level=logging.INFO)
+# Configure logging
+logging.basicConfig(level=logging.INFO)
 
-# def main():
-#     # Paths to your actual imzML and ibd files
-#     imzml_file = Path(r"C:\Users\tvisv\OneDrive\Desktop\Taste of MSI\rsc Taste of MSI\Ingredient Classification MALDI\Original\20240605_pea_pos.imzML")
-#     ibd_file = Path(r"C:\Users\tvisv\OneDrive\Desktop\Taste of MSI\rsc Taste of MSI\Ingredient Classification MALDI\Original\20240605_pea_pos.ibd")
-#     output_dir = Path("pea_processed_new.zarr")
+def main():
+    # Path to your specific imzML file or Bruker .d directory
+    input_path = Path(r"C:\Users\tvisv\Downloads\Pea Original\20240605_pea_pos.imzML")  # or "C:\path\to\your\dataset.d"
+    output_dir = Path("output.zarr")
 
-#     # Initialize converter
-#     converter = ImzMLToZarrConvertor(imzml_file, ibd_file)
+    # Initialize converter with the input path and output path
+    converter = MSIToZarrConvertor(input_path, output_dir)
 
-#     # Run conversion and log the outcome
-#     success = converter.convert(output_dir)
-#     if success:
-#         logging.info(f"Conversion completed successfully. Zarr output stored at {output_dir}")
-#     else:
-#         logging.error("Conversion failed.")
+    # Run conversion and log the outcome
+    success = converter.convert()
+    if success:
+        logging.info(f"Conversion completed successfully. Zarr output stored at {output_dir}")
+    else:
+        logging.error("Conversion failed.")
 
-# if __name__ == "__main__":
-#     profiler = cProfile.Profile()
-#     profiler.enable()
-#     main()
-#     profiler.disable()
+if __name__ == "__main__":
+    profiler = cProfile.Profile()
+    profiler.enable()
+    main()
+    profiler.disable()
 
-#     # Save profile results to a file
-#     profile_path = "profile_rechunker.prof"
-#     profiler.dump_stats(profile_path)
-#     logging.info(f"Profiling results saved to {profile_path}")
+    # Save profile results to a file
+    profile_path = "profile_rechunker.prof"
+    profiler.dump_stats(profile_path)
+    logging.info(f"Profiling results saved to {profile_path}")
+
 
 ##################################################################
 
@@ -320,30 +320,30 @@
 
 ########################################
 
-import zarr
-import numpy as np
-import matplotlib.pyplot as plt
-import xarray as xr
+# import zarr
+# import numpy as np
+# import matplotlib.pyplot as plt
+# import xarray as xr
 
-# Load the Zarr store
-zarr_path = r"pea_continuous.zarr"  # Replace with your actual Zarr path
-ds = xr.open_zarr(zarr_path)
+# # Load the Zarr store
+# zarr_path = r"pea_continuous.zarr"  # Replace with your actual Zarr path
+# ds = xr.open_zarr(zarr_path)
 
-# Compute the total ion current (TIC) image by summing across the m/z (c) dimension
-tic_image = ds['0'].sum(dim='c')
+# # Compute the total ion current (TIC) image by summing across the m/z (c) dimension
+# tic_image = ds['0'].sum(dim='c')
 
-# Replace zero or null values with NaN for visualization purposes
-tic_image = tic_image.where(tic_image > 0, np.nan)
+# # Replace zero or null values with NaN for visualization purposes
+# tic_image = tic_image.where(tic_image > 0, np.nan)
 
-# Plot the TIC image with adjusted color limits
-plt.figure(figsize=(8, 6))
-tic_image.plot(cmap='viridis', vmin=np.nanpercentile(tic_image, 1), vmax=np.nanpercentile(tic_image, 99))  # Set color limits to 1st and 99th percentile
+# # Plot the TIC image with adjusted color limits
+# plt.figure(figsize=(8, 6))
+# tic_image.plot(cmap='viridis', vmin=np.nanpercentile(tic_image, 1), vmax=np.nanpercentile(tic_image, 99))  # Set color limits to 1st and 99th percentile
 
-# Rotate 180 degrees if needed
-plt.gca().invert_yaxis()
+# # Rotate 180 degrees if needed
+# plt.gca().invert_yaxis()
 
-plt.title("Median-Normalized Total Ion Image (TIC) with Improved Color Scaling")
-plt.show()
+# plt.title("Median-Normalized Total Ion Image (TIC) with Improved Color Scaling")
+# plt.show()
 
 
 ################################################
