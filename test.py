@@ -320,30 +320,30 @@
 
 ########################################
 
-# import zarr
-# import numpy as np
-# import matplotlib.pyplot as plt
-# import xarray as xr
+import zarr
+import numpy as np
+import matplotlib.pyplot as plt
+import xarray as xr
 
-# # Load the Zarr store
-# zarr_path = r"C:\Users\tvisv\Downloads\MSIConverter\20240826_xenium_0041899.zarr"  # Replace with your actual Zarr path
-# ds = xr.open_zarr(zarr_path)
+# Load the Zarr store
+zarr_path = r"pea_continuous.zarr"  # Replace with your actual Zarr path
+ds = xr.open_zarr(zarr_path)
 
-# # Compute the total ion current (TIC) image by summing across the m/z (c) dimension
-# tic_image = ds['0'].sum(dim='c')
+# Compute the total ion current (TIC) image by summing across the m/z (c) dimension
+tic_image = ds['0'].sum(dim='c')
 
-# # Replace zero or null values with NaN for visualization purposes
-# tic_image = tic_image.where(tic_image > 0, np.nan)
+# Replace zero or null values with NaN for visualization purposes
+tic_image = tic_image.where(tic_image > 0, np.nan)
 
-# # Plot the TIC image with adjusted color limits
-# plt.figure(figsize=(8, 6))
-# tic_image.plot(cmap='viridis', vmin=np.nanpercentile(tic_image, 1), vmax=np.nanpercentile(tic_image, 99))  # Set color limits to 1st and 99th percentile
+# Plot the TIC image with adjusted color limits
+plt.figure(figsize=(8, 6))
+tic_image.plot(cmap='viridis', vmin=np.nanpercentile(tic_image, 1), vmax=np.nanpercentile(tic_image, 99))  # Set color limits to 1st and 99th percentile
 
-# # Rotate 180 degrees if needed
-# plt.gca().invert_yaxis()
+# Rotate 180 degrees if needed
+plt.gca().invert_yaxis()
 
-# plt.title("Median-Normalized Total Ion Image (TIC) with Improved Color Scaling")
-# plt.show()
+plt.title("Median-Normalized Total Ion Image (TIC) with Improved Color Scaling")
+plt.show()
 
 
 ################################################
@@ -513,49 +513,48 @@
 
 ################################################################
 
-import zarr
-import numpy as np
-import matplotlib.pyplot as plt
+# import zarr
+# import numpy as np
+# import matplotlib.pyplot as plt
 
-def plot_mass_spectrum_of_pixel(zarr_store_path, y, x):
-    """
-    Plot the mass spectrum of the pixel at the specified (y, x) coordinates from the processed Zarr store.
+# def plot_mass_spectrum_of_pixel(zarr_store_path, y, x):
+#     """
+#     Plot the mass spectrum of the pixel at the specified (y, x) coordinates from the processed Zarr store.
 
-    Parameters:
-    -----------
-    zarr_store_path : str
-        Path to the processed Zarr store.
-    y : int
-        The y-coordinate of the pixel.
-    x : int
-        The x-coordinate of the pixel.
-    """
-    # Open the Zarr store
-    zarr_store = zarr.open(zarr_store_path, mode='r')
+#     Parameters:
+#     -----------
+#     zarr_store_path : str
+#         Path to the processed Zarr store.
+#     y : int
+#         The y-coordinate of the pixel.
+#     x : int
+#         The x-coordinate of the pixel.
+#     """
+#     # Open the Zarr store
+#     zarr_store = zarr.open(zarr_store_path, mode='r')
     
-    # Access the Zarr arrays
-    mzs_array = zarr_store['labels']['mzs']['0']
-    intensities_array = zarr_store['0']
-    lengths_array = zarr_store['labels/lengths']['0']
+#     # Access the Zarr arrays
+#     mzs_array = zarr_store['labels']['mzs']['0']
+#     intensities_array = zarr_store['0']
+#     lengths_array = zarr_store['labels/lengths']['0']
     
-    # Get the length of the m/z values for the selected pixel
-    length = lengths_array[0, 0, y, x]
+#     # Get the length of the m/z values for the selected pixel
+#     length = lengths_array[0, 0, y, x]
     
-    # Extract the m/z values and intensities for the selected pixel
-    mz_values = mzs_array[:length, 0, y, x]
-    intensity_values = intensities_array[:length, 0, y, x]
+#     # Extract the m/z values and intensities for the selected pixel
+#     mz_values = mzs_array[:length, 0, y, x]
+#     intensity_values = intensities_array[:length, 0, y, x]
     
-    # Plot the mass spectrum as a stemplot
-    plt.figure(figsize=(10, 5))
-    plt.stem(mz_values, intensity_values, linefmt='b-', markerfmt='bo', basefmt='r-')
-    plt.xlabel('m/z')
-    plt.ylabel('Intensity')
-    plt.title(f'Mass Spectrum of Pixel ({y}, {x})')
-    plt.grid(True)
-    plt.show()
+#     # Plot the mass spectrum as a stemplot
+#     plt.figure(figsize=(10, 5))
+#     plt.stem(mz_values, intensity_values, linefmt='b-', markerfmt='bo', basefmt='r-')
+#     plt.xlabel('m/z')
+#     plt.ylabel('Intensity')
+#     plt.title(f'Mass Spectrum of Pixel ({y}, {x})')
+#     plt.grid(True)
+#     plt.show()
 
-# Example usage
-zarr_store_path = '20240826_xenium_0041899.zarr'
-y, x = 100, 50  # The coordinates of the pixel to plot
-plot_mass_spectrum_of_pixel(zarr_store_path, y, x)
-
+# # Example usage
+# zarr_store_path = '20240826_xenium_0041899.zarr'
+# y, x = 100, 50  # The coordinates of the pixel to plot
+# plot_mass_spectrum_of_pixel(zarr_store_path, y, x)
