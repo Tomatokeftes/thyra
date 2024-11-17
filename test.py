@@ -126,8 +126,8 @@ logging.basicConfig(level=logging.INFO)
 
 def main():
     # Path to your specific imzML file or Bruker .d directory
-    input_path = Path(r"C:\Users\tvisv\Downloads\Pea Original\20240605_pea_pos.imzML")  # or "C:\path\to\your\dataset.d"
-    output_dir = Path("output.zarr")
+    input_path = Path(r"C:\Users\tvisv\OneDrive\Desktop\Taste of MSI\rsc Taste of MSI\Ingredient Classification MALDI\Original\20240505_carrot pos.imzML")  # or "C:\path\to\your\dataset.d"
+    output_dir = Path("carrot.zarr")
 
     # Initialize converter with the input path and output path
     converter = MSIToZarrConvertor(input_path, output_dir)
@@ -273,10 +273,11 @@ if __name__ == "__main__":
 # import zarr
 # import numpy as np
 # import matplotlib.pyplot as plt
+# from tqdm import tqdm
 
 # def plot_total_mass_spectrum_and_total_ion_image(zarr_store_path: str):
 #     """
-#     Plot the total mass spectrum and total ion image from the processed MSI data.
+#     Plot the total mass spectrum and total ion image from the processed MSI data stored in Zarr.
     
 #     Parameters:
 #     -----------
@@ -285,27 +286,56 @@ if __name__ == "__main__":
 #     """
 #     # Open the Zarr file store
 #     zarr_store = zarr.open(zarr_store_path, mode='r')
+
+#     # Access the shape of the intensity array and initialize variables
+#     intensities = zarr_store['0']  # 4D array: (c, z, y, x)
+#     y_size, x_size = intensities.shape[2], intensities.shape[3]
     
-#     # Access the m/z values and intensity data
-#     mzs = zarr_store['labels']['mzs']['0'][:, 0, 0, 0]  # 1D array of m/z values
-#     intensities = zarr_store['0']  # 4D array: (c, 1, y, x)
-    
-#     # Calculate the total mass spectrum
-#     total_mass_spectrum = np.sum(intensities, axis=(1, 2, 3))  # Sum over all pixels
+#     # Check the shape of the m/z array
+#     mzs_array = zarr_store['labels']['mzs']['0']
+#     print("Shape of mzs array:", mzs_array.shape)
+
+#     # Initialize variables for constructing a common mass axis
+#     all_mzs = []
+
+#     # Collect all unique m/z values from each pixel, ensuring bounds are respected
+#     for y in range(y_size):
+#         for x in range(x_size):
+#             if y < mzs_array.shape[2] and x < mzs_array.shape[3]:  # Ensure indices are within bounds
+#                 mzs = mzs_array[:, 0, y, x]  # Retrieve m/z values for the pixel
+#                 all_mzs.extend(mzs)
+
+#     # Create a sorted, unique, and common mass axis
+#     common_mz_axis = np.unique(np.sort(all_mzs))
+
+#     # Initialize an array for the total mass spectrum
+#     total_mass_spectrum = np.zeros_like(common_mz_axis, dtype=np.float64)
+
+#     # Iterate through each pixel to align and sum intensities using searchsorted
+#     for y in tqdm(range(y_size), desc="Processing pixels"):
+#         for x in range(x_size):
+#             if y < mzs_array.shape[2] and x < mzs_array.shape[3]:  # Ensure indices are within bounds
+#                 mzs = mzs_array[:, 0, y, x]  # m/z values for this pixel
+#                 intensity_array = intensities[:, 0, y, x]  # Intensities for this pixel
+
+#                 # Align intensities to the common mass axis using searchsorted
+#                 indices = np.searchsorted(common_mz_axis, mzs)
+#                 np.add.at(total_mass_spectrum, indices, intensity_array)
+
 #     # Plot the total mass spectrum
 #     plt.figure(figsize=(10, 5))
-#     plt.plot(mzs, total_mass_spectrum, color='blue')
+#     plt.plot(common_mz_axis, total_mass_spectrum, color='blue')
 #     plt.xlabel('m/z')
 #     plt.ylabel('Total Intensity')
 #     plt.title('Total Mass Spectrum')
 #     plt.grid(True)
 #     plt.show()
-    
-#     # Calculate the total ion image
-#     total_ion_image = np.sum(intensities, axis=0).reshape(intensities.shape[2], intensities.shape[3])  # Sum over m/z axis
+
+#     # Calculate the total ion image by summing over the m/z axis
+#     total_ion_image = np.sum(intensities, axis=0).reshape(y_size, x_size)  # Sum over m/z axis
 #     # Plot the total ion image
 #     plt.figure(figsize=(8, 8))
-#     plt.imshow(total_ion_image, cmap='viridis', origin='lower')
+#     plt.imshow(total_ion_image, cmap='viridis', origin='upper')
 #     plt.colorbar(label='Total Intensity')
 #     plt.title('Total Ion Image')
 #     plt.xlabel('X')
@@ -313,7 +343,7 @@ if __name__ == "__main__":
 #     plt.show()
 
 # # Example usage
-# zarr_store_path = 'pea_processed_new.zarr'
+# zarr_store_path = 'output.zarr'
 # plot_total_mass_spectrum_and_total_ion_image(zarr_store_path)
 
 
