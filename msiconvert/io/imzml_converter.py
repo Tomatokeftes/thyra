@@ -1,14 +1,15 @@
 from typing import List
 import zarr
 from pyimzml.ImzMLParser import ImzMLParser as PyImzMLParser
-from msiconvert.io.msi_convert import BaseMSIConvertor
+from .base_converter import BaseMSIConverter
+from .registry import register_converter
 from ..utils.zarr_manager import ZarrManager, SHAPE
 
 
-class _BaseImzMLConvertor(BaseMSIConvertor):
+class BaseImzMLConverter(BaseMSIConverter):
     """Base class for imzML-specific converters."""
 
-    def __init__(self, root: zarr.Group, name: str, parser: PyImzMLParser) -> None:
+    def __init__(self, root: zarr.Group, name: str, parser: PyImzMLParser):
         super().__init__(root, name)
         self.parser = parser
 
@@ -26,18 +27,16 @@ class _BaseImzMLConvertor(BaseMSIConvertor):
             'uuid': self.parser.metadata.file_description.cv_params[0][2],
         }
         self.root.create_group('labels').attrs['labels'] = self.get_labels()
-    
+
     def run(self) -> None:
-        """Primary method to add metadata, create arrays, and read binary data."""
+        """Ensure the ibd file is closed after conversion."""
         try:
-            self.add_base_metadata()
-            self.create_zarr_arrays()
-            self.read_binary_data()
+            super().run()
         finally:
-            # Ensure the ibd file is closed after conversion
             self.parser.m.close()
 
-class ProcessedImzMLConvertor(_BaseImzMLConvertor):
+@register_converter('imzml_processed')
+class ProcessedImzMLConvertor(BaseImzMLConverter):
     def get_labels(self) -> List[str]:
         return ['mzs/0', 'lengths/0']
 
@@ -80,5 +79,6 @@ class ProcessedImzMLConvertor(_BaseImzMLConvertor):
                 self.zarr_manager.fast_intensities[:length, 0, y - 1, x - 1] = spectra[1]
             self.zarr_manager.copy_to_main_arrays()
 
-class ContinuousImzMLConvertor(_BaseImzMLConvertor):
+@register_converter('imzml_continuous')
+class ContinuousImzMLConvertor(BaseImzMLConverter):
     pass

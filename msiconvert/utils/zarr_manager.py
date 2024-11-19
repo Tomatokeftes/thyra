@@ -34,6 +34,7 @@ class ZarrManager:
             '0',
             shape=get_intensity_shape(),
             dtype=self.parser.intensityPrecision,
+            dimension_separator='/',
         )
         intensities.attrs['_ARRAY_DIMENSIONS'] = self._get_xarray_axes()
 
@@ -42,6 +43,7 @@ class ZarrManager:
             shape=get_mz_shape(),
             dtype=self.parser.mzPrecision,
             compressor=self.compressor,
+            dimension_separator='/',
         )
 
         self.root.zeros(
@@ -49,6 +51,7 @@ class ZarrManager:
             shape=get_lengths_shape(),
             dtype=np.uint32,
             compressor=self.compressor,
+            dimension_separator='/',
         )
 
         # Save references to the arrays
