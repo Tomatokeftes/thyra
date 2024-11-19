@@ -90,3 +90,4 @@ def temp_store_factory(*args, **kw):
                 store.rmdir()
 
     return get_temp_stores
+

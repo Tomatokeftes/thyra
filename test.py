@@ -119,15 +119,15 @@ import logging
 from pathlib import Path
 import cProfile
 
-from msiconvert.imzml.convertor import MSIToZarrConvertor
+from msiconvert.io.msi_convert import MSIToZarrConvertor
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 
 def main():
     # Path to your specific imzML file or Bruker .d directory
-    input_path = Path(r"C:\Users\tvisv\OneDrive\Desktop\Taste of MSI\rsc Taste of MSI\Ingredient Classification MALDI\Original\20240505_carrot pos.imzML")  # or "C:\path\to\your\dataset.d"
-    output_dir = Path("carrot.zarr")
+    input_path = Path(r"C:\Users\tvisv\OneDrive\Desktop\Taste of MSI\rsc\Ingredient Classification MALDI\Original\20240605_pea_pos.imzML")  # or "C:\path\to\your\dataset.d"
+    output_dir = Path("pea2.zarr")
 
     # Initialize converter with the input path and output path
     converter = MSIToZarrConvertor(input_path, output_dir)

@@ -5,7 +5,7 @@ from pathlib import Path
 from collections import defaultdict
 
 # Adjust the import to reflect the new module structure
-from msiconvert.imzml.convertor import _get_xarray_axes, MSIToZarrConvertor
+from msiconvert.io.convertor import _get_xarray_axes, MSIToZarrConvertor
 
 @pytest.fixture
 def continuous_imzml_files():

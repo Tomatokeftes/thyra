@@ -1,6 +1,6 @@
 import pytest
 from pathlib import Path
-from msiconvert.imzml.utils import get_imzml_pair  # Update with the correct module path
+from Archive.utils import get_imzml_pair  # Update with the correct module path
 
 @pytest.fixture
 def sample_directory(tmp_path):
