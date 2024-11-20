@@ -127,7 +127,7 @@ logging.basicConfig(level=logging.INFO)
 def main():
     # Path to your specific imzML file or Bruker .d directory
     input_path = Path(r"C:\Users\tvisv\OneDrive\Desktop\Taste of MSI\rsc\Ingredient Classification MALDI\Original\20240605_pea_pos.imzML")  # or "C:\path\to\your\dataset.d"
-    output_dir = Path("pea4.zarr")
+    output_dir = Path("pea.zarr")
 
     # Initialize converter with the input path and output path
     converter = MSIToZarrConverter(input_path, output_dir)
@@ -150,76 +150,6 @@ if __name__ == "__main__":
     profiler.dump_stats(profile_path)
     logging.info(f"Profiling results saved to {profile_path}")
 
-
-##################################################################
-
-# import zarr
-# import numpy as np
-
-# def check_mzs_chunks_for_duplicates(zarr_store_path: str):
-#     """
-#     Check the chunks of the mzs array in a Zarr file store for duplicates.
-    
-#     Parameters:
-#     -----------
-#     zarr_store_path : str
-#         Path to the Zarr file store.
-        
-#     Returns:
-#     --------
-#     bool
-#         True if duplicates are found across chunks, False otherwise.
-#     """
-#     # Open the Zarr file store
-#     zarr_store = zarr.open(zarr_store_path, mode='r')
-    
-#     # Navigate to the mzs array
-#     try:
-#         mzs_array = zarr_store['labels']['mzs']['0']  # Adjusted path based on your structure
-#     except KeyError:
-#         raise KeyError("The 'mzs' array was not found in the expected location within the Zarr store.")
-    
-#     # Retrieve shape and chunk sizes
-#     shape = mzs_array.shape
-#     chunk_sizes = mzs_array.chunks
-
-#     print(f"mzs array shape: {shape}")
-#     print(f"Chunk sizes: {chunk_sizes}")
-
-#     # Generate slices for each chunk along each dimension
-#     def get_chunk_slices(shape, chunk_sizes):
-#         """Generate slices for each chunk along each dimension."""
-#         slices = []
-#         for dim_size, chunk_size in zip(shape, chunk_sizes):
-#             dim_slices = [slice(i, min(i + chunk_size, dim_size)) for i in range(0, dim_size, chunk_size)]
-#             slices.append(dim_slices)
-#         return slices
-
-#     # Generate all combinations of chunk slices
-#     chunk_slices = get_chunk_slices(shape, chunk_sizes)
-#     all_chunk_combinations = np.array(np.meshgrid(*chunk_slices, indexing='ij')).T.reshape(-1, len(shape))
-
-#     # Collect all m/z values from each chunk
-#     chunk_contents = []
-#     for chunk_slice in all_chunk_combinations:
-#         chunk = mzs_array.oindex[tuple(chunk_slice)]
-#         chunk_contents.append(chunk.flatten())
-
-#     # Check for duplicates
-#     all_mzs = np.concatenate(chunk_contents)
-#     unique_mzs = np.unique(all_mzs)
-    
-#     if len(unique_mzs) < len(all_mzs):
-#         print("Duplicates found in the mzs chunks.")
-#         return True
-#     else:
-#         print("No duplicates found in the mzs chunks.")
-#         return False
-
-# # Example usage
-# zarr_store_path = "pea_continuous.zarr"
-# duplicates_found = check_mzs_chunks_for_duplicates(zarr_store_path)
-# print(f"Duplicates found: {duplicates_found}")
 
 ##################################################################
 # import zarr
@@ -356,7 +286,7 @@ if __name__ == "__main__":
 # import xarray as xr
 
 # # Load the Zarr store
-# zarr_path = r"pea_continuous.zarr"  # Replace with your actual Zarr path
+# zarr_path = r"pea.zarr"  # Replace with your actual Zarr path
 # ds = xr.open_zarr(zarr_path)
 
 # # Compute the total ion current (TIC) image by summing across the m/z (c) dimension

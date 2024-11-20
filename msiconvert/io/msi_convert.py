@@ -1,8 +1,5 @@
 from pathlib import Path
-import abc
 import logging
-from typing import List, Tuple
-from pyimzml.ImzMLParser import ImzMLParser as PyImzMLParser
 import zarr
 from .registry import get_converter_class
 from .base_converter import BaseMSIConverter
@@ -43,9 +40,10 @@ class MSIToZarrConverter:
         if self.input_path.suffix.lower() == '.imzml':
             return self._determine_imzml_format()
         elif self.input_path.suffix.lower() == '.d':
-            return 'bruker'
+            return self._determine_bruker_format()
         else:
             raise ValueError("Unsupported file format or invalid input path.")
+
 
     def _determine_imzml_format(self) -> str:
         """Determine if the imzML file is continuous or processed."""
@@ -83,3 +81,15 @@ class MSIToZarrConverter:
             ibd_file_handle.close()
             raise
 
+    def _determine_bruker_format(self) -> str:
+        """Set up parameters for Bruker data and return the format name."""
+        # Set the dataset name using the output path stem
+        self.name = self.output_path.stem
+        
+        # Create the root Zarr group
+        self.root = zarr.group(store=zarr.DirectoryStore(self.output_path))
+        
+        # Set up converter keyword arguments, including 'input_path' needed by BrukerConverter
+        self.converter_kwargs = {'input_path': self.input_path}
+        
+        return 'bruker'

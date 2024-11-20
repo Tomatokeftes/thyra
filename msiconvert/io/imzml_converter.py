@@ -1,5 +1,6 @@
 from typing import List
 import zarr
+from tqdm import tqdm
 from pyimzml.ImzMLParser import ImzMLParser as PyImzMLParser
 from .base_converter import BaseMSIConverter
 from .registry import register_converter
@@ -71,14 +72,74 @@ class ProcessedImzMLConvertor(BaseImzMLConverter):
 
     def read_binary_data(self) -> None:
         with self.zarr_manager.temporary_arrays():
-            for idx, (x, y, _) in enumerate(self.parser.coordinates):
-                length = self.parser.mzLengths[idx]
-                self.zarr_manager.lengths[0, 0, y - 1, x - 1] = length
-                spectra = self.parser.getspectrum(idx)
-                self.zarr_manager.fast_mzs[:length, 0, y - 1, x - 1] = spectra[0]
-                self.zarr_manager.fast_intensities[:length, 0, y - 1, x - 1] = spectra[1]
+            total_spectra = len(self.parser.coordinates)
+            with tqdm(total=total_spectra, desc='Processing spectra', unit='spectrum') as pbar:
+                for idx, (x, y, _) in enumerate(self.parser.coordinates):
+                    length = self.parser.mzLengths[idx]
+                    self.zarr_manager.lengths[0, 0, y - 1, x - 1] = length
+                    spectra = self.parser.getspectrum(idx)
+                    self.zarr_manager.fast_mzs[:length, 0, y - 1, x - 1] = spectra[0]
+                    self.zarr_manager.fast_intensities[:length, 0, y - 1, x - 1] = spectra[1]
+                    pbar.update(1)
             self.zarr_manager.copy_to_main_arrays()
 
-@register_converter('imzml_continuous')
-class ContinuousImzMLConvertor(BaseImzMLConverter):
-    pass
+# @register_converter('imzml_continuous')
+# class _ContinuousImzMLConvertor(_BaseImzMLConvertor):
+#     def get_labels(self) -> List[str]:
+#         return ['mzs/0']
+
+#     def get_intensity_shape(self) -> SHAPE:
+#         return (
+#             self.parser.mzLengths[0],
+#             1,
+#             self.parser.imzmldict['max count of pixels y'],
+#             self.parser.imzmldict['max count of pixels x'],
+#         )
+    
+#     def get_mz_shape(self) -> SHAPE:
+#         "return an int tuple describing the shape of the mzs array"
+#         return (
+#             self.parser.mzLengths[0],  # c = m/Z
+#             1,                         # z
+#             1,                         # y
+#             1,                         # x
+#         )
+
+#     def create_zarr_arrays(self):
+#         intensities = self.root.zeros(
+#             '0',
+#             shape=self.get_intensity_shape(),
+#             dtype=self.parser.intensityPrecision,
+#         )
+#         compressor = zarr.Blosc(cname='zstd', clevel=5, shuffle=Blosc.BITSHUFFLE)
+#         intensities.attrs['_ARRAY_DIMENSIONS'] = _get_xarray_axes(self.root)
+#         self.root.zeros(
+#             'labels/mzs/0',
+#             shape=self.get_mz_shape(),
+#             dtype=self.parser.mzPrecision,
+#             compressor=compressor,
+#         )
+
+#     def read_binary_data(self) -> None:
+#         compressor = zarr.Blosc(cname='zstd', clevel=5, shuffle=Blosc.BITSHUFFLE)
+#         intensities = self.root[0]
+#         mzs = self.root['labels/mzs/0']
+#         with single_temp_store() as fast_store:
+#             fast_intensities = zarr.group(fast_store).zeros(
+#                 '0',
+#                 shape=intensities.shape,
+#                 dtype=intensities.dtype,
+#                 chunks=(-1, 1, 1, 1),
+#                 compressor=compressor,
+#             )
+#             self.parser.m.seek(self.parser.mzOffsets[0])
+#             mzs[:, 0, 0, 0] = np.fromfile(
+#                 self.parser.m, count=self.parser.mzLengths[0], dtype=self.parser.mzPrecision
+#             )
+#             for idx, (x, y, _) in enumerate(self.parser.coordinates):
+#                 self.parser.m.seek(self.parser.intensityOffsets[idx])
+#                 fast_intensities[:, 0, y - 1, x - 1] = np.fromfile(
+#                     self.parser.m, count=self.parser.intensityLengths[idx], dtype=self.parser.intensityPrecision
+#                 )
+#             with ProgressBar():
+#                 copy_array(fast_intensities, intensities)
