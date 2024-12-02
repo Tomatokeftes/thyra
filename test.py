@@ -115,40 +115,40 @@
 
 
 ##################################################################
-import logging
-from pathlib import Path
-import cProfile
+# import logging
+# from pathlib import Path
+# import cProfile
 
-from msiconvert.io.msi_convert import MSIToZarrConverter
+# from msiconvert.io.msi_convert import MSIToZarrConverter
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
+# # Configure logging
+# logging.basicConfig(level=logging.INFO)
 
-def main():
-    # Path to your specific imzML file or Bruker .d directory
-    input_path = Path(r"C:\Users\tvisv\OneDrive\Desktop\Taste of MSI\rsc\Ingredient Classification MALDI\Original\20240605_pea_pos.imzML")  # or "C:\path\to\your\dataset.d"
-    output_dir = Path("pea_indices2.zarr")
+# def main():
+#     # Path to your specific imzML file or Bruker .d directory
+#     input_path = Path(r"C:\Users\tvisv\OneDrive\Desktop\Eva\rsc\20240916_Brain_epilepsy\20240916_Brain_epilepsy.d")  # or "C:\path\to\your\dataset.d"
+#     output_dir = Path("brain_epilepsy.zarr")
 
-    # Initialize converter with the input path and output path
-    converter = MSIToZarrConverter(input_path, output_dir)
+#     # Initialize converter with the input path and output path
+#     converter = MSIToZarrConverter(input_path, output_dir)
 
-    # Run conversion and log the outcome
-    success = converter.convert()
-    if success:
-        logging.info(f"Conversion completed successfully. Zarr output stored at {output_dir}")
-    else:
-        logging.error("Conversion failed.")
+#     # Run conversion and log the outcome
+#     success = converter.convert()
+#     if success:
+#         logging.info(f"Conversion completed successfully. Zarr output stored at {output_dir}")
+#     else:
+#         logging.error("Conversion failed.")
 
-if __name__ == "__main__":
-    profiler = cProfile.Profile()
-    profiler.enable()
-    main()
-    profiler.disable()
+# if __name__ == "__main__":
+#     profiler = cProfile.Profile()
+#     profiler.enable()
+#     main()
+#     profiler.disable()
 
-    # Save profile results to a file
-    profile_path = "profile_rechunker.prof"
-    profiler.dump_stats(profile_path)
-    logging.info(f"Profiling results saved to {profile_path}")
+#     # Save profile results to a file
+#     profile_path = "profile_rechunker.prof"
+#     profiler.dump_stats(profile_path)
+#     logging.info(f"Profiling results saved to {profile_path}")
 
 
 ##################################################################

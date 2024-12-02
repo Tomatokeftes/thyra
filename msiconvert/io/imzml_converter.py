@@ -72,7 +72,7 @@ class ProcessedImzMLConvertor(BaseImzMLConverter):
         )
 
     def read_binary_data(self) -> None:
-        unique_mzs = SortedSet()
+        unique_mzs = set()
         with self.zarr_manager.temporary_arrays():
             total_spectra = len(self.parser.coordinates)
             with tqdm(total=total_spectra, desc='Processing spectra', unit='spectrum') as pbar:
@@ -85,9 +85,9 @@ class ProcessedImzMLConvertor(BaseImzMLConverter):
                     self.zarr_manager.fast_intensities[:length, 0, y - 1, x - 1] = spectra[1]
                     pbar.update(1)
 
-            common_mass_axis = list(unique_mzs)
+            common_mass_axis = sorted(unique_mzs)
             mz_to_index = {mz: idx for idx, mz in enumerate(common_mass_axis)}
-            self.zarr_manager.save_array('labels/common_mass_axis', common_mass_axis)
+            self.zarr_manager.save_array('common_mass_axis', common_mass_axis)
 
             with tqdm(total=total_spectra, desc='Mapping spectra', unit='spectrum') as pbar:
                 for idx, (x, y, _) in enumerate(self.parser.coordinates):
