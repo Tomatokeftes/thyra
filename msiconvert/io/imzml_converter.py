@@ -1,5 +1,6 @@
 from typing import List
 import zarr
+from sortedcontainers import SortedSet
 from tqdm import tqdm
 from pyimzml.ImzMLParser import ImzMLParser as PyImzMLParser
 from .base_converter import BaseMSIConverter
@@ -71,6 +72,7 @@ class ProcessedImzMLConvertor(BaseImzMLConverter):
         )
 
     def read_binary_data(self) -> None:
+        unique_mzs = SortedSet()
         with self.zarr_manager.temporary_arrays():
             total_spectra = len(self.parser.coordinates)
             with tqdm(total=total_spectra, desc='Processing spectra', unit='spectrum') as pbar:
@@ -78,10 +80,26 @@ class ProcessedImzMLConvertor(BaseImzMLConverter):
                     length = self.parser.mzLengths[idx]
                     self.zarr_manager.lengths[0, 0, y - 1, x - 1] = length
                     spectra = self.parser.getspectrum(idx)
+                    unique_mzs.update(spectra[0])
                     self.zarr_manager.fast_mzs[:length, 0, y - 1, x - 1] = spectra[0]
                     self.zarr_manager.fast_intensities[:length, 0, y - 1, x - 1] = spectra[1]
                     pbar.update(1)
+
+            common_mass_axis = list(unique_mzs)
+            mz_to_index = {mz: idx for idx, mz in enumerate(common_mass_axis)}
+            self.zarr_manager.save_array('labels/common_mass_axis', common_mass_axis)
+
+            with tqdm(total=total_spectra, desc='Mapping spectra', unit='spectrum') as pbar:
+                for idx, (x, y, _) in enumerate(self.parser.coordinates):
+                    length = self.parser.mzLengths[idx]
+                    mz_values = self.zarr_manager.fast_mzs[:length, 0, y - 1, x - 1]
+                    mz_indices = [mz_to_index[mz] for mz in mz_values]
+                    self.zarr_manager.fast_mzs[:length, 0, y - 1, x - 1] = mz_indices
+                    pbar.update(1)
+
             self.zarr_manager.copy_to_main_arrays()
+
+        
 
 # @register_converter('imzml_continuous')
 # class _ContinuousImzMLConvertor(_BaseImzMLConvertor):

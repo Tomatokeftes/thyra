@@ -44,7 +44,7 @@ class ZarrManager:
         self.root.zeros(
             'labels/mzs/0',
             shape=get_mz_shape(),
-            dtype=np.float64,
+            dtype=np.uint32,
             compressor=self.compressor,
             dimension_separator='/',
             chunks = chunk_shape,
@@ -63,6 +63,14 @@ class ZarrManager:
         self.intensities = self.root['0']
         self.mzs = self.root['labels/mzs/0']
         self.lengths = self.root['labels/lengths/0']
+
+    def save_array(self, name: str, data: List[float]): 
+        self.root.array(
+            name,
+            data=np.array(data),
+            dtype=np.float32,
+            compressor=self.compressor,
+        )
 
     def copy_array(self, source: zarr.Array, destination: zarr.Array) -> None:
         """
@@ -100,7 +108,7 @@ class ZarrManager:
             self.fast_mzs = fast_group.zeros(
                 'mzs',
                 shape=self.mzs.shape,
-                dtype=self.mzs.dtype,
+                dtype=np.float64,
                 chunks=(-1, 1, 1, 1),
                 compressor=self.compressor,
             )
