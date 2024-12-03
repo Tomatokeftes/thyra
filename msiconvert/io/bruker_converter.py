@@ -9,6 +9,7 @@ import sys
 import sqlite3
 from ctypes import *
 from tqdm import tqdm
+import numpy as np
 
 SHAPE = Tuple[int, int, int, int]
 
@@ -234,62 +235,84 @@ class BrukerConverter(BaseMSIConverter):
         )
 
     def read_binary_data(self) -> None:
-        unique_mzs = set()  # Use a regular set for efficiency
+        decimal_places = 5
+
         with self.zarr_manager.temporary_arrays():
             frame_positions = self.reader.get_frame_positions()
             frame_count = self.reader.get_frame_count()
 
-            # First loop: Read spectra and store data
+            all_mz_arrays = []
+            all_intensity_arrays = []
+            coordinates = []
+            lengths = []
+
+            # First loop: Read spectra and collect data
             with tqdm(total=frame_count, desc="Processing frames", unit="frame") as pbar:
                 for frame_id in range(1, frame_count + 1):
                     mzs, intensities = self.reader.get_spectrum(frame_id)
                     if mzs.size == 0:
                         pbar.update(1)
                         continue
+                    
+                    # Round m/z values to a fixed number of decimal places and convert to float32
+                    mzs = np.round(mzs, decimals=decimal_places).astype(np.float32)
+                    intensities = intensities.astype(np.float32)
 
-                    # Add unique m/z values to the set
-                    unique_mzs.update(mzs)
+                    # Collect data
+                    all_mz_arrays.append(mzs)
+                    all_intensity_arrays.append(intensities)
 
                     x_pos = int(frame_positions[frame_id - 1][0])
                     y_pos = int(frame_positions[frame_id - 1][1])
+                    coordinates.append((x_pos, y_pos))
+                    lengths.append(len(mzs))
 
-                    length = len(mzs)
-                    self.zarr_manager.lengths[0, 0, y_pos, x_pos] = length
-                    self.zarr_manager.fast_mzs[:length, 0, y_pos, x_pos] = mzs
-                    self.zarr_manager.fast_intensities[:length, 0, y_pos, x_pos] = intensities
-
-                    # Update the progress bar
                     pbar.update(1)
 
+            # Concatenate all m/z arrays and intensity arrays
+            all_mzs = np.concatenate(all_mz_arrays)
+            all_intensities = np.concatenate(all_intensity_arrays)
+
             # Create common mass axis
-            common_mass_axis = sorted(unique_mzs)
-            mz_to_index = {mz: idx for idx, mz in enumerate(common_mass_axis)}
+            common_mass_axis = np.unique(all_mzs)
+            print(f"Length of unique common mass axis: {len(common_mass_axis)}")
+
+            # Create mapping from m/z value to index
+            sorted_mz_values = common_mass_axis  # Already sorted by np.unique
+
+            # Use Numba-accelerated function for mapping
+            from numba import njit
+
+            @njit
+            def map_mz_indices(mz_values, sorted_mz_values):
+                return np.searchsorted(sorted_mz_values, mz_values)
+
+            # Map all m/z values to indices
+            mapped_mz_indices = map_mz_indices(all_mzs, sorted_mz_values)
+
+            # Save common mass axis
             self.zarr_manager.save_array('labels/common_mass_axis', common_mass_axis)
 
-            # Second loop: Map m/z values to indices
-            with tqdm(total=frame_count, desc="Mapping m/z to indices", unit="frame") as pbar:
-                for frame_id in range(1, frame_count + 1):
-                    x_pos = int(frame_positions[frame_id - 1][0])
-                    y_pos = int(frame_positions[frame_id - 1][1])
+            # Write data back to Zarr arrays
+            idx = 0
+            with tqdm(total=len(coordinates), desc='Mapping data', unit='frame') as pbar:
+                for (x_pos, y_pos), length in zip(coordinates, lengths):
+                    mz_indices = mapped_mz_indices[idx:idx+length]
+                    intensities = all_intensities[idx:idx+length]
+                    idx += length
 
-                    length = int(self.zarr_manager.lengths[0, 0, y_pos, x_pos])
-                    if length == 0:
-                        pbar.update(1)
-                        continue
+                    # Store lengths
+                    self.zarr_manager.lengths[0, 0, y_pos, x_pos] = length
 
-                    # Read mzs from fast_mzs
-                    mzs = self.zarr_manager.fast_mzs[:length, 0, y_pos, x_pos]
-
-                    # Map mzs to indices
-                    mz_indices = [mz_to_index[mz] for mz in mzs]
-
-                    # Store mz_indices back into fast_mzs
+                    # Store mapped m/z indices and intensities
                     self.zarr_manager.fast_mzs[:length, 0, y_pos, x_pos] = mz_indices
+                    self.zarr_manager.fast_intensities[:length, 0, y_pos, x_pos] = intensities
 
                     pbar.update(1)
 
             # Copy data to main arrays
             self.zarr_manager.copy_to_main_arrays()
+
 
 
     def run(self) -> None:

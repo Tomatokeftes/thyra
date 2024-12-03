@@ -6,7 +6,8 @@ from pyimzml.ImzMLParser import ImzMLParser as PyImzMLParser
 from .base_converter import BaseMSIConverter
 from .registry import register_converter
 from ..utils.zarr_manager import ZarrManager, SHAPE
-
+import numpy as np
+from numba import njit
 
 class BaseImzMLConverter(BaseMSIConverter):
     """Base class for imzML-specific converters."""
@@ -72,32 +73,68 @@ class ProcessedImzMLConvertor(BaseImzMLConverter):
         )
 
     def read_binary_data(self) -> None:
-        unique_mzs = set()
+        decimal_places = 5
+        all_mz_arrays = []
+        all_intensity_arrays = []
+        coordinates = []
+        
         with self.zarr_manager.temporary_arrays():
             total_spectra = len(self.parser.coordinates)
             with tqdm(total=total_spectra, desc='Processing spectra', unit='spectrum') as pbar:
                 for idx, (x, y, _) in enumerate(self.parser.coordinates):
                     length = self.parser.mzLengths[idx]
                     self.zarr_manager.lengths[0, 0, y - 1, x - 1] = length
-                    spectra = self.parser.getspectrum(idx)
-                    unique_mzs.update(spectra[0])
-                    self.zarr_manager.fast_mzs[:length, 0, y - 1, x - 1] = spectra[0]
-                    self.zarr_manager.fast_intensities[:length, 0, y - 1, x - 1] = spectra[1]
+
+                    # Get spectra (returns a tuple of arrays)
+                    mz_array, intensity_array = self.parser.getspectrum(idx)
+
+                    # Round mz values and convert to float32
+                    mz_array = np.round(mz_array, decimals=decimal_places).astype(np.float32)
+                    intensity_array = intensity_array.astype(np.float32)
+
+                    # Collect all mz and intensity arrays
+                    all_mz_arrays.append(mz_array)
+                    all_intensity_arrays.append(intensity_array)
+                    coordinates.append((x, y, length))
                     pbar.update(1)
 
-            common_mass_axis = sorted(unique_mzs)
-            mz_to_index = {mz: idx for idx, mz in enumerate(common_mass_axis)}
+            # Concatenate all mz arrays and find unique values
+            all_mz_values = np.concatenate(all_mz_arrays)
+            common_mass_axis = np.unique(all_mz_values)
+            print(f'Common mass axis length: {len(common_mass_axis)}')
+
+            # Create mapping from m/z value to index
+            sorted_mz_values = common_mass_axis
+
+            # Use Numba-accelerated function for mapping
+            from numba import njit
+
+            @njit
+            def map_mz_indices(mz_values, sorted_mz_values):
+                return np.searchsorted(sorted_mz_values, mz_values)
+
+            # Map all m/z values to indices
+            all_mz_indices = []
+            for mz_array in all_mz_arrays:
+                mz_indices = map_mz_indices(mz_array, sorted_mz_values)
+                all_mz_indices.append(mz_indices)
+
+            # Save common mass axis
             self.zarr_manager.save_array('common_mass_axis', common_mass_axis)
 
-            with tqdm(total=total_spectra, desc='Mapping spectra', unit='spectrum') as pbar:
-                for idx, (x, y, _) in enumerate(self.parser.coordinates):
-                    length = self.parser.mzLengths[idx]
-                    mz_values = self.zarr_manager.fast_mzs[:length, 0, y - 1, x - 1]
-                    mz_indices = [mz_to_index[mz] for mz in mz_values]
+            # Write data back to Zarr arrays
+            with tqdm(total=total_spectra, desc='Writing data', unit='spectrum') as pbar:
+                for idx, (x, y, length) in enumerate(coordinates):
+                    mz_indices = all_mz_indices[idx]
+                    intensity_array = all_intensity_arrays[idx]
                     self.zarr_manager.fast_mzs[:length, 0, y - 1, x - 1] = mz_indices
+                    self.zarr_manager.fast_intensities[:length, 0, y - 1, x - 1] = intensity_array
                     pbar.update(1)
 
+            # Copy data to main arrays
             self.zarr_manager.copy_to_main_arrays()
+
+
 
         
 
