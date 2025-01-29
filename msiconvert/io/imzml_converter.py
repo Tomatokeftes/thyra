@@ -73,8 +73,12 @@ class ProcessedImzMLConvertor(BaseImzMLConverter):
         )
 
     def read_binary_data(self) -> None:
-        decimal_places = 5
-        all_mz_arrays = []
+
+        print("Computing common mass axis")
+        all_mz_arrays = np.concatenate([self.parser.getspectrum(i)[0] for i in range(len(self.parser.coordinates))])
+        self.common_mass_axis = np.unique(all_mz_arrays)
+        print(f"Common mass axis length: {len(self.common_mass_axis)}")
+
         all_intensity_arrays = []
         coordinates = []
         
@@ -89,7 +93,6 @@ class ProcessedImzMLConvertor(BaseImzMLConverter):
                     mz_array, intensity_array = self.parser.getspectrum(idx)
 
                     # Round mz values and convert to float32
-                    mz_array = np.round(mz_array, decimals=decimal_places).astype(np.float32)
                     intensity_array = intensity_array.astype(np.float32)
 
                     # Collect all mz and intensity arrays
