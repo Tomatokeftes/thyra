@@ -25,8 +25,13 @@ class BaseMSIConverter(abc.ABC):
     def read_binary_data(self) -> None:
         """Fill in the arrays with data from the source file."""
 
+    @abc.abstractmethod
+    def get_common_mass_axis(self) -> None:
+        """Create a common mass axis for all spectra."""
+        
     def run(self) -> None:
         """Primary method to add metadata, create arrays, and read binary data."""
         self.add_base_metadata()
+        self.get_common_mass_axis()
         self.create_zarr_arrays()
         self.read_binary_data()

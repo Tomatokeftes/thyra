@@ -1,13 +1,11 @@
 from typing import List
 import zarr
-from sortedcontainers import SortedSet
 from tqdm import tqdm
 from pyimzml.ImzMLParser import ImzMLParser as PyImzMLParser
 from .base_converter import BaseMSIConverter
 from .registry import register_converter
 from ..utils.zarr_manager import ZarrManager, SHAPE
 import numpy as np
-from numba import njit
 
 class BaseImzMLConverter(BaseMSIConverter):
     """Base class for imzML-specific converters."""
@@ -41,163 +39,94 @@ class BaseImzMLConverter(BaseMSIConverter):
 @register_converter('imzml_processed')
 class ProcessedImzMLConvertor(BaseImzMLConverter):
     def get_labels(self) -> List[str]:
-        return ['mzs/0', 'lengths/0']
+        return ['common_mass_axis']
 
-    def get_intensity_shape(self) -> SHAPE:
+    def get_common_mass_axis(self) -> None:
+        """Create a common mass axis for all spectra."""
+        print('Creating common mass axis for processed imzML')
+
+        all_mz_values = np.concatenate([self.parser.getspectrum(idx)[0] for idx, _ in enumerate(self.parser.coordinates)])
+        self.common_mass_axis = np.unique(all_mz_values)
+        print(f'Common mass axis length: {self.common_mass_axis.shape[0]}')
+
+    def get_intensity_array_shape(self) -> SHAPE:
         return (
-            max(self.parser.mzLengths),
+            self.common_mass_axis.shape[0],
             1,
             self.parser.imzmldict['max count of pixels y'],
             self.parser.imzmldict['max count of pixels x'],
         )
 
-    def get_mz_shape(self) -> SHAPE:
-        "Return an int tuple describing the shape of the mzs array"
-        return self.get_intensity_shape()
-
-    def get_lengths_shape(self) -> SHAPE:
-        "Return an int tuple describing the shape of the lengths array"
-        return (
-            1,                                               # c = m/Z
-            1,                                               # z = 1
-            self.parser.imzmldict['max count of pixels y'],  # y
-            self.parser.imzmldict['max count of pixels x'],  # x
-        )
-
     def create_zarr_arrays(self):
         self.zarr_manager = ZarrManager(self.root, self.parser)
         self.zarr_manager.create_arrays(
-            self.get_intensity_shape,
-            self.get_mz_shape,
-            self.get_lengths_shape
+            self.get_intensity_array_shape,
+            self.common_mass_axis,
         )
 
     def read_binary_data(self) -> None:
-
-        print("Computing common mass axis")
-        all_mz_arrays = np.concatenate([self.parser.getspectrum(i)[0] for i in range(len(self.parser.coordinates))])
-        self.common_mass_axis = np.unique(all_mz_arrays)
-        print(f"Common mass axis length: {len(self.common_mass_axis)}")
-
-        all_intensity_arrays = []
-        coordinates = []
         
         with self.zarr_manager.temporary_arrays():
             total_spectra = len(self.parser.coordinates)
             with tqdm(total=total_spectra, desc='Processing spectra', unit='spectrum') as pbar:
                 for idx, (x, y, _) in enumerate(self.parser.coordinates):
-                    length = self.parser.mzLengths[idx]
-                    self.zarr_manager.lengths[0, 0, y - 1, x - 1] = length
-
-                    # Get spectra (returns a tuple of arrays)
                     mz_array, intensity_array = self.parser.getspectrum(idx)
 
-                    # Round mz values and convert to float32
-                    intensity_array = intensity_array.astype(np.float32)
+                    # Enforce intensity array to be float64
+                    intensity_array = intensity_array.astype(np.float64)
 
-                    # Collect all mz and intensity arrays
-                    all_mz_arrays.append(mz_array)
-                    all_intensity_arrays.append(intensity_array)
-                    coordinates.append((x, y, length))
+                    # Map m/z values to common mass axis
+                    mz_indices = np.searchsorted(self.common_mass_axis, mz_array)
+
+                    # Store intensities in temporary arrays
+                    self.zarr_manager.fast_intensities[mz_indices, 0, y - 1, x - 1] = intensity_array
+
                     pbar.update(1)
 
-            # Concatenate all mz arrays and find unique values
-            all_mz_values = np.concatenate(all_mz_arrays)
-            common_mass_axis = np.unique(all_mz_values)
-            print(f'Common mass axis length: {len(common_mass_axis)}')
+                self.zarr_manager.copy_to_main_arrays()
+                
+@register_converter('imzml_continuous')
+class ContinuousImzMLConvertor(BaseImzMLConverter):
+    def get_labels(self) -> List[str]:
+        return ['common_mass_axis']
 
-            # Create mapping from m/z value to index
-            sorted_mz_values = common_mass_axis
+    def get_common_mass_axis(self) -> None:
+        """Extract the common mass axis from the continuous imzML file."""
+        print('Extracting common mass axis for continuous imzML')
 
-            # Use Numba-accelerated function for mapping
-            from numba import njit
+        # Read the m/z values from the first pixel (all pixels have the same m/z values)
+        self.common_mass_axis = self.parser.getspectrum(0)[0]
+        print(f'Common mass axis length: {self.common_mass_axis.shape[0]}')
 
-            @njit
-            def map_mz_indices(mz_values, sorted_mz_values):
-                return np.searchsorted(sorted_mz_values, mz_values)
+    def get_intensity_array_shape(self) -> SHAPE:
+        return (
+            self.common_mass_axis.shape[0],  # Number of m/z channels
+            1,
+            self.parser.imzmldict['max count of pixels y'],
+            self.parser.imzmldict['max count of pixels x'],
+        )
 
-            # Map all m/z values to indices
-            all_mz_indices = []
-            for mz_array in all_mz_arrays:
-                mz_indices = map_mz_indices(mz_array, sorted_mz_values)
-                all_mz_indices.append(mz_indices)
+    def create_zarr_arrays(self):
+        self.zarr_manager = ZarrManager(self.root, self.parser)
+        self.zarr_manager.create_arrays(
+            self.get_intensity_array_shape,
+            self.common_mass_axis,
+        )
 
-            # Save common mass axis
-            self.zarr_manager.save_array('common_mass_axis', common_mass_axis)
+    def read_binary_data(self) -> None:
+        """Read continuous imzML spectra and store them in the Zarr array efficiently."""
+        with self.zarr_manager.temporary_arrays():
+            total_spectra = len(self.parser.coordinates)
+            with tqdm(total=total_spectra, desc='Processing spectra', unit='spectrum') as pbar:
+                for idx, (x, y, _) in enumerate(self.parser.coordinates):
+                    _, intensity_array = self.parser.getspectrum(idx)
 
-            # Write data back to Zarr arrays
-            with tqdm(total=total_spectra, desc='Writing data', unit='spectrum') as pbar:
-                for idx, (x, y, length) in enumerate(coordinates):
-                    mz_indices = all_mz_indices[idx]
-                    intensity_array = all_intensity_arrays[idx]
-                    self.zarr_manager.fast_mzs[:length, 0, y - 1, x - 1] = mz_indices
-                    self.zarr_manager.fast_intensities[:length, 0, y - 1, x - 1] = intensity_array
+                    # Ensure intensity is float64
+                    intensity_array = intensity_array.astype(np.float64)
+
+                    # Directly store intensities (1-to-1 mapping)
+                    self.zarr_manager.fast_intensities[:, 0, y - 1, x - 1] = intensity_array
+
                     pbar.update(1)
 
-            # Copy data to main arrays
-            self.zarr_manager.copy_to_main_arrays()
-
-
-
-        
-
-# @register_converter('imzml_continuous')
-# class _ContinuousImzMLConvertor(_BaseImzMLConvertor):
-#     def get_labels(self) -> List[str]:
-#         return ['mzs/0']
-
-#     def get_intensity_shape(self) -> SHAPE:
-#         return (
-#             self.parser.mzLengths[0],
-#             1,
-#             self.parser.imzmldict['max count of pixels y'],
-#             self.parser.imzmldict['max count of pixels x'],
-#         )
-    
-#     def get_mz_shape(self) -> SHAPE:
-#         "return an int tuple describing the shape of the mzs array"
-#         return (
-#             self.parser.mzLengths[0],  # c = m/Z
-#             1,                         # z
-#             1,                         # y
-#             1,                         # x
-#         )
-
-#     def create_zarr_arrays(self):
-#         intensities = self.root.zeros(
-#             '0',
-#             shape=self.get_intensity_shape(),
-#             dtype=self.parser.intensityPrecision,
-#         )
-#         compressor = zarr.Blosc(cname='zstd', clevel=5, shuffle=Blosc.BITSHUFFLE)
-#         intensities.attrs['_ARRAY_DIMENSIONS'] = _get_xarray_axes(self.root)
-#         self.root.zeros(
-#             'labels/mzs/0',
-#             shape=self.get_mz_shape(),
-#             dtype=self.parser.mzPrecision,
-#             compressor=compressor,
-#         )
-
-#     def read_binary_data(self) -> None:
-#         compressor = zarr.Blosc(cname='zstd', clevel=5, shuffle=Blosc.BITSHUFFLE)
-#         intensities = self.root[0]
-#         mzs = self.root['labels/mzs/0']
-#         with single_temp_store() as fast_store:
-#             fast_intensities = zarr.group(fast_store).zeros(
-#                 '0',
-#                 shape=intensities.shape,
-#                 dtype=intensities.dtype,
-#                 chunks=(-1, 1, 1, 1),
-#                 compressor=compressor,
-#             )
-#             self.parser.m.seek(self.parser.mzOffsets[0])
-#             mzs[:, 0, 0, 0] = np.fromfile(
-#                 self.parser.m, count=self.parser.mzLengths[0], dtype=self.parser.mzPrecision
-#             )
-#             for idx, (x, y, _) in enumerate(self.parser.coordinates):
-#                 self.parser.m.seek(self.parser.intensityOffsets[idx])
-#                 fast_intensities[:, 0, y - 1, x - 1] = np.fromfile(
-#                     self.parser.m, count=self.parser.intensityLengths[idx], dtype=self.parser.intensityPrecision
-#                 )
-#             with ProgressBar():
-#                 copy_array(fast_intensities, intensities)
+                self.zarr_manager.copy_to_main_arrays()
