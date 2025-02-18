@@ -1,9 +1,11 @@
+from os import write
 import zarr
 from typing import List, Tuple, Callable, Generator
 import numpy as np
 from contextlib import contextmanager
 from dask.diagnostics.progress import ProgressBar
 import dask.array as da
+from rechunker import rechunk
 
 from ..utils.temp_store import single_temp_store
 
@@ -23,7 +25,7 @@ class ZarrManager:
         """
         self.root = root
         self.parser = parser
-        self.compressor = zarr.Blosc(cname='zstd', clevel=5, shuffle=zarr.Blosc.BITSHUFFLE)
+        self.compressor = zarr.Blosc(cname='lz4', clevel=5, shuffle=zarr.Blosc.NOSHUFFLE)
         self.intensities: zarr.Array = None
         self.common_mass_axis: zarr.Array = None
         self.temporary_intensities: zarr.Array = None
@@ -50,7 +52,7 @@ class ZarrManager:
         common_mass_axis : np.ndarray
             The computed common mass axis array.
         """
-        chunk_shape = (1000, 1, 128, 128)
+        chunk_shape = (10000, 1, 16, 16)
         
         # Create the main Zarr arrays
         self.intensities = self.root.zeros(
@@ -60,6 +62,7 @@ class ZarrManager:
             compressor=self.compressor,
             dimension_separator='/',
             chunks=chunk_shape,
+            write_empty_chunks=False,
         )
         self.intensities.attrs['_ARRAY_DIMENSIONS'] = self._get_xarray_axes()
 
@@ -129,5 +132,6 @@ class ZarrManager:
                 shape=self.intensities.shape,
                 dtype=self.intensities.dtype,
                 chunks=(-1, 1, 1, 1),
+                write_empty_chunks=False,
             )
             yield

@@ -1,118 +1,117 @@
-# import matplotlib.pyplot as plt
+# from rechunk_zarr import rechunk_zarr
+
+# # Rechunk your array
+# rechunk_zarr(
+#     source_path=r"C:\Users\P70078823\Desktop\Random\burger.zarr",
+#     target_path=r"C:\Users\P70078823\Desktop\Random\burger3.zarr",
+#     chunks=(448284, 1, 1, 1)
+# )
+##################################################################
+# import zarr
+# import dask.array as da
+
+# # Define the path to your Zarr store
+# zarr_store_path = r"C:\Users\P70078823\Desktop\MSIConverter\pea.zarr"
+
+# # Open the Zarr store
+# root = zarr.open(zarr_store_path, mode='r')
+
+# # Access the main intensity dataset
+# zarr_array = root["0"]  # Adjust if needed
+
+# # Convert to Dask array for lazy evaluation
+# dask_array = da.from_zarr(zarr_array)
+
+# def count_low_intensity_values(dask_array, threshold: float = 0.01):
+#     """
+#     Counts how many nonzero values in the dataset are below a certain intensity threshold.
+
+#     Parameters:
+#     -----------
+#     dask_array : dask.array.Array
+#         The Dask array wrapping the Zarr dataset.
+#     threshold : float, optional
+#         The intensity threshold (default is 0.01).
+
+#     Returns:
+#     --------
+#     tuple(int, int, float)
+#         - Count of nonzero values below the threshold.
+#         - Total number of nonzero values.
+#         - Percentage of low-intensity values out of all nonzero values.
+#     """
+#     # Count all nonzero values
+#     total_nonzero_count = da.sum(dask_array != 0).compute()
+
+#     # Count how many of these are below the threshold
+#     low_intensity_count = da.sum((dask_array != 0) & (dask_array < threshold)).compute()
+
+#     # Compute percentage
+#     percentage_low_intensity = (low_intensity_count / total_nonzero_count) * 100 if total_nonzero_count > 0 else 0
+
+#     return int(low_intensity_count), int(total_nonzero_count), percentage_low_intensity
+
+# # Set the threshold for low-intensity values
+# threshold_value = 100  # Adjust as needed
+
+# # Compute counts
+# low_count, total_nonzero, low_percentage = count_low_intensity_values(dask_array, threshold=threshold_value)
+
+# # Print results
+# print(f"Total nonzero entries: {total_nonzero}")
+# print(f"Nonzero entries below {threshold_value}: {low_count}")
+# print(f"Percentage of low-intensity nonzero entries: {low_percentage:.6f}%")
+
+
+
+##################################################################
+# import zarr
 # import numpy as np
-# from pyimzml.ImzMLParser import ImzMLParser
+# import dask.array as da
 
-# def extract_imzml_data(imzml_path):
-#     """Extract dimensions, m/z values, and intensity information from an imzML file."""
-#     with ImzMLParser(str(imzml_path)) as parser:
-#         # Get pixel dimensions from the metadata
-#         x_dim = parser.imzmldict['max count of pixels x']
-#         y_dim = parser.imzmldict['max count of pixels y']
-#         mz_length = parser.mzLengths[0]  # Assumes uniform m/z length in continuous mode
-        
-#         # Retrieve m/z values and initialize intensity sum
-#         mz_values = parser.getspectrum(0)[0]  # Extract m/z values from the first pixel
-#         total_intensity_sum = np.zeros((y_dim, x_dim))
-#         pixel_count = 0
-        
-#         # Initialize an array to accumulate intensities for the average spectrum
-#         intensity_sums = np.zeros(mz_length)
+# # Define the path to your Zarr store
+# zarr_store_path = r"C:\Users\P70078823\Desktop\MSIConverter\pea.zarr"
 
-#         # Sum all intensity values across all pixels
-#         for x, y, _ in parser.coordinates:
-#             mzs, intensities = parser.getspectrum(pixel_count)
-            
-#             # Check that m/z values are consistent
-#             if not np.allclose(mz_values, mzs):
-#                 raise ValueError("m/z values are inconsistent across pixels.")
-            
-#             # Accumulate intensities for each m/z channel
-#             intensity_sums += intensities
-            
-#             # Accumulate intensities for the total ion image (TIC)
-#             total_intensity_sum[y-1, x-1] = np.sum(intensities)
-#             pixel_count += 1
+# # Open the Zarr store
+# root = zarr.open(zarr_store_path, mode='r')
 
-#         # Calculate the average mass spectrum
-#         average_spectrum = intensity_sums / pixel_count
+# # Access the main intensity dataset
+# zarr_array = root["0"]  # Adjust if needed
 
-#     return x_dim, y_dim, mz_values, average_spectrum, total_intensity_sum, pixel_count, mz_values
+# # Convert to Dask array for lazy evaluation
+# dask_array = da.from_zarr(zarr_array)
 
-# def plot_average_mass_spectrum(mz_values, average_spectrum):
-#     """Plot the average mass spectrum as a stem plot."""
-#     plt.figure(figsize=(10, 5))
-#     plt.stem(mz_values, average_spectrum, basefmt=" ")
-#     plt.xlabel("m/z")
-#     plt.ylabel("Average Intensity")
-#     plt.title("Average Mass Spectrum")
-#     plt.grid(True)
-#     plt.show()
+# def count_approximate_value(dask_array, target_value=1.0, atol=1e-6):
+#     """
+#     Counts the number of occurrences of a value (handling floating-point precision) in the Zarr array.
 
-# def plot_total_ion_image(total_intensity_sum):
-#     """Plot the total ion image (TIC) as a heatmap."""
-#     plt.figure(figsize=(6, 6))
-#     plt.imshow(total_intensity_sum, cmap="viridis", origin="lower")
-#     plt.colorbar(label="Total Ion Count")
-#     plt.xlabel("X")
-#     plt.ylabel("Y")
-#     plt.title("Total Ion Image (TIC)")
-#     plt.show()
+#     Parameters:
+#     -----------
+#     dask_array : dask.array.Array
+#         The Dask array wrapping the Zarr dataset.
+#     target_value : float, optional
+#         The value to count occurrences of (default is 1.0).
+#     atol : float, optional
+#         Absolute tolerance for floating-point comparisons (default is 1e-6).
 
-# # Load and plot data
-# imzml_path = "tests/data/test_continuous.imzML"  # Update this path as needed
-# x_dim, y_dim, mz_values, average_spectrum, total_intensity_sum, pixel_count, mz_values = extract_imzml_data(imzml_path)
-# print(f"Dimensions: {x_dim} x {y_dim}")
-# print(f"Number of m/z values: {len(mz_values)}")
-# print(f"Average mass spectrum shape: {average_spectrum.shape}")
-# print(f"Total ion image shape: {total_intensity_sum.shape}")
-# print(f"Number of pixels: {pixel_count}")
-# print(f"m/z values: {mz_values}")
+#     Returns:
+#     --------
+#     tuple(int, float)
+#         - The total count of entries approximately equal to `target_value`.
+#         - The percentage of these entries relative to the total dataset size.
+#     """
+#     total_elements = dask_array.size  # Get the total number of elements
+#     approx_count = da.sum(da.map_blocks(np.isclose, dask_array, target_value, atol=atol)).compute()  # Use np.isclose with Dask
+#     percentage = (approx_count / total_elements) * 100  # Compute percentage
 
+#     return int(approx_count), percentage
 
-# # Plot the average mass spectrum
-# plot_average_mass_spectrum(mz_values, average_spectrum)
+# # Compute the count and percentage of values approximately equal to 1.0
+# count_ones, percentage_ones = count_approximate_value(dask_array, target_value=0.0, atol=1e-6)
 
-# # Plot the total ion image
-# plot_total_ion_image(total_intensity_sum)
-
-
-# import numpy as np
-# from pyimzml.ImzMLParser import ImzMLParser
-# import matplotlib.pyplot as plt
-
-# def generate_tic_image(imzml_path):
-#     """Generate a Total Ion Count (TIC) image from a processed imzML file."""
-#     parser = ImzMLParser(str(imzml_path))
-
-#     # Get dimensions from the imzML file metadata
-#     x_dim = parser.imzmldict['max count of pixels x']
-#     y_dim = parser.imzmldict['max count of pixels y']
-
-
-#     # Initialize TIC image array
-#     tic_image = np.zeros((y_dim + 1, x_dim + 1))
-
-#     # Sum intensities for each pixel to create the TIC
-#     for idx, (x, y, _) in enumerate(parser.coordinates):
-#         mzs, intensities = parser.getspectrum(idx)
-#         tic_image[y -1, x - 1] = np.sum(intensities)  # One-based to zero-based index adjustment
-
-#     return tic_image
-
-# def plot_tic_image(tic_image):
-#     """Plot the TIC image using matplotlib."""
-#     plt.imshow(tic_image, cmap='viridis', origin="upper")
-#     plt.colorbar(label="Total Ion Count")
-#     plt.xlabel("X Coordinate")
-#     plt.ylabel("Y Coordinate")
-#     plt.title("Total Ion Image (TIC)")
-#     plt.show()
-
-# # Usage example
-# imzml_path = r"C:\Users\tvisv\Downloads\MSIConverter\test_processed.imzML"  # Replace with the path to your processed imzML file
-# tic_image = generate_tic_image(imzml_path)
-# plot_tic_image(tic_image)
-
+# # Print results
+# print(f"Total number of entries approximately equal to 1: {count_ones}")
+# print(f"Percentage of dataset approximately equal to 1: {percentage_ones:.6f}%")
 
 ##################################################################
 import logging
@@ -126,8 +125,8 @@ logging.basicConfig(level=logging.INFO)
 
 def main():
     # Path to your specific imzML file or Bruker .d directory
-    input_path = Path(r"C:\Users\tvisv\OneDrive\Desktop\Taste of MSI\rsc\Ingredient Classification MALDI\Original\20240605_pea_pos.imzML")  # or "C:\path\to\your\dataset.d"
-    output_dir = Path("test_asyncsssssss.zarr")
+    input_path = Path(r"C:\Users\P70078823\OneDrive\Desktop\Taste of MSI\rsc\Ingredient Classification MALDI\Original\20240605_pea_pos.imzML")  # or "C:\path\to\your\dataset.d"
+    output_dir = Path("pealz4BYTEshuffle.zarr")
 
     # Initialize converter with the input path and output path
     converter = MSIToZarrConverter(input_path, output_dir)
