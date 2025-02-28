@@ -1,0 +1,2 @@
+[console_scripts]
+msiconvert = msiconvert.__main__:main

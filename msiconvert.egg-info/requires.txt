@@ -1,0 +1,10 @@
+numpy
+zarr
+dask
+scipy
+pyimzml
+tqdm
+spatialdata
+anndata
+geopandas
+shapely

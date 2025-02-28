@@ -1,0 +1,13 @@
+Metadata-Version: 2.1
+Name: msiconvert
+Version: 0.1.0
+Requires-Dist: numpy
+Requires-Dist: zarr
+Requires-Dist: dask
+Requires-Dist: scipy
+Requires-Dist: pyimzml
+Requires-Dist: tqdm
+Requires-Dist: spatialdata
+Requires-Dist: anndata
+Requires-Dist: geopandas
+Requires-Dist: shapely
