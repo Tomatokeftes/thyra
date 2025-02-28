@@ -61,5 +61,3 @@ def detect_format(input_path: Path) -> str:
             return format_name
     
     raise ValueError(f"Unable to detect format for: {input_path}")
-    
-    raise ValueError(f"Unable to detect format for: {input_path}")
