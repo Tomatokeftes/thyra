@@ -12,9 +12,9 @@ def main():
     parser.add_argument('output', help='Path for output file')
     parser.add_argument(
         '--format', 
-        choices=['spatialdata', 'lightweight'], 
-        default='spatialdata',
-        help='Output format type'
+        choices=['spatialdata', 'lightweight', 'anndata'], 
+        default='anndata',
+        help='Output format type: spatialdata (full SpatialData format), anndata (standard AnnData), or lightweight (basic zarr)'
     )
     parser.add_argument(
         '--dataset-id',
