@@ -2,8 +2,12 @@
 from pathlib import Path
 import logging
 from typing import Optional, Dict, Any
+import traceback
 
 from .core.registry import detect_format, get_reader_class, get_converter_class
+
+# msiconvert/convert.py - enhance error handling
+import traceback
 
 def convert_msi(
     input_path: str,
@@ -14,34 +18,11 @@ def convert_msi(
     handle_3d: bool = False,
     **kwargs
 ) -> bool:
-    """
-    Convert MSI data to the specified format.
-    
-    Parameters:
-    -----------
-    input_path : str
-        Path to the input MSI file or directory.
-    output_path : str
-        Path for the output file.
-    format_type : str
-        Output format type: "spatialdata" or "lightweight".
-    dataset_id : str
-        Identifier for the dataset.
-    pixel_size_um : float
-        Size of each pixel in micrometers.
-    handle_3d : bool
-        Whether to process as 3D data or as 2D slices.
-    **kwargs : dict
-        Additional arguments for specific converters.
-    
-    Returns:
-    --------
-    bool: True if conversion was successful, False otherwise.
-    """
-    input_path = Path(input_path).resolve()  # Use resolve() to get absolute path
+    """Convert MSI data to the specified format with enhanced error handling."""
+    input_path = Path(input_path).resolve()
     output_path = Path(output_path).resolve()
     
-    print(f"Processing input file: {input_path}")
+    logging.info(f"Processing input file: {input_path}")
     
     if not input_path.exists():
         logging.error(f"Input path does not exist: {input_path}")
@@ -54,13 +35,16 @@ def convert_msi(
     try:
         # Detect input format
         input_format = detect_format(input_path)
+        logging.info(f"Detected format: {input_format}")
         
         # Create reader
         reader_class = get_reader_class(input_format)
+        logging.info(f"Using reader: {reader_class.__name__}")
         reader = reader_class(input_path)
         
         # Create converter
         converter_class = get_converter_class(format_type.lower())
+        logging.info(f"Using converter: {converter_class.__name__}")
         converter = converter_class(
             reader, 
             output_path,
@@ -71,7 +55,12 @@ def convert_msi(
         )
         
         # Run conversion
-        return converter.convert()
+        logging.info("Starting conversion...")
+        result = converter.convert()
+        logging.info(f"Conversion {'completed successfully' if result else 'failed'}")
+        return result
     except Exception as e:
         logging.error(f"Error during conversion: {e}")
+        # Log detailed traceback for debugging
+        logging.debug(f"Detailed traceback:\n{traceback.format_exc()}")
         return False

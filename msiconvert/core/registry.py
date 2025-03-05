@@ -28,6 +28,7 @@ def register_converter(format_name: str):
 def register_format_detector(format_name: str):
     """Decorator to register a function that detects a specific format."""
     def decorator(func: Callable[[Path], bool]):
+        print(f"Registering format detector for: {format_name}")
         format_detectors[format_name] = func
         return func
     return decorator

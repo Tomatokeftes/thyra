@@ -9,11 +9,13 @@ from spatialdata.transformations import Identity
 from shapely.geometry import box
 import geopandas as gpd
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Tuple
 
 from ..core.base_converter import BaseMSIConverter
 from ..core.base_reader import BaseMSIReader
+from ..core.registry import register_converter
 
+@register_converter('spatialdata')
 class SpatialDataConverter(BaseMSIConverter):
     """Converter for MSI data to SpatialData format."""
     

@@ -7,7 +7,9 @@ from ctypes import *
 import sys
 
 from ..core.base_reader import BaseMSIReader
+from ..core.registry import register_reader
 
+@register_reader('bruker')
 class BrukerReader(BaseMSIReader):
     """Reader for Bruker TSF format files."""
     

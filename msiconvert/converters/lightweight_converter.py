@@ -4,10 +4,13 @@ import zarr
 from pathlib import Path
 from typing import Dict, Any, Tuple
 from scipy import sparse
+from tqdm import tqdm
 
 from ..core.base_converter import BaseMSIConverter
 from ..core.base_reader import BaseMSIReader
+from ..core.registry import register_converter
 
+@register_converter('lightweight')
 class LightweightConverter(BaseMSIConverter):
     """Lightweight MSI data converter that mimics SpatialData organization without dependencies."""
     
@@ -96,21 +99,19 @@ class LightweightConverter(BaseMSIConverter):
             shape=(0,),
             dtype=np.float32,
             compressor=compressor,
-            chunks=(10000,),
-            resize=True
+            chunks=(10000,)
         )
-        
+
         self.root.create_dataset(
             'sparse_data/indices',
             shape=(0, 2),  # (pixel_idx, mass_idx)
             dtype=np.int32,
             compressor=compressor,
-            chunks=(10000, 2),
-            resize=True
+            chunks=(10000, 2)
         )
     
     def _process_spectra(self, dimensions: Tuple[int, int, int], mass_values: np.ndarray) -> None:
-        """Process spectra and store in sparse format."""
+        """Process spectra and store in sparse format with progress monitoring."""
         n_x, n_y, n_z = dimensions
         
         # Prepare for appending data
@@ -122,6 +123,9 @@ class LightweightConverter(BaseMSIConverter):
         buffer_size = 100000  # Adjust as needed
         
         # Process each spectrum
+        current_size = 0
+        flush_count = 0
+        
         for (x, y, z), mzs, intensities in self.reader.iter_spectra():
             pixel_idx = z * (n_y * n_x) + y * n_x + x
             
@@ -136,23 +140,27 @@ class LightweightConverter(BaseMSIConverter):
             
             # Flush buffer if it's full
             if len(data_buffer) >= buffer_size:
-                self._flush_buffer(data_array, indices_array, data_buffer, indices_buffer)
+                current_size = self._flush_buffer(data_array, indices_array, data_buffer, indices_buffer)
+                flush_count += 1
                 data_buffer = []
                 indices_buffer = []
         
         # Flush any remaining data
         if data_buffer:
-            self._flush_buffer(data_array, indices_array, data_buffer, indices_buffer)
+            current_size = self._flush_buffer(data_array, indices_array, data_buffer, indices_buffer)
+            flush_count += 1
     
     def _flush_buffer(self, data_array, indices_array, data_buffer, indices_buffer):
         """Append buffered data to Zarr arrays."""
         current_size = data_array.shape[0]
         new_size = current_size + len(data_buffer)
         
-        # Resize arrays
+        # Create new arrays with the updated size
         data_array.resize(new_size)
-        indices_array.resize(new_size, 2)
+        indices_array.resize((new_size, 2))
         
         # Store data
         data_array[current_size:new_size] = np.array(data_buffer, dtype=np.float32)
         indices_array[current_size:new_size] = np.array(indices_buffer, dtype=np.int32)
+        
+        return current_size

@@ -4,3 +4,5 @@
 *zarr
 *.prof
 Archive
+*imzML
+*ibd

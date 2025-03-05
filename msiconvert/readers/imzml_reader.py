@@ -3,9 +3,13 @@ import numpy as np
 from typing import Dict, Any, Tuple, Generator, Optional
 from pathlib import Path
 from pyimzml.ImzMLParser import ImzMLParser
+from tqdm import tqdm
 
 from ..core.base_reader import BaseMSIReader
 
+from ..core.registry import register_reader
+
+@register_reader('imzml')
 class ImzMLReader(BaseMSIReader):
     """Reader for imzML format files."""
     
@@ -66,7 +70,7 @@ class ImzMLReader(BaseMSIReader):
     
     def iter_spectra(self) -> Generator[Tuple[Tuple[int, int, int], np.ndarray, np.ndarray], None, None]:
         """
-        Iterate through spectra.
+        Iterate through spectra with progress monitoring.
         
         Yields:
         -------
@@ -75,18 +79,25 @@ class ImzMLReader(BaseMSIReader):
             - m/z values array
             - Intensity values array
         """
-        for idx, (x, y, _) in enumerate(self.parser.coordinates):
-            try:
-                mz_array, intensity_array = self.parser.getspectrum(idx)
-                
-                # Adjust coordinates to 0-based for internal use
-                x_adj = x - 1
-                y_adj = y - 1
-                z = 0  # imzML is typically 2D
-                
-                yield ((x_adj, y_adj, z), mz_array, intensity_array)
-            except Exception as err:
-                print(f"Error processing spectrum {idx} at pixel ({x}, {y}): {err}")
+        from tqdm import tqdm
+        
+        total_spectra = len(self.parser.coordinates)
+        with tqdm(total=total_spectra, desc="Reading spectra", unit="spectrum") as pbar:
+            for idx, (x, y, _) in enumerate(self.parser.coordinates):
+                try:
+                    mz_array, intensity_array = self.parser.getspectrum(idx)
+                    
+                    # Adjust coordinates to 0-based for internal use
+                    x_adj = x - 1
+                    y_adj = y - 1
+                    z = 0  # imzML is typically 2D
+                    
+                    yield ((x_adj, y_adj, z), mz_array, intensity_array)
+                    pbar.update(1)
+                except Exception as err:
+                    print(f"Error processing spectrum {idx} at pixel ({x}, {y}): {err}")
+                    pbar.update(1)
+    
     
     def close(self) -> None:
         """Close all open file handles."""
