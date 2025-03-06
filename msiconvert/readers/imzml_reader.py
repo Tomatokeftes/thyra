@@ -88,7 +88,7 @@ class ImzMLReader(BaseMSIReader):
         import logging
         logging.info(f"Processing {total_spectra} spectra in a grid of {total_pixels} pixels")
         
-        with tqdm(total=total_pixels, desc="Reading spectra", unit="spectrum") as pbar:
+        with tqdm(total=total_spectra, desc="Reading spectra", unit="spectrum") as pbar:
             for idx, (x, y, _) in enumerate(self.parser.coordinates):
                 try:
                     mz_array, intensity_array = self.parser.getspectrum(idx)
