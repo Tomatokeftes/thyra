@@ -79,10 +79,16 @@ class ImzMLReader(BaseMSIReader):
             - m/z values array
             - Intensity values array
         """
-        from tqdm import tqdm
         
         total_spectra = len(self.parser.coordinates)
-        with tqdm(total=total_spectra, desc="Reading spectra", unit="spectrum") as pbar:
+        dimensions = self.get_dimensions()
+        total_pixels = dimensions[0] * dimensions[1] * dimensions[2]
+        
+        # Log information about spectra vs pixels
+        import logging
+        logging.info(f"Processing {total_spectra} spectra in a grid of {total_pixels} pixels")
+        
+        with tqdm(total=total_pixels, desc="Reading spectra", unit="spectrum") as pbar:
             for idx, (x, y, _) in enumerate(self.parser.coordinates):
                 try:
                     mz_array, intensity_array = self.parser.getspectrum(idx)

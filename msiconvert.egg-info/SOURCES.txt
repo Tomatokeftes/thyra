@@ -9,6 +9,7 @@ msiconvert.egg-info/entry_points.txt
 msiconvert.egg-info/requires.txt
 msiconvert.egg-info/top_level.txt
 msiconvert/converters/__init__.py
+msiconvert/converters/anndata_converter.py
 msiconvert/converters/lightweight_converter.py
 msiconvert/converters/spatialdata_converter.py
 msiconvert/core/__init__.py
