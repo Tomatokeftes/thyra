@@ -1,4 +1,4 @@
-setup.py
+pyproject.toml
 msiconvert/__init__.py
 msiconvert/__main__.py
 msiconvert/convert.py
@@ -21,5 +21,3 @@ msiconvert/readers/bruker_reader.py
 msiconvert/readers/imzml_reader.py
 msiconvert/utils/__init__.py
 msiconvert/utils/data_processors.py
-msiconvert/utils/temp_store.py
-msiconvert/utils/zarr_manager.py
