@@ -9,7 +9,8 @@ from spatialdata.transformations import Identity
 from shapely.geometry import box
 import geopandas as gpd
 from pathlib import Path
-from typing import Dict, Any, Optional, Tuple
+from typing import Dict, Any, Tuple, Optional
+import logging
 
 from ..core.base_converter import BaseMSIConverter
 from ..core.base_reader import BaseMSIReader
@@ -24,134 +25,234 @@ class SpatialDataConverter(BaseMSIConverter):
                  pixel_size_um: float = 1.0,
                  handle_3d: bool = False,
                  **kwargs):
-        super().__init__(reader, output_path, **kwargs)
-        self.dataset_id = dataset_id
-        self.pixel_size_um = pixel_size_um
-        self.handle_3d = handle_3d
+        super().__init__(
+            reader, 
+            output_path, 
+            dataset_id=dataset_id,
+            pixel_size_um=pixel_size_um,
+            handle_3d=handle_3d,
+            **kwargs
+        )
     
-    def convert(self) -> bool:
-        """Convert MSI data to SpatialData format."""
-        try:
-            # Get dataset dimensions and mass axis
-            dimensions = self.reader.get_dimensions()
-            mass_values = self.reader.get_common_mass_axis()
-            
-            # Create SpatialData object
-            sdata = self._create_spatialdata(dimensions, mass_values)
-            
-            # Write to disk
-            sdata.write(str(self.output_path))
-            return True
-        except Exception as e:
-            print(f"Error during conversion: {e}")
-            return False
-        finally:
-            self.reader.close()
-    
-    def _create_spatialdata(self, dimensions: Tuple[int, int, int], mass_values: np.ndarray) -> SpatialData:
-        """Create SpatialData object from MSI data."""
-        n_x, n_y, n_z = dimensions
-        n_masses = len(mass_values)
-        
+    def _create_data_structures(self) -> Dict[str, Any]:
+        """Create data structures for SpatialData format."""
+        # Return dictionaries to store tables, shapes, and sparse matrices
         tables = {}
         shapes = {}
-        images = {}
         
         # If 3D data but we want to treat as 2D slices
+        n_x, n_y, n_z = self._dimensions
+        
         if n_z > 1 and not self.handle_3d:
+            # For 3D data treated as 2D slices, we'll create a structure for each slice
+            slices_data = {}
             for z in range(n_z):
-                # Process this z-slice
                 slice_id = f"{self.dataset_id}_z{z}"
-                adata, shape = self._process_2d_slice(mass_values, z, slice_id)
-                tables[slice_id] = adata
-                shapes[f"{slice_id}_pixels"] = shape
+                slices_data[slice_id] = {
+                    'sparse_data': self._create_sparse_matrix_for_slice(z),
+                    'coords_df': self._create_coordinates_dataframe_for_slice(z),
+                }
+            
+            return {
+                'mode': '2d_slices',
+                'slices_data': slices_data,
+                'tables': tables,
+                'shapes': shapes,
+                'var_df': self._create_mass_dataframe()
+            }
         else:
-            # Process as full 3D dataset or single 2D slice
-            adata = self._process_3d_volume(dimensions, mass_values)
-            tables[self.dataset_id] = adata
-            shapes[f"{self.dataset_id}_pixels"] = self._create_pixel_shapes(adata)
-        
-        # Create SpatialData object
-        sdata = SpatialData(
-            tables=tables,
-            shapes=shapes,
-            images=images
-        )
-        
-        return sdata
+            # For full 3D dataset or single 2D slice
+            return {
+                'mode': '3d_volume',
+                'sparse_data': self._create_sparse_matrix(),
+                'coords_df': self._create_coordinates_dataframe(),
+                'var_df': self._create_mass_dataframe(),
+                'tables': tables,
+                'shapes': shapes
+            }
     
-    def _process_2d_slice(self, mass_values: np.ndarray, z_value: int, slice_id: str):
-        """Process a single 2D slice of MSI data."""
-        # Implementation details...
+    def _create_sparse_matrix_for_slice(self, z_value: int) -> sparse.lil_matrix:
+        """Create a sparse matrix for a single Z-slice."""
+        n_x, n_y, _ = self._dimensions
+        n_pixels = n_x * n_y
+        n_masses = len(self._common_mass_axis)
         
-    def _process_3d_volume(self, dimensions: Tuple[int, int, int], mass_values: np.ndarray) -> AnnData:
-        """Process the entire 3D volume of MSI data."""
-        n_x, n_y, n_z = dimensions
-        n_masses = len(mass_values)
+        logging.info(f"Creating sparse matrix for slice z={z_value} with {n_pixels} pixels and {n_masses} mass values")
+        return sparse.lil_matrix((n_pixels, n_masses), dtype=np.float32)
+    
+    def _create_coordinates_dataframe_for_slice(self, z_value: int) -> pd.DataFrame:
+        """Create a coordinates dataframe for a single Z-slice."""
+        n_x, n_y, _ = self._dimensions
         
-        # Create sparse matrix to hold intensity data
-        sparse_data = sparse.lil_matrix((n_x * n_y * n_z, n_masses))
-        
-        # Create coordinate dataframe
         coords = []
-        for z in range(n_z):
-            for y in range(n_y):
-                for x in range(n_x):
-                    coords.append({
-                        'z': z,
-                        'y': y, 
-                        'x': x,
-                        'instance_id': z * (n_y * n_x) + y * n_x + x
-                    })
+        for y in range(n_y):
+            for x in range(n_x):
+                pixel_idx = y * n_x + x
+                coords.append({
+                    'y': y, 
+                    'x': x,
+                    'instance_id': pixel_idx
+                })
         
         coords_df = pd.DataFrame(coords)
-        coords_df['region'] = f"{self.dataset_id}_pixels"
+        slice_id = f"{self.dataset_id}_z{z_value}"
+        coords_df['region'] = f"{slice_id}_pixels"
+        # Make sure instance_id is a string to avoid issues
+        coords_df['instance_id'] = coords_df['instance_id'].astype(str)
         coords_df.set_index('instance_id', inplace=True)
         
-        # Create variable dataframe
-        var_df = pd.DataFrame({'mass': mass_values})
-        var_df.set_index('mass', inplace=True)
+        # Add spatial coordinates
+        coords_df['spatial_x'] = coords_df['x'] * self.pixel_size_um
+        coords_df['spatial_y'] = coords_df['y'] * self.pixel_size_um
         
-        # Fill the sparse matrix with intensity data
-        for (x, y, z), mzs, intensities in self.reader.iter_spectra():
-            idx = z * (n_y * n_x) + y * n_x + x
-            
-            # Map the m/z values to indices in the common mass axis
-            mz_indices = np.searchsorted(mass_values, mzs)
-            sparse_data[idx, mz_indices] = intensities
-        
-        # Convert to CSR format for better performance
-        sparse_data = sparse_data.tocsr()
-        
-        # Create AnnData
-        adata = AnnData(
-            X=sparse_data,
-            obs=coords_df,
-            var=var_df
-        )
-        
-        # Store spatial coordinates
-        adata.obsm['spatial'] = coords_df[['x', 'y', 'z']].values
-        
-        # Create table model
-        adata.obs["instance_key"] = adata.obs.index.astype(str)
-        table = TableModel.parse(
-            adata,
-            region=f"{self.dataset_id}_pixels",
-            region_key="region",
-            instance_key="instance_key"
-        )
-        
-        return table
+        return coords_df
     
-    def _create_pixel_shapes(self, adata) -> ShapesModel:
-        """Create geometric shapes for pixels with proper transformations."""
+    def _process_single_spectrum(self, data_structures: Dict[str, Any], 
+                               coords: Tuple[int, int, int], 
+                               mzs: np.ndarray, intensities: np.ndarray) -> None:
+        """Process a single spectrum for SpatialData format."""
+        x, y, z = coords
+        
+        if data_structures['mode'] == '2d_slices':
+            # For 2D slices mode, add data to the appropriate slice
+            slice_id = f"{self.dataset_id}_z{z}"
+            if slice_id in data_structures['slices_data']:
+                slice_data = data_structures['slices_data'][slice_id]
+                pixel_idx = y * self._dimensions[0] + x
+                
+                # Map m/z values to indices
+                mz_indices = self._map_mass_to_indices(mzs)
+                
+                # Add to sparse matrix for this slice
+                self._add_to_sparse_matrix(
+                    slice_data['sparse_data'], 
+                    pixel_idx, 
+                    mz_indices, 
+                    intensities
+                )
+        else:
+            # For 3D volume mode, add data to the single sparse matrix
+            pixel_idx = self._get_pixel_index(x, y, z)
+            
+            # Map m/z values to indices
+            mz_indices = self._map_mass_to_indices(mzs)
+            
+            # Add to sparse matrix
+            self._add_to_sparse_matrix(
+                data_structures['sparse_data'], 
+                pixel_idx, 
+                mz_indices, 
+                intensities
+            )
+    
+    def _finalize_data(self, data_structures: Dict[str, Any]) -> None:
+        """Finalize SpatialData structures by creating tables and shapes."""
+        if data_structures['mode'] == '2d_slices':
+            # Process each slice
+            for slice_id, slice_data in data_structures['slices_data'].items():
+                try:
+                    # Convert to CSR format for efficiency
+                    slice_data['sparse_data'] = slice_data['sparse_data'].tocsr()
+                    
+                    # Create AnnData for this slice
+                    adata = AnnData(
+                        X=slice_data['sparse_data'],
+                        obs=slice_data['coords_df'],
+                        var=data_structures['var_df']
+                    )
+                    
+                    # Store spatial coordinates
+                    adata.obsm['spatial'] = slice_data['coords_df'][['x', 'y']].values
+                    
+                    # Make sure region column exists and is correct
+                    region_key = f"{slice_id}_pixels"
+                    if 'region' not in adata.obs.columns:
+                        adata.obs['region'] = region_key
+                    
+                    # Make sure instance_key is a string column
+                    adata.obs['instance_key'] = adata.obs.index.astype(str)
+                    
+                    # Create table model
+                    table = TableModel.parse(
+                        adata,
+                        region=region_key,
+                        region_key="region",
+                        instance_key="instance_key"
+                    )
+                    
+                    # Add to tables and create shapes
+                    data_structures['tables'][slice_id] = table
+                    data_structures['shapes'][region_key] = self._create_pixel_shapes(adata, is_3d=False)
+                
+                except Exception as e:
+                    logging.error(f"Error processing slice {slice_id}: {e}")
+                    import traceback
+                    logging.debug(f"Detailed traceback:\n{traceback.format_exc()}")
+                    raise
+        else:
+            try:
+                # Process the single 3D volume
+                # Convert to CSR format
+                data_structures['sparse_data'] = data_structures['sparse_data'].tocsr()
+                
+                # Create AnnData
+                adata = AnnData(
+                    X=data_structures['sparse_data'],
+                    obs=data_structures['coords_df'],
+                    var=data_structures['var_df']
+                )
+                
+                # Store spatial coordinates
+                if self.handle_3d:
+                    adata.obsm['spatial'] = data_structures['coords_df'][['x', 'y', 'z']].values
+                else:
+                    adata.obsm['spatial'] = data_structures['coords_df'][['x', 'y']].values
+                
+                # Make sure region column exists and is correct
+                region_key = f"{self.dataset_id}_pixels"
+                if 'region' not in adata.obs.columns:
+                    adata.obs['region'] = region_key
+                
+                # Ensure instance_key is a string column
+                adata.obs['instance_key'] = adata.obs.index.astype(str)
+                
+                # Create table model
+                table = TableModel.parse(
+                    adata,
+                    region=region_key,
+                    region_key="region",
+                    instance_key="instance_key"
+                )
+                
+                # Add to tables and create shapes
+                data_structures['tables'][self.dataset_id] = table
+                data_structures['shapes'][region_key] = self._create_pixel_shapes(adata, is_3d=self.handle_3d)
+            
+            except Exception as e:
+                logging.error(f"Error processing 3D volume: {e}")
+                import traceback
+                logging.debug(f"Detailed traceback:\n{traceback.format_exc()}")
+                raise
+    
+    def _create_pixel_shapes(self, adata: AnnData, is_3d: bool = False) -> ShapesModel:
+        """
+        Create geometric shapes for pixels with proper transformations.
+        
+        Parameters:
+        -----------
+        adata: AnnData object containing coordinates
+        is_3d: Whether to handle as 3D data
+        
+        Returns:
+        --------
+        ShapesModel: SpatialData shapes model
+        """
         coordinates = adata.obsm['spatial']
         
         # Create a list of square geometries for each pixel
         geometries = []
         for i in range(len(adata)):
-            if coordinates.shape[1] >= 3:  # 3D data
+            if is_3d and coordinates.shape[1] >= 3:  # 3D data
                 x, y, z = coordinates[i][:3]
             else:  # 2D data
                 x, y = coordinates[i][:2]
@@ -183,6 +284,35 @@ class SpatialDataConverter(BaseMSIConverter):
         
         return shapes
     
-    def add_metadata(self, metadata: Dict[str, Any]) -> None:
+    def _save_output(self, data_structures: Dict[str, Any]) -> bool:
+        """Save the data to SpatialData format."""
+        try:
+            # Create SpatialData object
+            sdata = SpatialData(
+                tables=data_structures['tables'],
+                shapes=data_structures['shapes'],
+                images={}  # No images in MSI data
+            )
+            
+            # Add metadata
+            self.add_metadata(sdata)
+            
+            # Write to disk
+            sdata.write(str(self.output_path))
+            return True
+        except Exception as e:
+            logging.error(f"Error saving SpatialData: {e}")
+            import traceback
+            logging.debug(f"Detailed traceback:\n{traceback.format_exc()}")
+            return False
+    
+    def add_metadata(self, sdata: SpatialData) -> None:
         """Add metadata to the SpatialData object."""
-        # Implementation details...
+        # Add dataset metadata if SpatialData supports it
+        if hasattr(sdata, 'metadata'):
+            sdata.metadata = {
+                'dataset_id': self.dataset_id,
+                'pixel_size_um': self.pixel_size_um,
+                'source': self._metadata.get('source', 'unknown'),
+                'msi_metadata': self._metadata
+            }
