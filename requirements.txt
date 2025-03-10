@@ -1,0 +1,13 @@
+anndata==0.11.3
+dask==2024.8.2
+geopandas==1.0.1
+lxml==5.2.1
+numpy==2.2.3
+pandas==2.2.3
+pyimzML==1.5.5
+pytest==7.4.4
+scipy==1.15.2
+Shapely==2.0.7
+spatialdata==0.3.0
+tqdm==4.66.5
+zarr==2.18.4
