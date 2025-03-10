@@ -8,9 +8,10 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     strategy:
       matrix:
+        os: [ubuntu-latest, windows-latest]
         python-version: [3.9, '3.10', '3.11']
 
     steps:
@@ -24,6 +25,8 @@ jobs:
         python -m pip install --upgrade pip
         # Install the package with test dependencies
         pip install -e ".[test]"
+        # Install packages needed for warnings filtering
+        pip install cryptography paramiko
         # Install any missing test dependencies
         pip install lxml pyimzml
     - name: Test with pytest
