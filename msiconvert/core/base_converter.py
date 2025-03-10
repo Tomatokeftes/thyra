@@ -1,0 +1,288 @@
+from abc import ABC, abstractmethod
+from pathlib import Path
+from typing import Dict, Any, Tuple, Optional, List, Union
+from os import PathLike
+import numpy as np
+import logging
+from scipy import sparse
+import pandas as pd
+from tqdm import tqdm
+
+from .base_reader import BaseMSIReader
+
+class BaseMSIConverter(ABC):
+    """
+    Base class for MSI data converters with shared functionality.
+    Implements common processing steps while allowing format-specific customization.
+    """
+    
+    def __init__(self, reader: BaseMSIReader, output_path: Union[str, Path, PathLike], 
+                 dataset_id: str = "msi_dataset",
+                 pixel_size_um: float = 1.0,
+                 compression_level: int = 5,
+                 handle_3d: bool = False,
+                 **kwargs):
+        self.reader = reader
+        self.output_path = Path(output_path)
+        self.dataset_id = dataset_id
+        self.pixel_size_um = pixel_size_um
+        self.compression_level = compression_level
+        self.handle_3d = handle_3d
+        self.options = kwargs
+        self._common_mass_axis = None
+        self._dimensions = None
+        self._metadata = None
+        self._buffer_size = 100000  # Default buffer size for processing spectra
+    
+    def convert(self) -> bool:
+        """
+        Template method defining the conversion workflow.
+        
+        Returns:
+        --------
+        bool: True if conversion was successful, False otherwise.
+        """
+        try:
+            # 1. Initialize and prepare data
+            self._initialize_conversion()
+            
+            # 2. Create output-specific data structures
+            data_structures = self._create_data_structures()
+            
+            # 3. Process spectra
+            self._process_spectra(data_structures)
+            
+            # 4. Post-process and finalize data
+            self._finalize_data(data_structures)
+            
+            # 5. Save to disk in format-specific way
+            success = self._save_output(data_structures)
+            
+            return success
+        except Exception as e:
+            logging.error(f"Error during conversion: {e}")
+            import traceback
+            logging.debug(f"Detailed traceback:\n{traceback.format_exc()}")
+            return False
+        finally:
+            self.reader.close()
+    
+    def _initialize_conversion(self) -> None:
+        """Initialize conversion by loading dimensions, mass axis and metadata."""
+        logging.info("Initializing conversion...")
+        self._dimensions = self.reader.get_dimensions()
+        self._common_mass_axis = self.reader.get_common_mass_axis()
+        self._metadata = self.reader.get_metadata()
+        
+        logging.info(f"Dataset dimensions: {self._dimensions}")
+        logging.info(f"Common mass axis length: {len(self._common_mass_axis)}")
+    
+    @abstractmethod
+    def _create_data_structures(self) -> Any:
+        """
+        Create format-specific data structures.
+        
+        Returns:
+        --------
+        Any: Format-specific data structures to be used in subsequent steps.
+        """
+        pass
+    
+    def _process_spectra(self, data_structures: Any) -> None:
+        """
+        Process all spectra from the reader and integrate into data structures.
+        
+        Parameters:
+        -----------
+        data_structures: Format-specific data containers created by _create_data_structures.
+        """
+        logging.info("Processing spectra...")
+        if self._dimensions is None:
+            raise ValueError("Dimensions are not initialized.")
+        n_x, n_y, n_z = self._dimensions
+        total_pixels = n_x * n_y * n_z
+        
+        # Process spectra with progress tracking
+        with tqdm(desc="Processing spectra", unit="spectrum") as pbar:
+            for coords, mzs, intensities in self.reader.iter_spectra():
+                self._process_single_spectrum(data_structures, coords, mzs, intensities)
+                pbar.update(1)
+    
+    def _process_single_spectrum(self, data_structures: Any, coords: Tuple[int, int, int], 
+                               mzs: np.ndarray, intensities: np.ndarray) -> None:
+        """
+        Process a single spectrum.
+        
+        Parameters:
+        -----------
+        data_structures: Format-specific data containers
+        coords: (x, y, z) coordinates
+        mzs: m/z values
+        intensities: Intensity values
+        """
+        # Default implementation - to be overridden by subclasses if needed
+        pass
+    
+    def _finalize_data(self, data_structures: Any) -> None:
+        """
+        Perform any final processing on the data structures before saving.
+        
+        Parameters:
+        -----------
+        data_structures: Format-specific data containers
+        """
+        # Default implementation - to be overridden by subclasses if needed
+        pass
+    
+    @abstractmethod
+    def _save_output(self, data_structures: Any) -> bool:
+        """
+        Save the processed data to the output format.
+        
+        Parameters:
+        -----------
+        data_structures: Format-specific data containers
+        
+        Returns:
+        --------
+        bool: True if saving was successful, False otherwise
+        """
+        pass
+    
+    def add_metadata(self, metadata: Any) -> None:
+        """
+        Add metadata to the output.
+        Base implementation to be extended by subclasses.
+        
+        Parameters:
+        -----------
+        metadata: Any object that can store metadata
+        """
+        # This will be implemented by subclasses
+        pass
+    
+    # --- Common Utility Methods ---
+    
+    def _create_sparse_matrix(self) -> sparse.lil_matrix:
+        """
+        Create a sparse matrix for storing spectral data.
+        
+        Returns:
+        --------
+        sparse.lil_matrix: Empty sparse matrix sized for the dataset
+        """
+        if self._dimensions is None:
+            raise ValueError("Dimensions are not initialized.")
+        n_x, n_y, n_z = self._dimensions
+        n_pixels = n_x * n_y * n_z
+        if self._common_mass_axis is None:
+            raise ValueError("Common mass axis is not initialized.")
+        n_masses = len(self._common_mass_axis)
+        
+        logging.info(f"Creating sparse matrix for {n_pixels} pixels and {n_masses} mass values")
+        return sparse.lil_matrix((n_pixels, n_masses), dtype=np.float32)
+    
+    def _create_coordinates_dataframe(self) -> pd.DataFrame:
+        """
+        Create a DataFrame containing pixel coordinates.
+        
+        Returns:
+        --------
+        pd.DataFrame: DataFrame with pixel coordinates
+        """
+        if self._dimensions is None:
+            raise ValueError("Dimensions are not initialized.")
+        n_x, n_y, n_z = self._dimensions
+        
+        coords = []
+        for z in range(n_z):
+            for y in range(n_y):
+                for x in range(n_x):
+                    pixel_idx = z * (n_y * n_x) + y * n_x + x
+                    coords.append({
+                        'z': z,
+                        'y': y, 
+                        'x': x,
+                        'pixel_id': str(pixel_idx)  # Convert to string for compatibility
+                    })
+        
+        coords_df = pd.DataFrame(coords)
+        coords_df.set_index('pixel_id', inplace=True)
+        
+        # Add spatial coordinates
+        coords_df['spatial_x'] = coords_df['x'] * self.pixel_size_um
+        coords_df['spatial_y'] = coords_df['y'] * self.pixel_size_um
+        coords_df['spatial_z'] = coords_df['z'] * self.pixel_size_um
+        
+        return coords_df
+    
+    def _create_mass_dataframe(self) -> pd.DataFrame:
+        """
+        Create a DataFrame containing mass values.
+        
+        Returns:
+        --------
+        pd.DataFrame: DataFrame with mass values
+        """
+        if self._common_mass_axis is None:
+            raise ValueError("Common mass axis is not initialized.")
+        var_df = pd.DataFrame({'mz': self._common_mass_axis})
+        # Convert to string index for compatibility
+        var_df['mz_str'] = var_df['mz'].astype(str)
+        var_df.set_index('mz_str', inplace=True)
+        return var_df
+    
+    def _get_pixel_index(self, x: int, y: int, z: int) -> int:
+        """
+        Convert 3D coordinates to a flat array index.
+        
+        Parameters:
+        -----------
+        x, y, z: Pixel coordinates
+        
+        Returns:
+        --------
+        int: Flat index
+        """
+        if self._dimensions is None:
+            raise ValueError("Dimensions are not initialized.")
+        n_x, n_y, _ = self._dimensions
+        return z * (n_y * n_x) + y * n_x + x
+    
+    def _map_mass_to_indices(self, mzs: np.ndarray) -> np.ndarray:
+        """
+        Map m/z values to indices in the common mass axis.
+        
+        Parameters:
+        -----------
+        mzs: Array of m/z values
+        
+        Returns:
+        --------
+        np.ndarray: Array of indices in common mass axis
+        """
+        if self._common_mass_axis is None:
+            raise ValueError("Common mass axis is not initialized.")
+        return np.searchsorted(self._common_mass_axis, mzs)
+    
+    def _add_to_sparse_matrix(self, sparse_matrix: sparse.lil_matrix, 
+                            pixel_idx: int, mz_indices: np.ndarray, 
+                            intensities: np.ndarray) -> None:
+        """
+        Add intensity values to a sparse matrix.
+        
+        Parameters:
+        -----------
+        sparse_matrix: Target sparse matrix
+        pixel_idx: Flat pixel index
+        mz_indices: Indices in common mass axis
+        intensities: Intensity values
+        """
+        if self._common_mass_axis is None:
+            raise ValueError("Common mass axis is not initialized.")
+        n_masses = len(self._common_mass_axis)
+        
+        # Only store valid, non-zero values
+        for mz_idx, intensity in zip(mz_indices, intensities):
+            if intensity > 0 and mz_idx < n_masses:
+                sparse_matrix[pixel_idx, mz_idx] = intensity
