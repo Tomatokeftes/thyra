@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: [3.8, 3.9, '3.10']
+        python-version: [3.9, '3.10', '3.11']
 
     steps:
     - uses: actions/checkout@v3
@@ -22,14 +22,10 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        # Install test-specific dependencies
-        pip install pytest pytest-cov
-        # Install dependencies from requirements.txt
-        pip install -r requirements.txt
+        # Install the package with test dependencies
+        pip install -e ".[test]"
         # Install any missing test dependencies
         pip install lxml pyimzml
-        # Install the package itself
-        pip install -e .
     - name: Test with pytest
       run: |
         pytest -m "not integration" --disable-warnings
