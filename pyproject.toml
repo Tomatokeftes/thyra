@@ -1,33 +1,69 @@
 [build-system]
-requires = ["setuptools", "wheel"]
+requires = ["setuptools>=61.0.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "msiconvert"
 version = "0.1.0"
 description = "A library to convert MSI data into different formats"
-authors = [
-    { name = "Theodoros Visvikis", email = "t.visvikis@maastrichtuniversity.nl" }
-]
 readme = "README.md"
-license = { text = "MIT" }
+authors = [
+    {name = "Theodoros Visvikis", email = "t.visvikis@maastrichtuniversity.nl"}
+]
+license = {text = "MIT"}
 classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
 ]
+requires-python = ">=3.8"
 dependencies = [
-    "numpy",
-    "zarr",
-    "dask",
-    "scipy",
-    "pyimzml",
-    "tqdm",
-    "spatialdata",
-    "anndata",
-    "geopandas",
-    "shapely",
+    "anndata>=0.10.0,<0.12.0",
+    "dask>=2023.0.0",
+    "geopandas>=0.9.0",
+    "lxml>=4.6.0",
+    "numpy>=1.20.0",
+    "pandas>=1.3.0",
+    "pyimzML>=1.4.0",
+    "scipy>=1.7.0",
+    "Shapely>=1.8.0",
+    "spatialdata>=0.0.2",
+    "tqdm>=4.50.0",
+    "zarr>=2.10.0",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "mock>=4.0.0",
+]
+dev = [
+    "black>=23.0.0",
+    "isort>=5.12.0",
+    "flake8>=6.0.0",
 ]
 
 [project.scripts]
 msiconvert = "msiconvert.__main__:main"
+
+[tool.setuptools]
+packages = ["msiconvert"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"
+markers = [
+    "unit: marks tests as unit tests (fast, no external dependencies)",
+    "integration: marks tests as integration tests (may be slow, may require external dependencies)"
+]
+addopts = "-v --tb=short -m \"not integration\""
+filterwarnings = [
+    "ignore::DeprecationWarning:pkg_resources.*:",
+    "ignore::DeprecationWarning:xarray_schema.*:",
+    "ignore::UserWarning:spatialdata.models.models:1053",
+    "ignore::cryptography.utils.CryptographyDeprecationWarning:paramiko.pkey:",
+    "ignore::cryptography.utils.CryptographyDeprecationWarning:paramiko.transport:"
+]
