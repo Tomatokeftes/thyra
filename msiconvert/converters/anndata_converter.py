@@ -2,7 +2,8 @@ import numpy as np
 import pandas as pd
 from anndata import AnnData
 from pathlib import Path
-from typing import Dict, Any, Tuple
+from typing import Dict, Any, Tuple, Union, Optional
+from os import PathLike
 from scipy import sparse
 import logging
 
@@ -79,7 +80,7 @@ class AnnDataConverter(BaseMSIConverter):
             )
             
             # Add metadata
-            self.add_metadata(adata)
+            self.add_metadata(metadata=adata)
             
             # Save to disk
             self._save_anndata(adata)
@@ -89,18 +90,27 @@ class AnnDataConverter(BaseMSIConverter):
             logging.error(f"Error saving AnnData: {e}")
             return False
     
-    def add_metadata(self, adata: AnnData) -> None:
+    def add_metadata(self, metadata: Any) -> None:
         """Add metadata to the AnnData object."""
-        # Add dataset-level metadata
-        adata.uns['metadata'] = self._metadata
-        adata.uns['dataset_id'] = self.dataset_id
-        adata.uns['pixel_size_um'] = self.pixel_size_um
+        # Check if metadata is AnnData object
+        if isinstance(metadata, AnnData):
+            adata = metadata
+            # Add dataset-level metadata
+            adata.uns['metadata'] = self._metadata
+            adata.uns['dataset_id'] = self.dataset_id
+            adata.uns['pixel_size_um'] = self.pixel_size_um
+        else:
+            # Handle base class implementation
+            super().add_metadata(metadata)
     
     def _save_anndata(self, adata: AnnData) -> None:
         """Save AnnData object to disk, using zarr backing for large datasets."""
         # Calculate dimensions for reporting
         n_pixels = adata.n_obs
         n_masses = adata.n_vars
+        
+        # Get the file path as a Path object
+        output_path = self.output_path
         
         # For very large datasets, use zarr backing
         if n_pixels * n_masses > 1e8:  # Threshold can be adjusted
@@ -110,13 +120,13 @@ class AnnDataConverter(BaseMSIConverter):
             try:
                 # For newer versions of AnnData that support chunks directly
                 adata.write_zarr(
-                    store=str(self.output_path),
+                    store=output_path,
                     chunks=(min(10000, n_pixels), min(1000, n_masses))
                 )
             except TypeError:
                 # Fallback for older versions that don't support chunks or compressor directly
                 logging.info("Using compatible mode for AnnData zarr writing")
-                adata.write_zarr(store=str(self.output_path))
+                adata.write_zarr(store=output_path)
         else:
             # For smaller datasets, use standard h5ad format
-            adata.write_h5ad(str(self.output_path))
+            adata.write_h5ad(output_path)

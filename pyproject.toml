@@ -7,7 +7,7 @@ name = "msiconvert"
 version = "0.1.0"
 description = "A library to convert MSI data into different formats"
 authors = [
-    { name = "Your Name", email = "your.email@example.com" }
+    { name = "Theodoros Visvikis", email = "t.visvikis@maastrichtuniversity.nl" }
 ]
 readme = "README.md"
 license = { text = "MIT" }

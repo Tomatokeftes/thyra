@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Dict, Any, Tuple, Optional, List
+from typing import Dict, Any, Tuple, Optional, List, Union
+from os import PathLike
 import numpy as np
 import logging
 from scipy import sparse
@@ -15,14 +16,14 @@ class BaseMSIConverter(ABC):
     Implements common processing steps while allowing format-specific customization.
     """
     
-    def __init__(self, reader: BaseMSIReader, output_path: Path, 
+    def __init__(self, reader: BaseMSIReader, output_path: Union[str, Path, PathLike], 
                  dataset_id: str = "msi_dataset",
                  pixel_size_um: float = 1.0,
                  compression_level: int = 5,
                  handle_3d: bool = False,
                  **kwargs):
         self.reader = reader
-        self.output_path = output_path
+        self.output_path = Path(output_path)
         self.dataset_id = dataset_id
         self.pixel_size_um = pixel_size_um
         self.compression_level = compression_level
@@ -96,6 +97,8 @@ class BaseMSIConverter(ABC):
         data_structures: Format-specific data containers created by _create_data_structures.
         """
         logging.info("Processing spectra...")
+        if self._dimensions is None:
+            raise ValueError("Dimensions are not initialized.")
         n_x, n_y, n_z = self._dimensions
         total_pixels = n_x * n_y * n_z
         
@@ -146,14 +149,14 @@ class BaseMSIConverter(ABC):
         """
         pass
     
-    def add_metadata(self, metadata: Dict[str, Any]) -> None:
+    def add_metadata(self, metadata: Any) -> None:
         """
         Add metadata to the output.
         Base implementation to be extended by subclasses.
         
         Parameters:
         -----------
-        metadata: Dictionary containing metadata
+        metadata: Any object that can store metadata
         """
         # This will be implemented by subclasses
         pass
@@ -168,8 +171,12 @@ class BaseMSIConverter(ABC):
         --------
         sparse.lil_matrix: Empty sparse matrix sized for the dataset
         """
+        if self._dimensions is None:
+            raise ValueError("Dimensions are not initialized.")
         n_x, n_y, n_z = self._dimensions
         n_pixels = n_x * n_y * n_z
+        if self._common_mass_axis is None:
+            raise ValueError("Common mass axis is not initialized.")
         n_masses = len(self._common_mass_axis)
         
         logging.info(f"Creating sparse matrix for {n_pixels} pixels and {n_masses} mass values")
@@ -183,6 +190,8 @@ class BaseMSIConverter(ABC):
         --------
         pd.DataFrame: DataFrame with pixel coordinates
         """
+        if self._dimensions is None:
+            raise ValueError("Dimensions are not initialized.")
         n_x, n_y, n_z = self._dimensions
         
         coords = []
@@ -215,6 +224,8 @@ class BaseMSIConverter(ABC):
         --------
         pd.DataFrame: DataFrame with mass values
         """
+        if self._common_mass_axis is None:
+            raise ValueError("Common mass axis is not initialized.")
         var_df = pd.DataFrame({'mz': self._common_mass_axis})
         # Convert to string index for compatibility
         var_df['mz_str'] = var_df['mz'].astype(str)
@@ -233,6 +244,8 @@ class BaseMSIConverter(ABC):
         --------
         int: Flat index
         """
+        if self._dimensions is None:
+            raise ValueError("Dimensions are not initialized.")
         n_x, n_y, _ = self._dimensions
         return z * (n_y * n_x) + y * n_x + x
     
@@ -248,6 +261,8 @@ class BaseMSIConverter(ABC):
         --------
         np.ndarray: Array of indices in common mass axis
         """
+        if self._common_mass_axis is None:
+            raise ValueError("Common mass axis is not initialized.")
         return np.searchsorted(self._common_mass_axis, mzs)
     
     def _add_to_sparse_matrix(self, sparse_matrix: sparse.lil_matrix, 
@@ -263,6 +278,8 @@ class BaseMSIConverter(ABC):
         mz_indices: Indices in common mass axis
         intensities: Intensity values
         """
+        if self._common_mass_axis is None:
+            raise ValueError("Common mass axis is not initialized.")
         n_masses = len(self._common_mass_axis)
         
         # Only store valid, non-zero values

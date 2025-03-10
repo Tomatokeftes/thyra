@@ -1,6 +1,6 @@
 # msiconvert/readers/imzml_reader.py
 import numpy as np
-from typing import Dict, Any, Tuple, Generator, Optional
+from typing import Dict, Any, Tuple, Generator, Optional, Union
 from pathlib import Path
 from pyimzml.ImzMLParser import ImzMLParser
 from tqdm import tqdm
@@ -13,7 +13,27 @@ from ..core.registry import register_reader
 class ImzMLReader(BaseMSIReader):
     """Reader for imzML format files."""
     
-    def __init__(self, imzml_path: Path):
+    def __init__(self, imzml_path: Optional[Union[str, Path]] = None):
+        """
+        Initialize an ImzML reader.
+        
+        Parameters:
+        -----------
+        imzml_path : str or Path, optional
+            Path to the imzML file. If not provided, can be set later using read().
+        """
+        super().__init__() # Call parent constructor with no arguments
+        self.filepath = imzml_path # Store filepath as instance variable
+        
+        # Only initialize the parser if a path is provided
+        if imzml_path is not None:
+            self._initialize_parser(imzml_path)
+            
+    def _initialize_parser(self, imzml_path):
+        """Initialize the ImzML parser with the given path."""
+        if isinstance(imzml_path, str):
+            imzml_path = Path(imzml_path)
+        
         self.imzml_path = imzml_path
         self.ibd_path = imzml_path.with_suffix('.ibd')
         
@@ -26,7 +46,9 @@ class ImzMLReader(BaseMSIReader):
             parse_lib="lxml",
             ibd_file=self.ibd_file
         )
-        
+        if self.parser.metadata is None:
+            raise ValueError("Failed to parse metadata from imzML file.")
+            
         # Determine file mode
         self.is_continuous = "continuous" in self.parser.metadata.file_description.param_by_name
         self.is_processed = "processed" in self.parser.metadata.file_description.param_by_name
@@ -37,8 +59,61 @@ class ImzMLReader(BaseMSIReader):
         # Calculate common mass axis
         self._common_mass_axis = None
     
+    def can_read(self, filepath: str) -> bool:
+        """Check if this reader can read the given file."""
+        return isinstance(filepath, str) and filepath.lower().endswith('.imzml')
+    
+    def read(self, filepath=None):
+        """Read the imzML file and return parsed data."""
+        if filepath is not None:
+            self._initialize_parser(filepath)
+        elif self.filepath is not None and not hasattr(self, 'parser'):
+            self._initialize_parser(self.filepath)
+        elif not hasattr(self, 'parser'):
+            raise ValueError("No filepath provided to read method and no parser initialized")
+        
+        # Read the data from the file
+        coordinates = []
+        intensities_list = []
+        mzs = self.get_common_mass_axis()
+        
+        for (x, y, z), spectrum_mzs, spectrum_intensities in self.iter_spectra():
+            coordinates.append((x, y))
+            
+            # Process intensity values
+            if self.is_continuous:
+                intensities_list.append(spectrum_intensities)
+            else:
+                # For processed data, we need to remap to the common mass axis
+                intensities = np.zeros_like(mzs)
+                # Simple nearest-neighbor mapping for now
+                for i, mz in enumerate(spectrum_mzs):
+                    idx = np.abs(mzs - mz).argmin()
+                    intensities[idx] = spectrum_intensities[i]
+                intensities_list.append(intensities)
+        
+        # Convert list to array
+        intensities = np.vstack(intensities_list)
+        
+        # Return the data dictionary
+        dimensions = self.get_dimensions()
+        width, height, _ = dimensions
+        
+        return {
+            'mzs': mzs,
+            'intensities': intensities,
+            'coordinates': coordinates,
+            'width': width,
+            'height': height,
+            'pixel_size_x': 1.0,  # Default pixel size if not available
+            'pixel_size_y': 1.0
+        }
+    
     def get_metadata(self) -> Dict[str, Any]:
         """Return metadata about the imzML dataset."""
+        if not hasattr(self, 'parser'):
+            raise ValueError("Parser not initialized. Call read() first.")
+        
         return {
             'source': str(self.imzml_path),
             'uuid': self.parser.metadata.file_description.cv_params[0][2],
@@ -47,6 +122,9 @@ class ImzMLReader(BaseMSIReader):
     
     def get_dimensions(self) -> Tuple[int, int, int]:
         """Return the dimensions of the imzML dataset (x, y, z)."""
+        if not hasattr(self, 'parser'):
+            raise ValueError("Parser not initialized. Call read() first.")
+            
         x_max = self.parser.imzmldict['max count of pixels x']
         y_max = self.parser.imzmldict['max count of pixels y']
         z_max = 1  # imzML is typically 2D; set to 1 for compatibility
@@ -54,6 +132,9 @@ class ImzMLReader(BaseMSIReader):
     
     def get_common_mass_axis(self) -> np.ndarray:
         """Return the common mass axis for all spectra."""
+        if not hasattr(self, 'parser'):
+            raise ValueError("Parser not initialized. Call read() first.")
+            
         if self._common_mass_axis is None:
             if self.is_continuous:
                 # Continuous data: all pixels have the same m/z values
@@ -67,6 +148,37 @@ class ImzMLReader(BaseMSIReader):
                 self._common_mass_axis = np.unique(all_mz_values)
         
         return self._common_mass_axis
+        
+    def get_mzs(self):
+        """Get the m/z values."""
+        return self.get_common_mass_axis()
+    
+    def get_intensities(self):
+        """Get the intensity values for all spectra."""
+        if not hasattr(self, 'parser'):
+            if self.filepath:
+                self._initialize_parser(self.filepath)
+            else:
+                raise ValueError("Parser not initialized and no filepath available")
+        
+        data = self.read()
+        return data['intensities']
+    
+    def get_coordinates(self):
+        """Get the pixel coordinates."""
+        if not hasattr(self, 'parser'):
+            if self.filepath:
+                self._initialize_parser(self.filepath)
+            else:
+                raise ValueError("Parser not initialized and no filepath available")
+                
+        data = self.read()
+        return data['coordinates']
+    
+    def get_pixel_size(self) -> Tuple[float, float]:
+        """Get the pixel size in microns."""
+        # Default to 1.0 if not available
+        return (1.0, 1.0)
     
     def iter_spectra(self) -> Generator[Tuple[Tuple[int, int, int], np.ndarray, np.ndarray], None, None]:
         """
@@ -79,6 +191,11 @@ class ImzMLReader(BaseMSIReader):
             - m/z values array
             - Intensity values array
         """
+        if not hasattr(self, 'parser'):
+            if self.filepath:
+                self._initialize_parser(self.filepath)
+            else:
+                raise ValueError("Parser not initialized and no filepath available")
         
         total_spectra = len(self.parser.coordinates)
         dimensions = self.get_dimensions()
@@ -103,7 +220,6 @@ class ImzMLReader(BaseMSIReader):
                 except Exception as err:
                     print(f"Error processing spectrum {idx} at pixel ({x}, {y}): {err}")
                     pbar.update(1)
-    
     
     def close(self) -> None:
         """Close all open file handles."""
