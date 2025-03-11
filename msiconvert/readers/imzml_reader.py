@@ -216,7 +216,12 @@ class ImzMLReader(BaseMSIReader):
         return self._common_mass_axis
     
     def _map_mz_to_common_axis(self, mzs: np.ndarray, intensities: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-        """Map m/z values to indices in the common mass axis using searchsorted.
+        """
+        Map m/z values to indices in the common mass axis.
+        
+        For continuous mode imzML files, the mapping is straightforward since all
+        spectra share the same m/z values. For processed mode, we need to map each
+        m/z value to its closest match in the common axis within tolerance.
         
         Args:
             mzs: Array of m/z values
@@ -345,11 +350,60 @@ class ImzMLReader(BaseMSIReader):
                             logging.warning(f"Error processing spectrum {idx}: {e}")
                             pbar.update(1)
     
+    def read(self):
+        """
+        Read the entire imzML file and return a structured data dictionary.
+        
+        Returns:
+            dict: Dictionary containing:
+                - mzs: common m/z values array
+                - intensities: array of intensity arrays
+                - coordinates: list of (x,y,z) coordinates
+                - width: number of pixels in x dimension
+                - height: number of pixels in y dimension
+                - depth: number of pixels in z dimension
+        """
+        if not hasattr(self, 'parser') or self.parser is None:
+            if self.filepath:
+                self._initialize_parser(self.filepath)
+            else:
+                raise ValueError("Parser not initialized and no filepath available")
+
+        # Get common mass axis
+        mzs = self.get_common_mass_axis()
+        
+        # Get dimensions
+        width, height, depth = self.get_dimensions()
+        
+        # Collect all spectra
+        coordinates = []
+        intensities = []
+        
+        # Iterate through all spectra
+        for coords, spectrum_indices, spectrum_intensities in self.iter_spectra():
+            coordinates.append(coords)
+            
+            # Convert sparse representation to full array
+            full_spectrum = np.zeros(len(mzs), dtype=np.float32)
+            full_spectrum[spectrum_indices] = spectrum_intensities
+            intensities.append(full_spectrum)
+        
+        return {
+            "mzs": mzs,
+            "intensities": np.array(intensities),
+            "coordinates": coordinates,
+            "width": width,
+            "height": height,
+            "depth": depth
+        }
+    
     def close(self) -> None:
         """Close all open file handles."""
-        if hasattr(self, 'ibd_file') and self.ibd_file:
+        if hasattr(self, 'ibd_file') and self.ibd_file is not None:
             self.ibd_file.close()
             self.ibd_file = None
         
-        if hasattr(self, 'parser') and hasattr(self.parser, 'm') and self.parser.m:
-            self.parser.m.close()
+        if hasattr(self, 'parser') and self.parser is not None:
+            if hasattr(self.parser, 'm') and self.parser.m is not None:
+                self.parser.m.close()
+            self.parser = None
