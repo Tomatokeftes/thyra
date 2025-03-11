@@ -1,7 +1,7 @@
 # msiconvert/core/base_reader.py
 from abc import ABC, abstractmethod
 import numpy as np
-from typing import Dict, Any, Tuple, Generator, Optional
+from typing import Dict, Any, Tuple, Generator, Optional, Union
 
 class BaseMSIReader(ABC):
     """Abstract base class for reading MSI data formats."""
@@ -22,16 +22,18 @@ class BaseMSIReader(ABC):
         pass
     
     @abstractmethod
-    def iter_spectra(self) -> Generator[Tuple[Tuple[int, int, int], np.ndarray, np.ndarray], None, None]:
+    def iter_spectra(self, batch_size: Optional[int] = None) -> Generator[Tuple[Tuple[int, int, int], np.ndarray, np.ndarray], None, None]:
         """
-        Iterate through spectra.
+        Iterate through spectra with progress tracking.
+        
+        Args:
+            batch_size: Optional batch size for spectrum iteration
         
         Yields:
-        -------
-        Tuple containing:
-            - Coordinates (x, y, z)
-            - m/z values array
-            - Intensity values array
+            Tuple containing:
+                - Coordinates (x, y, z)
+                - Indices in common mass axis
+                - Intensity values array
         """
         pass
     

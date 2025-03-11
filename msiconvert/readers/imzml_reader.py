@@ -1,31 +1,42 @@
 # msiconvert/readers/imzml_reader.py
 import numpy as np
-from typing import Dict, Any, Tuple, Generator, Optional, Union
+from typing import Dict, Any, Tuple, Generator, Optional, Union, List
 from pathlib import Path
 from pyimzml.ImzMLParser import ImzMLParser
+import logging
 from tqdm import tqdm
 
 from ..core.base_reader import BaseMSIReader
-
 from ..core.registry import register_reader
 
 @register_reader('imzml')
 class ImzMLReader(BaseMSIReader):
-    """Reader for imzML format files."""
+    """Reader for imzML format files with optimizations for performance."""
     
-    def __init__(self, imzml_path: Optional[Union[str, Path]] = None):
+    def __init__(self, imzml_path: Optional[Union[str, Path]] = None, 
+                 batch_size: int = 50,
+                 cache_coordinates: bool = True):
         """
         Initialize an ImzML reader.
         
-        Parameters:
-        -----------
-        imzml_path : str or Path, optional
-            Path to the imzML file. If not provided, can be set later using read().
+        Args:
+            imzml_path: Path to the imzML file. If not provided, can be set later using read().
+            batch_size: Default batch size for spectrum iteration
+            cache_coordinates: Whether to cache coordinates upfront
         """
-        super().__init__() # Call parent constructor with no arguments
-        self.filepath = imzml_path # Store filepath as instance variable
+        self.filepath = imzml_path
+        self.batch_size = batch_size
+        self.cache_coordinates = cache_coordinates
+        self.parser = None
+        self.ibd_file = None
         
-        # Only initialize the parser if a path is provided
+        # Cached properties
+        self._common_mass_axis = None  # Will hold all unique m/z values
+        self._dimensions = None
+        self._metadata = None
+        self._coordinates_cache = {}
+        
+        # Initialize if path provided
         if imzml_path is not None:
             self._initialize_parser(imzml_path)
             
@@ -40,12 +51,23 @@ class ImzMLReader(BaseMSIReader):
         if not self.ibd_path.exists():
             raise ValueError(f"Corresponding .ibd file not found for {imzml_path}")
         
+        # Open the .ibd file for reading
         self.ibd_file = open(self.ibd_path, mode="rb")
-        self.parser = ImzMLParser(
-            filename=str(imzml_path),
-            parse_lib="lxml",
-            ibd_file=self.ibd_file
-        )
+        
+        # Initialize the parser
+        logging.info(f"Initializing ImzML parser for {imzml_path}")
+        try:
+            self.parser = ImzMLParser(
+                filename=str(imzml_path),
+                parse_lib="lxml",
+                ibd_file=self.ibd_file
+            )
+        except Exception as e:
+            if self.ibd_file:
+                self.ibd_file.close()
+            logging.error(f"Failed to initialize ImzML parser: {e}")
+            raise
+        
         if self.parser.metadata is None:
             raise ValueError("Failed to parse metadata from imzML file.")
             
@@ -55,171 +77,273 @@ class ImzMLReader(BaseMSIReader):
         
         if self.is_continuous == self.is_processed:
             raise ValueError("Invalid file mode, expected either 'continuous' or 'processed'.")
+            
+        # Cache coordinates if requested
+        if self.cache_coordinates:
+            self._cache_all_coordinates()
+    
+    def _cache_all_coordinates(self):
+        """Cache all coordinates for faster access."""
+        if not hasattr(self, 'parser') or self.parser is None:
+            return
+            
+        logging.info("Caching all coordinates for faster access")
+        self._coordinates_cache = {}
         
-        # Calculate common mass axis
-        self._common_mass_axis = None
+        for idx, (x, y, z) in enumerate(self.parser.coordinates):
+            # Adjust coordinates to 0-based
+            self._coordinates_cache[idx] = (x - 1, y - 1, z - 1 if z > 0 else 0)
+            
+        logging.info(f"Cached {len(self._coordinates_cache)} coordinates")
     
     def can_read(self, filepath: str) -> bool:
         """Check if this reader can read the given file."""
         return isinstance(filepath, str) and filepath.lower().endswith('.imzml')
     
-    def read(self, filepath=None):
-        """Read the imzML file and return parsed data."""
-        if filepath is not None:
-            self._initialize_parser(filepath)
-        elif self.filepath is not None and not hasattr(self, 'parser'):
-            self._initialize_parser(self.filepath)
-        elif not hasattr(self, 'parser'):
-            raise ValueError("No filepath provided to read method and no parser initialized")
-        
-        # Read the data from the file
-        coordinates = []
-        intensities_list = []
-        mzs = self.get_common_mass_axis()
-        
-        for (x, y, z), spectrum_mzs, spectrum_intensities in self.iter_spectra():
-            coordinates.append((x, y))
-            
-            # Process intensity values
-            if self.is_continuous:
-                intensities_list.append(spectrum_intensities)
-            else:
-                # For processed data, we need to remap to the common mass axis
-                intensities = np.zeros_like(mzs)
-                # Simple nearest-neighbor mapping for now
-                for i, mz in enumerate(spectrum_mzs):
-                    idx = np.abs(mzs - mz).argmin()
-                    intensities[idx] = spectrum_intensities[i]
-                intensities_list.append(intensities)
-        
-        # Convert list to array
-        intensities = np.vstack(intensities_list)
-        
-        # Return the data dictionary
-        dimensions = self.get_dimensions()
-        width, height, _ = dimensions
-        
-        return {
-            'mzs': mzs,
-            'intensities': intensities,
-            'coordinates': coordinates,
-            'width': width,
-            'height': height,
-            'pixel_size_x': 1.0,  # Default pixel size if not available
-            'pixel_size_y': 1.0
-        }
-    
     def get_metadata(self) -> Dict[str, Any]:
         """Return metadata about the imzML dataset."""
-        if not hasattr(self, 'parser'):
-            raise ValueError("Parser not initialized. Call read() first.")
-        
-        return {
-            'source': str(self.imzml_path),
-            'uuid': self.parser.metadata.file_description.cv_params[0][2],
-            'file_mode': 'continuous' if self.is_continuous else 'processed'
-        }
-    
-    def get_dimensions(self) -> Tuple[int, int, int]:
-        """Return the dimensions of the imzML dataset (x, y, z)."""
-        if not hasattr(self, 'parser'):
-            raise ValueError("Parser not initialized. Call read() first.")
-            
-        x_max = self.parser.imzmldict['max count of pixels x']
-        y_max = self.parser.imzmldict['max count of pixels y']
-        z_max = 1  # imzML is typically 2D; set to 1 for compatibility
-        return (x_max, y_max, z_max)
-    
-    def get_common_mass_axis(self) -> np.ndarray:
-        """Return the common mass axis for all spectra."""
-        if not hasattr(self, 'parser'):
-            raise ValueError("Parser not initialized. Call read() first.")
-            
-        if self._common_mass_axis is None:
-            if self.is_continuous:
-                # Continuous data: all pixels have the same m/z values
-                self._common_mass_axis = self.parser.getspectrum(0)[0]
-            else:
-                # Processed data: collect all unique m/z values
-                all_mz_values = np.concatenate([
-                    self.parser.getspectrum(idx)[0] 
-                    for idx in range(len(self.parser.coordinates))
-                ])
-                self._common_mass_axis = np.unique(all_mz_values)
-        
-        return self._common_mass_axis
-        
-    def get_mzs(self):
-        """Get the m/z values."""
-        return self.get_common_mass_axis()
-    
-    def get_intensities(self):
-        """Get the intensity values for all spectra."""
-        if not hasattr(self, 'parser'):
+        if not hasattr(self, 'parser') or self.parser is None:
             if self.filepath:
                 self._initialize_parser(self.filepath)
             else:
                 raise ValueError("Parser not initialized and no filepath available")
         
-        data = self.read()
-        return data['intensities']
+        if self._metadata is None:
+            self._metadata = {
+                'source': str(self.imzml_path),
+                'uuid': self.parser.metadata.file_description.cv_params[0][2],
+                'file_mode': 'continuous' if self.is_continuous else 'processed'
+            }
+            
+            # Add additional metadata if available
+            if hasattr(self.parser, 'imzmldict'):
+                for key, value in self.parser.imzmldict.items():
+                    self._metadata[key] = value
+                    
+        return self._metadata
     
-    def get_coordinates(self):
-        """Get the pixel coordinates."""
-        if not hasattr(self, 'parser'):
+    def get_dimensions(self) -> Tuple[int, int, int]:
+        """Return the dimensions of the imzML dataset (x, y, z)."""
+        if not hasattr(self, 'parser') or self.parser is None:
             if self.filepath:
                 self._initialize_parser(self.filepath)
             else:
                 raise ValueError("Parser not initialized and no filepath available")
                 
-        data = self.read()
-        return data['coordinates']
+        if self._dimensions is None:
+            # Get dimensions from metadata if available
+            if hasattr(self.parser, 'imzmldict'):
+                x_max = self.parser.imzmldict.get('max count of pixels x', 1)
+                y_max = self.parser.imzmldict.get('max count of pixels y', 1)
+                z_max = self.parser.imzmldict.get('max count of pixels z', 1)
+            else:
+                # Calculate from coordinates
+                x_coordinates = [x for x, _, _ in self.parser.coordinates]
+                y_coordinates = [y for _, y, _ in self.parser.coordinates]
+                z_coordinates = [z for _, _, z in self.parser.coordinates]
+                
+                x_max = max(x_coordinates) if x_coordinates else 1
+                y_max = max(y_coordinates) if y_coordinates else 1
+                z_max = max(z_coordinates) if z_coordinates else 1
+                
+            self._dimensions = (x_max, y_max, z_max)
+            
+        return self._dimensions
     
-    def get_pixel_size(self) -> Tuple[float, float]:
-        """Get the pixel size in microns."""
-        # Default to 1.0 if not available
-        return (1.0, 1.0)
-    
-    def iter_spectra(self) -> Generator[Tuple[Tuple[int, int, int], np.ndarray, np.ndarray], None, None]:
+    def get_common_mass_axis(self) -> np.ndarray:
         """
-        Iterate through spectra with progress monitoring.
+        Return the common mass axis composed of all unique m/z values.
         
-        Yields:
-        -------
-        Tuple containing:
-            - Coordinates (x, y, z)
-            - m/z values array
-            - Intensity values array
+        For continuous mode, returns the m/z values from the first spectrum.
+        For processed mode, collects all unique m/z values across spectra.
+        
+        Returns:
+            Array of m/z values in ascending order
         """
-        if not hasattr(self, 'parser'):
+        if not hasattr(self, 'parser') or self.parser is None:
             if self.filepath:
                 self._initialize_parser(self.filepath)
             else:
                 raise ValueError("Parser not initialized and no filepath available")
+                
+        if self._common_mass_axis is None:
+            if self.is_continuous:
+                # For continuous data, all spectra share the same m/z values
+                logging.info("Using m/z values from first spectrum (continuous mode)")
+                self._common_mass_axis = self.parser.getspectrum(0)[0]
+            else:
+                # For processed data, collect unique m/z values across spectra
+                logging.info("Building common mass axis from all unique m/z values (processed mode)")
+                
+                # Sample spectra for performance
+                total_spectra = len(self.parser.coordinates)
+                sample_size = min(50, total_spectra)
+                sample_indices = np.linspace(0, total_spectra - 1, sample_size, dtype=int)
+                
+                all_mzs = []
+                for idx in sample_indices:
+                    try:
+                        mzs, _ = self.parser.getspectrum(idx)
+                        if mzs.size > 0:
+                            all_mzs.append(mzs)
+                    except Exception as e:
+                        logging.warning(f"Error getting spectrum {idx}: {e}")
+                
+                if all_mzs:
+                    # Concatenate and find unique values
+                    try:
+                        # More efficient approach for large arrays
+                        combined_mzs = np.concatenate(all_mzs)
+                        # Sort and find unique values (more efficient than np.unique for large arrays)
+                        combined_mzs.sort()
+                        # Use tolerance-based uniqueness to handle precision issues
+                        tolerance = 1e-6  # Adjust based on instrument precision
+                        mask = np.empty(combined_mzs.size, dtype=bool)
+                        mask[0] = True
+                        np.greater(np.diff(combined_mzs), tolerance, out=mask[1:])
+                        self._common_mass_axis = combined_mzs[mask]
+                    except Exception as e:
+                        logging.warning(f"Error creating optimized common mass axis: {e}, falling back to standard method")
+                        # Fallback to standard np.unique
+                        combined_mzs = np.concatenate(all_mzs)
+                        self._common_mass_axis = np.unique(combined_mzs)
+                else:
+                    # Fallback to empty array
+                    self._common_mass_axis = np.array([])
+            
+            logging.info(f"Common mass axis created with {len(self._common_mass_axis)} m/z values")
+                
+        return self._common_mass_axis
+    
+    def _map_mz_to_common_axis(self, mzs: np.ndarray, intensities: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+        """Map m/z values to indices in the common mass axis using searchsorted.
+        
+        Args:
+            mzs: Array of m/z values
+            intensities: Array of intensity values
+            
+        Returns:
+            Tuple of (indices in common mass axis, corresponding intensities)
+        """
+        if mzs.size == 0 or intensities.size == 0:
+            return np.array([], dtype=int), np.array([])
+            
+        # Get common mass axis (calculate if not already done)
+        common_axis = self.get_common_mass_axis()
+        if common_axis.size == 0:
+            return np.array([], dtype=int), intensities
+            
+        # Use searchsorted to find indices in common mass axis
+        indices = np.searchsorted(common_axis, mzs)
+        
+        # Filter out indices that are out of bounds
+        valid_mask = (indices < len(common_axis))
+        
+        # Ensure the values are close enough (within tolerance)
+        tolerance = 1e-6  # Adjust based on instrument precision
+        if np.any(valid_mask):
+            exact_matches = np.abs(common_axis[indices[valid_mask]] - mzs[valid_mask]) <= tolerance
+            valid_mask[valid_mask] = exact_matches
+        
+        # Return only valid mappings
+        return indices[valid_mask], intensities[valid_mask]
+    
+    def iter_spectra(self, batch_size: int = None) -> Generator[Tuple[Tuple[int, int, int], np.ndarray, np.ndarray], None, None]:
+        """
+        Iterate through spectra with progress monitoring and batch processing.
+        
+        Maps m/z values to the common mass axis using searchsorted for accurate
+        representation in the output data structures.
+        
+        Args:
+            batch_size: Number of spectra to process in each batch (None for default)
+            
+        Yields:
+            Tuple of:
+                - Coordinates (x, y, z)
+                - Indices in common mass axis
+                - Intensity values array
+        """
+        if not hasattr(self, 'parser') or self.parser is None:
+            if self.filepath:
+                self._initialize_parser(self.filepath)
+            else:
+                raise ValueError("Parser not initialized and no filepath available")
+        
+        # Use default batch size if not specified
+        if batch_size is None:
+            batch_size = self.batch_size
+        
+        # Ensure common mass axis is built before starting iteration
+        common_axis = self.get_common_mass_axis()
         
         total_spectra = len(self.parser.coordinates)
         dimensions = self.get_dimensions()
         total_pixels = dimensions[0] * dimensions[1] * dimensions[2]
         
         # Log information about spectra vs pixels
-        import logging
         logging.info(f"Processing {total_spectra} spectra in a grid of {total_pixels} pixels")
         
+        # Process in batches
         with tqdm(total=total_spectra, desc="Reading spectra", unit="spectrum") as pbar:
-            for idx, (x, y, _) in enumerate(self.parser.coordinates):
-                try:
-                    mz_array, intensity_array = self.parser.getspectrum(idx)
+            if batch_size <= 1:
+                # Process one at a time
+                for idx in range(total_spectra):
+                    try:
+                        # Get coordinates (with adjustment to 0-based)
+                        if idx in self._coordinates_cache:
+                            coords = self._coordinates_cache[idx]
+                        else:
+                            x, y, z = self.parser.coordinates[idx]
+                            # Adjust coordinates to 0-based for internal use
+                            coords = (x - 1, y - 1, z - 1 if z > 0 else 0)
+                        
+                        # Get spectrum data
+                        mzs, intensities = self.parser.getspectrum(idx)
+                        
+                        if mzs.size > 0 and intensities.size > 0:
+                            # Map to common mass axis
+                            common_indices, mapped_intensities = self._map_mz_to_common_axis(mzs, intensities)
+                            
+                            if common_indices.size > 0:
+                                yield coords, common_indices, mapped_intensities
+                        
+                        pbar.update(1)
+                    except Exception as e:
+                        logging.warning(f"Error processing spectrum {idx}: {e}")
+                        pbar.update(1)
+            else:
+                # Process in batches
+                for batch_start in range(0, total_spectra, batch_size):
+                    batch_end = min(batch_start + batch_size, total_spectra)
+                    batch_size_actual = batch_end - batch_start
                     
-                    # Adjust coordinates to 0-based for internal use
-                    x_adj = x - 1
-                    y_adj = y - 1
-                    z = 0  # imzML is typically 2D
-                    
-                    yield ((x_adj, y_adj, z), mz_array, intensity_array)
-                    pbar.update(1)
-                except Exception as err:
-                    print(f"Error processing spectrum {idx} at pixel ({x}, {y}): {err}")
-                    pbar.update(1)
+                    # Process each spectrum in the batch
+                    for offset in range(batch_size_actual):
+                        idx = batch_start + offset
+                        try:
+                            # Get coordinates (with adjustment to 0-based)
+                            if idx in self._coordinates_cache:
+                                coords = self._coordinates_cache[idx]
+                            else:
+                                x, y, z = self.parser.coordinates[idx]
+                                # Adjust coordinates to 0-based for internal use
+                                coords = (x - 1, y - 1, z - 1 if z > 0 else 0)
+                            
+                            # Get spectrum data
+                            mzs, intensities = self.parser.getspectrum(idx)
+                            
+                            if mzs.size > 0 and intensities.size > 0:
+                                # Map to common mass axis
+                                common_indices, mapped_intensities = self._map_mz_to_common_axis(mzs, intensities)
+                                
+                                if common_indices.size > 0:
+                                    yield coords, common_indices, mapped_intensities
+                            
+                            pbar.update(1)
+                        except Exception as e:
+                            logging.warning(f"Error processing spectrum {idx}: {e}")
+                            pbar.update(1)
     
     def close(self) -> None:
         """Close all open file handles."""
