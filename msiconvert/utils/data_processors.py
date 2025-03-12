@@ -1,5 +1,4 @@
 import zarr
-import numpy as np
 import dask.array as da
 from typing import Optional, Tuple
 

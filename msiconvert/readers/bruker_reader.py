@@ -1,7 +1,7 @@
 # msiconvert/readers/bruker_reader.py
 import numpy as np
 import sqlite3
-from typing import Dict, Any, Tuple, Generator, Optional, List, Iterator
+from typing import Dict, Any, Tuple, Generator, List
 from pathlib import Path
 import os
 import logging
@@ -313,17 +313,18 @@ class BrukerReader(BaseMSIReader):
         if self._common_mass_axis is None:
             logging.info("Building common mass axis from all unique m/z values")
             
-            # Sample more frames for better coverage
-            sample_size = min(50, self._frame_count)
-            frame_ids = np.linspace(1, self._frame_count, sample_size, dtype=int)
-            
             # Collect all m/z values
             all_mzs = []
-            for frame_id in frame_ids:
-                mzs, _ = self._get_spectrum_data(frame_id)
-                if mzs is not None and mzs.size > 0:
-                    all_mzs.append(mzs)
+            for frame_id in range(1, self._frame_count + 1):
+                try:
+
+                    mzs, _ = self._get_spectrum_data(frame_id)
+                    if mzs is not None and mzs.size > 0:
+                        all_mzs.append(mzs)
             
+                except Exception as e:
+                    logging.warning(f"Error reading spectrum for frame {frame_id}: {e}")
+                    
             if all_mzs:
                 # Concatenate and find unique values
                 try:
@@ -332,43 +333,14 @@ class BrukerReader(BaseMSIReader):
                     
                     logging.info(f"Created common mass axis with {len(self._common_mass_axis)} unique m/z values")
                 except Exception as e:
-                    logging.warning(f"Error creating optimized common mass axis: {e}, falling back to standard method")
-                    # Fallback to standard np.unique
-                    combined_mzs = np.concatenate(all_mzs)
-                    self._common_mass_axis = np.unique(combined_mzs)
+                    logging.warning(f"Error creating common mass axis: {e}")
+                    self._common_mass_axis = np.array([])
             else:
                 # Fallback if no spectra were found
                 self._common_mass_axis = np.array([])
                 logging.warning("No spectra found to build common mass axis")
-                
+        
         return self._common_mass_axis
-        
-    def _map_mz_to_common_axis(self, mzs: np.ndarray, intensities: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-        """Map m/z values to indices in the common mass axis using searchsorted.
-        
-        Args:
-            mzs: Array of m/z values
-            intensities: Array of intensity values
-            
-        Returns:
-            Tuple of (indices in common mass axis, corresponding intensities)
-        """
-        if mzs.size == 0 or intensities.size == 0:
-            return np.array([], dtype=int), np.array([])
-            
-        # Get common mass axis (calculate if not already done)
-        common_axis = self.get_common_mass_axis()
-        if common_axis.size == 0:
-            return np.array([], dtype=int), intensities
-            
-        # Use searchsorted to find indices in common mass axis
-        indices = np.searchsorted(common_axis, mzs)
-        
-        # Filter out indices that are out of bounds
-        valid_mask = (indices < len(common_axis))
-        
-        # Return only valid mappings
-        return indices[valid_mask], intensities[valid_mask]
     
     def _get_spectrum_data(self, frame_id: int) -> Tuple[np.ndarray, np.ndarray]:
         """Get the m/z and intensity arrays for a specific frame.
@@ -773,7 +745,7 @@ class BrukerReader(BaseMSIReader):
                         
                         if mzs.size > 0 and intensities.size > 0:
                             # Map to common mass axis
-                            common_indices, mapped_intensities = self._map_mz_to_common_axis(mzs, intensities)
+                            common_indices, mapped_intensities = self.map_mz_to_common_axis(mzs, intensities, common_axis)
                             
                             if common_indices.size > 0:
                                 yield coords, common_indices, mapped_intensities
@@ -814,7 +786,7 @@ class BrukerReader(BaseMSIReader):
                             
                             if mzs is not None and intensities is not None and mzs.size > 0 and intensities.size > 0:
                                 # Map to common mass axis
-                                common_indices, mapped_intensities = self._map_mz_to_common_axis(mzs, intensities)
+                                common_indices, mapped_intensities = self.map_mz_to_common_axis(mzs, intensities, common_axis)
                                 
                                 if common_indices.size > 0:
                                     yield coords, common_indices, mapped_intensities

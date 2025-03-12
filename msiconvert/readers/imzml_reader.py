@@ -1,6 +1,6 @@
 # msiconvert/readers/imzml_reader.py
 import numpy as np
-from typing import Dict, Any, Tuple, Generator, Optional, Union, List
+from typing import Dict, Any, Tuple, Generator, Optional, Union
 from pathlib import Path
 from pyimzml.ImzMLParser import ImzMLParser
 import logging
@@ -175,13 +175,10 @@ class ImzMLReader(BaseMSIReader):
                 # For processed data, collect unique m/z values across spectra
                 logging.info("Building common mass axis from all unique m/z values (processed mode)")
                 
-                # Sample spectra for performance
                 total_spectra = len(self.parser.coordinates)
-                sample_size = min(50, total_spectra)
-                sample_indices = np.linspace(0, total_spectra - 1, sample_size, dtype=int)
                 
                 all_mzs = []
-                for idx in sample_indices:
+                for idx in range(total_spectra):
                     try:
                         mzs, _ = self.parser.getspectrum(idx)
                         if mzs.size > 0:
@@ -192,66 +189,19 @@ class ImzMLReader(BaseMSIReader):
                 if all_mzs:
                     # Concatenate and find unique values
                     try:
-                        # More efficient approach for large arrays
-                        combined_mzs = np.concatenate(all_mzs)
-                        # Sort and find unique values (more efficient than np.unique for large arrays)
-                        combined_mzs.sort()
-                        # Use tolerance-based uniqueness to handle precision issues
-                        tolerance = 1e-6  # Adjust based on instrument precision
-                        mask = np.empty(combined_mzs.size, dtype=bool)
-                        mask[0] = True
-                        np.greater(np.diff(combined_mzs), tolerance, out=mask[1:])
-                        self._common_mass_axis = combined_mzs[mask]
-                    except Exception as e:
-                        logging.warning(f"Error creating optimized common mass axis: {e}, falling back to standard method")
-                        # Fallback to standard np.unique
                         combined_mzs = np.concatenate(all_mzs)
                         self._common_mass_axis = np.unique(combined_mzs)
+
+                        logging.info(f"Common mass axis created with {len(self._common_mass_axis)} unique m/z values")
+                    except Exception as e:
+                        logging.warning(f"Error creating common mass axis: {e}")
+                        self._common_mass_axis = np.array([])
                 else:
                     # Fallback to empty array
                     self._common_mass_axis = np.array([])
-            
-            logging.info(f"Common mass axis created with {len(self._common_mass_axis)} m/z values")
+                    logging.warning("No spectra found to build common mass axis")
                 
         return self._common_mass_axis
-    
-    def _map_mz_to_common_axis(self, mzs: np.ndarray, intensities: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-        """
-        Map m/z values to indices in the common mass axis.
-        
-        For continuous mode imzML files, the mapping is straightforward since all
-        spectra share the same m/z values. For processed mode, we need to map each
-        m/z value to its closest match in the common axis within tolerance.
-        
-        Args:
-            mzs: Array of m/z values
-            intensities: Array of intensity values
-            
-        Returns:
-            Tuple of (indices in common mass axis, corresponding intensities)
-        """
-        if mzs.size == 0 or intensities.size == 0:
-            return np.array([], dtype=int), np.array([])
-            
-        # Get common mass axis (calculate if not already done)
-        common_axis = self.get_common_mass_axis()
-        if common_axis.size == 0:
-            return np.array([], dtype=int), intensities
-            
-        # Use searchsorted to find indices in common mass axis
-        indices = np.searchsorted(common_axis, mzs)
-        
-        # Filter out indices that are out of bounds
-        valid_mask = (indices < len(common_axis))
-        
-        # Ensure the values are close enough (within tolerance)
-        tolerance = 1e-6  # Adjust based on instrument precision
-        if np.any(valid_mask):
-            exact_matches = np.abs(common_axis[indices[valid_mask]] - mzs[valid_mask]) <= tolerance
-            valid_mask[valid_mask] = exact_matches
-        
-        # Return only valid mappings
-        return indices[valid_mask], intensities[valid_mask]
     
     def iter_spectra(self, batch_size: int = None) -> Generator[Tuple[Tuple[int, int, int], np.ndarray, np.ndarray], None, None]:
         """
@@ -308,7 +258,7 @@ class ImzMLReader(BaseMSIReader):
                         
                         if mzs.size > 0 and intensities.size > 0:
                             # Map to common mass axis
-                            common_indices, mapped_intensities = self._map_mz_to_common_axis(mzs, intensities)
+                            common_indices, mapped_intensities = self.map_mz_to_common_axis(mzs, intensities, common_axis)
                             
                             if common_indices.size > 0:
                                 yield coords, common_indices, mapped_intensities
@@ -340,7 +290,7 @@ class ImzMLReader(BaseMSIReader):
                             
                             if mzs.size > 0 and intensities.size > 0:
                                 # Map to common mass axis
-                                common_indices, mapped_intensities = self._map_mz_to_common_axis(mzs, intensities)
+                                common_indices, mapped_intensities = self.map_mz_to_common_axis(mzs, intensities, common_axis)
                                 
                                 if common_indices.size > 0:
                                     yield coords, common_indices, mapped_intensities

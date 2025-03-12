@@ -1,10 +1,7 @@
 import numpy as np
-import pandas as pd
 from anndata import AnnData
 from pathlib import Path
-from typing import Dict, Any, Tuple, Union, Optional
-from os import PathLike
-from scipy import sparse
+from typing import Dict, Any, Tuple
 import logging
 
 from ..core.base_converter import BaseMSIConverter

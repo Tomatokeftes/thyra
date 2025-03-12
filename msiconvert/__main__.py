@@ -1,7 +1,6 @@
 # msiconvert/__main__.py
 import argparse
 import logging
-from pathlib import Path
 from .convert import convert_msi
 from .utils.data_processors import optimize_zarr_chunks
 

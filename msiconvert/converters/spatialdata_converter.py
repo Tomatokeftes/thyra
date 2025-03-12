@@ -9,7 +9,7 @@ from spatialdata.transformations import Identity
 from shapely.geometry import box
 import geopandas as gpd
 from pathlib import Path
-from typing import Dict, Any, Tuple, Optional
+from typing import Dict, Any, Tuple
 import logging
 
 from ..core.base_converter import BaseMSIConverter

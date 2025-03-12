@@ -4,7 +4,6 @@ import zarr
 from pathlib import Path
 from typing import Dict, Any, Tuple, List
 import logging
-from tqdm import tqdm
 
 from ..core.base_converter import BaseMSIConverter
 from ..core.base_reader import BaseMSIReader

@@ -1,13 +1,11 @@
 # msiconvert/convert.py (updated)
 from pathlib import Path
 import logging
-from typing import Optional, Dict, Any
 import traceback
 
 from .core.registry import detect_format, get_reader_class, get_converter_class
 
 # msiconvert/convert.py - enhance error handling
-import traceback
 
 def convert_msi(
     input_path: str,
