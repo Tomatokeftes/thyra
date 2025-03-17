@@ -108,9 +108,12 @@ class BrukerReader(BaseMSIReader):
         
         return self._common_mass_axis
     
-    def iter_spectra(self) -> Generator[Tuple[Tuple[int, int, int], np.ndarray, np.ndarray], None, None]:
+    def iter_spectra(self, batch_size: Optional[int] = None) -> Generator[Tuple[Tuple[int, int, int], np.ndarray, np.ndarray], None, None]:
         """
         Iterate through spectra.
+        
+        Args:
+            batch_size: Optional batch size for spectrum iteration (not used in current implementation)
         
         Yields:
         -------

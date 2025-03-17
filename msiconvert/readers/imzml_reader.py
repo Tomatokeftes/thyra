@@ -180,16 +180,18 @@ class ImzMLReader(BaseMSIReader):
         # Default to 1.0 if not available
         return (1.0, 1.0)
     
-    def iter_spectra(self) -> Generator[Tuple[Tuple[int, int, int], np.ndarray, np.ndarray], None, None]:
+    def iter_spectra(self, batch_size: Optional[int] = None) -> Generator[Tuple[Tuple[int, int, int], np.ndarray, np.ndarray], None, None]:
         """
         Iterate through spectra with progress monitoring.
         
+        Args:
+            batch_size: Optional batch size for spectrum iteration (not used in current implementation)
+        
         Yields:
-        -------
-        Tuple containing:
-            - Coordinates (x, y, z)
-            - m/z values array
-            - Intensity values array
+            Tuple containing:
+                - Coordinates (x, y, z)
+                - m/z values array
+                - Intensity values array
         """
         if not hasattr(self, 'parser'):
             if self.filepath:
