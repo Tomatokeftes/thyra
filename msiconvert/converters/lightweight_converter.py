@@ -4,7 +4,6 @@ import zarr
 from pathlib import Path
 from typing import Dict, Any, Tuple, List
 import logging
-from tqdm import tqdm
 
 from ..core.base_converter import BaseMSIConverter
 from ..core.base_reader import BaseMSIReader
@@ -173,21 +172,13 @@ class LightweightConverter(BaseMSIConverter):
         --------
         int: New current size after flushing
         """
-        if self.root is None:
-            raise ValueError("Root is not initialized.")
         data_array = self.root['sparse_data/data']
-        if self.root is None:
-            raise ValueError("Root is not initialized.")
         indices_array = self.root['sparse_data/indices']
         
         new_size = current_size + len(data_buffer)
         
         # Create new arrays with the updated size
-        if self.root is None:
-            raise ValueError("Root is not initialized.")
         data_array.resize(new_size)
-        if self.root is None:
-            raise ValueError("Root is not initialized.")
         indices_array.resize((new_size, 2))
         
         # Store data

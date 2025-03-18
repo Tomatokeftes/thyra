@@ -1,13 +1,10 @@
 """
 Common test fixtures for msiconvert tests.
 """
-import os
 import pytest
 import tempfile
 import numpy as np
-import shutil
 from pathlib import Path
-from lxml import etree
 from pyimzml.ImzMLWriter import ImzMLWriter
 
 # Root directory of the tests
@@ -39,7 +36,7 @@ def mock_reader():
         def get_common_mass_axis(self):
             return np.linspace(100, 1000, 100)  # 100 mass values
             
-        def iter_spectra(self):
+        def iter_spectra(self, batch_size=None):
             mass_axis = self.get_common_mass_axis()
             for x in range(3):
                 for y in range(3):

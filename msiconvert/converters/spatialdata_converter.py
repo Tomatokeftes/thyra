@@ -1,4 +1,5 @@
 # msiconvert/converters/spatialdata_converter.py
+from flask import g
 import numpy as np
 import pandas as pd
 from anndata import AnnData
@@ -9,7 +10,7 @@ from spatialdata.transformations import Identity
 from shapely.geometry import box
 import geopandas as gpd
 from pathlib import Path
-from typing import Dict, Any, Tuple, Optional
+from typing import Dict, Any, Tuple
 import logging
 
 from ..core.base_converter import BaseMSIConverter
@@ -234,7 +235,7 @@ class SpatialDataConverter(BaseMSIConverter):
                 logging.debug(f"Detailed traceback:\n{traceback.format_exc()}")
                 raise
     
-    def _create_pixel_shapes(self, adata: AnnData, is_3d: bool = False) -> ShapesModel:
+    def _create_pixel_shapes(self, adata: AnnData, is_3d: bool = False) -> gpd.GeoDataFrame:
         """
         Create geometric shapes for pixels with proper transformations.
         

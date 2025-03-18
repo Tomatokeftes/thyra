@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Dict, Any, Tuple, Optional, List, Union
+from typing import Any, Tuple, Union
 from os import PathLike
 import numpy as np
 import logging
@@ -100,11 +100,10 @@ class BaseMSIConverter(ABC):
         if self._dimensions is None:
             raise ValueError("Dimensions are not initialized.")
         n_x, n_y, n_z = self._dimensions
-        total_pixels = n_x * n_y * n_z
         
         # Process spectra with progress tracking
         with tqdm(desc="Processing spectra", unit="spectrum") as pbar:
-            for coords, mzs, intensities in self.reader.iter_spectra():
+            for coords, mzs, intensities in self.reader.iter_spectra(batch_size=self._buffer_size):
                 self._process_single_spectrum(data_structures, coords, mzs, intensities)
                 pbar.update(1)
     
