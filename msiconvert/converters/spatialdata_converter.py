@@ -1,5 +1,4 @@
 # msiconvert/converters/spatialdata_converter.py
-from flask import g
 import numpy as np
 import pandas as pd
 from anndata import AnnData

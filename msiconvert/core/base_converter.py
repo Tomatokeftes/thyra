@@ -70,12 +70,24 @@ class BaseMSIConverter(ABC):
     def _initialize_conversion(self) -> None:
         """Initialize conversion by loading dimensions, mass axis and metadata."""
         logging.info("Initializing conversion...")
-        self._dimensions = self.reader.get_dimensions()
-        self._common_mass_axis = self.reader.get_common_mass_axis()
-        self._metadata = self.reader.get_metadata()
-        
-        logging.info(f"Dataset dimensions: {self._dimensions}")
-        logging.info(f"Common mass axis length: {len(self._common_mass_axis)}")
+        try:
+            self._dimensions = self.reader.get_dimensions()
+            if any(d <= 0 for d in self._dimensions):
+                raise ValueError(f"Invalid dimensions: {self._dimensions}. All dimensions must be positive.")
+                
+            self._common_mass_axis = self.reader.get_common_mass_axis()
+            if self._common_mass_axis is None or len(self._common_mass_axis) == 0:
+                raise ValueError("Common mass axis is empty or None. Cannot proceed with conversion.")
+                
+            self._metadata = self.reader.get_metadata()
+            if self._metadata is None:
+                self._metadata = {}  # Initialize with empty dict if None
+                
+            logging.info(f"Dataset dimensions: {self._dimensions}")
+            logging.info(f"Common mass axis length: {len(self._common_mass_axis)}")
+        except Exception as e:
+            logging.error(f"Error during initialization: {e}")
+            raise
     
     @abstractmethod
     def _create_data_structures(self) -> Any:
@@ -250,7 +262,7 @@ class BaseMSIConverter(ABC):
     
     def _map_mass_to_indices(self, mzs: np.ndarray) -> np.ndarray:
         """
-        Map m/z values to indices in the common mass axis.
+        Map m/z values to indices in the common mass axis with high accuracy.
         
         Parameters:
         -----------
@@ -262,7 +274,21 @@ class BaseMSIConverter(ABC):
         """
         if self._common_mass_axis is None:
             raise ValueError("Common mass axis is not initialized.")
-        return np.searchsorted(self._common_mass_axis, mzs)
+            
+        if mzs.size == 0:
+            return np.array([], dtype=int)
+            
+        # Use searchsorted for exact mapping
+        indices = np.searchsorted(self._common_mass_axis, mzs)
+        
+        # Ensure indices are within bounds
+        indices = np.clip(indices, 0, len(self._common_mass_axis) - 1)
+        
+        # For complete accuracy, validate the indices
+        max_diff = 1e-6  # Very small tolerance threshold for floating point differences
+        mask = np.abs(self._common_mass_axis[indices] - mzs) <= max_diff
+        
+        return indices[mask]
     
     def _add_to_sparse_matrix(self, sparse_matrix: sparse.lil_matrix, 
                             pixel_idx: int, mz_indices: np.ndarray, 

@@ -1,11 +1,23 @@
-# msiconvert/convert.py (updated)
+# msiconvert/convert.py
 from pathlib import Path
 import logging
 import traceback
+import warnings
+from cryptography.utils import CryptographyDeprecationWarning
 
 from .core.registry import detect_format, get_reader_class, get_converter_class
 
-# msiconvert/convert.py - enhance error handling
+warnings.filterwarnings(
+    "ignore", 
+    message=r"Accession IMS:1000046.*",  # or just "ignore" all UserWarning from that module
+    category=UserWarning,
+    module=r"pyimzml.ontology.ontology"
+)
+
+warnings.filterwarnings(
+    "ignore", 
+    category=CryptographyDeprecationWarning
+)
 
 def convert_msi(
     input_path: str,
