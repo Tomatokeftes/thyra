@@ -289,12 +289,12 @@ class BaseMSIConverter(ABC):
         mask = np.abs(self._common_mass_axis[indices] - mzs) <= max_diff
         
         return indices[mask]
-    
+
     def _add_to_sparse_matrix(self, sparse_matrix: sparse.lil_matrix, 
                             pixel_idx: int, mz_indices: np.ndarray, 
                             intensities: np.ndarray) -> None:
         """
-        Add intensity values to a sparse matrix.
+        Add intensity values to a sparse matrix efficiently.
         
         Parameters:
         -----------
@@ -305,9 +305,20 @@ class BaseMSIConverter(ABC):
         """
         if self._common_mass_axis is None:
             raise ValueError("Common mass axis is not initialized.")
+            
+        if mz_indices.size == 0 or intensities.size == 0:
+            return
+            
         n_masses = len(self._common_mass_axis)
         
-        # Only store valid, non-zero values
-        for mz_idx, intensity in zip(mz_indices, intensities):
-            if intensity > 0 and mz_idx < n_masses:
-                sparse_matrix[pixel_idx, mz_idx] = intensity
+        # Filter out invalid indices and zero intensities in a single pass
+        valid_mask = (mz_indices < n_masses) & (intensities > 0)
+        if not np.any(valid_mask):
+            return
+            
+        # Extract valid values
+        valid_indices = mz_indices[valid_mask]
+        valid_intensities = intensities[valid_mask]
+        
+        # Use bulk assignment for better performance
+        sparse_matrix[pixel_idx, valid_indices] = valid_intensities

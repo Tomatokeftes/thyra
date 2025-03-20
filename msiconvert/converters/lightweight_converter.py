@@ -1,4 +1,4 @@
-# msiconvert/converters/lightweight_converter.py
+# msiconvert/converters/lightweight_converter.py (improved)
 import numpy as np
 import zarr
 from pathlib import Path
@@ -36,6 +36,7 @@ class LightweightConverter(BaseMSIConverter):
         # Add metadata
         if self._metadata is None:
             raise ValueError("Metadata is not initialized.")
+            
         self.add_metadata(self._metadata)
         
         # Create arrays
@@ -50,28 +51,28 @@ class LightweightConverter(BaseMSIConverter):
     
     def add_metadata(self, metadata: Dict[str, Any]) -> None:
         """Add metadata to the Zarr store."""
+        # Consolidate checks and assignments
         if self.root is None:
             raise ValueError("Root is not initialized.")
+            
         self.root.attrs['metadata'] = metadata
-        if self.root is None:
-            raise ValueError("Root is not initialized.")
         self.root.attrs['dataset_id'] = self.dataset_id
-        if self.root is None:
-            raise ValueError("Root is not initialized.")
         self.root.attrs['pixel_size_um'] = self.pixel_size_um
     
     def _create_arrays(self) -> None:
         """Create Zarr arrays for storing the data."""
         if self._dimensions is None:
             raise ValueError("Dimensions are not initialized.")
+            
         n_x, n_y, n_z = self._dimensions
         
         # Create compressor
         compressor = zarr.Blosc(cname='zstd', clevel=self.compression_level, shuffle=zarr.Blosc.SHUFFLE)
         
-        # Create array for mass values
         if self.root is None:
             raise ValueError("Root is not initialized.")
+            
+        # Create array for mass values
         self.root.array(
             'mass_values',
             data=self._common_mass_axis,
@@ -88,8 +89,6 @@ class LightweightConverter(BaseMSIConverter):
                     coords[idx] = [x, y, z]
                     idx += 1
         
-        if self.root is None:
-            raise ValueError("Root is not initialized.")
         self.root.array(
             'coordinates',
             data=coords,
@@ -98,13 +97,9 @@ class LightweightConverter(BaseMSIConverter):
         )
         
         # Create sparse array structure
-        if self.root is None:
-            raise ValueError("Root is not initialized.")
         self.root.create_group('sparse_data')
         
         # We'll use COO format for sparse data
-        if self.root is None:
-            raise ValueError("Root is not initialized.")
         self.root.create_dataset(
             'sparse_data/data',
             shape=(0,),
@@ -113,8 +108,6 @@ class LightweightConverter(BaseMSIConverter):
             chunks=(10000,)
         )
 
-        if self.root is None:
-            raise ValueError("Root is not initialized.")
         self.root.create_dataset(
             'sparse_data/indices',
             shape=(0, 2),  # (pixel_idx, mass_idx)
@@ -162,37 +155,58 @@ class LightweightConverter(BaseMSIConverter):
         """
         Append buffered data to Zarr arrays.
         
-        Parameters:
-        -----------
-        data_buffer: List of intensity values
-        indices_buffer: List of [pixel_idx, mass_idx] pairs
-        current_size: Current size of the arrays
-        
+        Args:
+            data_buffer: List of intensity values
+            indices_buffer: List of [pixel_idx, mass_idx] pairs
+            current_size: Current size of the arrays
+            
         Returns:
-        --------
-        int: New current size after flushing
+            int: New current size after flushing
         """
+        if not data_buffer:
+            return current_size
+            
+        if self.root is None:
+            raise ValueError("Root is not initialized.")
+            
+        # Get arrays once to avoid repeated dictionary lookups
         data_array = self.root['sparse_data/data']
         indices_array = self.root['sparse_data/indices']
         
-        new_size = current_size + len(data_buffer)
+        # Calculate new size
+        buffer_length = len(data_buffer)
+        new_size = current_size + buffer_length
         
-        # Create new arrays with the updated size
+        # Resize arrays to accommodate new data
         data_array.resize(new_size)
         indices_array.resize((new_size, 2))
         
-        # Store data
-        data_array[current_size:new_size] = np.array(data_buffer, dtype=np.float32)
-        indices_array[current_size:new_size] = np.array(indices_buffer, dtype=np.int32)
+        # Convert data to numpy arrays for efficient bulk insertion
+        data_np = np.array(data_buffer, dtype=np.float32)
+        indices_np = np.array(indices_buffer, dtype=np.int32)
+        
+        # Store data in a single operation
+        data_array[current_size:new_size] = data_np
+        indices_array[current_size:new_size] = indices_np
         
         return new_size
     
     def _save_output(self, data_structures: Dict[str, Any]) -> bool:
         """Save output for lightweight format."""
         try:
-            # Consolidate metadata
+            if self.root is None:
+                raise ValueError("Root is not initialized.")
+                
+            # Add any final metadata
+            if 'sparse_count' not in self.root.attrs:
+                self.root.attrs['sparse_count'] = data_structures['current_size']
+                
+            # Consolidate metadata for better performance
             zarr.consolidate_metadata(self.root.store)
+            logging.info(f"Successfully saved lightweight format to {self.output_path}")
             return True
         except Exception as e:
-            logging.error(f"Error consolidating Zarr metadata: {e}")
+            logging.error(f"Error saving lightweight format: {e}")
+            import traceback
+            logging.error(f"Traceback: {traceback.format_exc()}")
             return False

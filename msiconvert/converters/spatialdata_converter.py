@@ -1,16 +1,23 @@
-# msiconvert/converters/spatialdata_converter.py
+# msiconvert/converters/spatialdata_converter.py (improved)
 import numpy as np
 import pandas as pd
 from anndata import AnnData
 from scipy import sparse
-from spatialdata import SpatialData
-from spatialdata.models import ShapesModel, TableModel
-from spatialdata.transformations import Identity
-from shapely.geometry import box
-import geopandas as gpd
 from pathlib import Path
 from typing import Dict, Any, Tuple
 import logging
+
+# Import SpatialData dependencies
+try:
+    from spatialdata import SpatialData
+    from spatialdata.models import ShapesModel, TableModel
+    from spatialdata.transformations import Identity
+    from shapely.geometry import box
+    import geopandas as gpd
+    SPATIALDATA_AVAILABLE = True
+except ImportError:
+    logging.warning("SpatialData dependencies not available. SpatialDataConverter will not work.")
+    SPATIALDATA_AVAILABLE = False
 
 from ..core.base_converter import BaseMSIConverter
 from ..core.base_reader import BaseMSIReader
@@ -25,6 +32,10 @@ class SpatialDataConverter(BaseMSIConverter):
                  pixel_size_um: float = 1.0,
                  handle_3d: bool = False,
                  **kwargs):
+        # Check if SpatialData is available
+        if not SPATIALDATA_AVAILABLE:
+            raise ImportError("SpatialData dependencies not available. Please install required packages.")
+            
         super().__init__(
             reader, 
             output_path, 
@@ -84,24 +95,25 @@ class SpatialDataConverter(BaseMSIConverter):
         """Create a coordinates dataframe for a single Z-slice."""
         n_x, n_y, _ = self._dimensions
         
-        coords = []
-        for y in range(n_y):
-            for x in range(n_x):
-                pixel_idx = y * n_x + x
-                coords.append({
-                    'y': y, 
-                    'x': x,
-                    'instance_id': pixel_idx
-                })
+        # Pre-allocate arrays for better performance
+        pixel_count = n_x * n_y
+        y_values = np.repeat(np.arange(n_y), n_x)
+        x_values = np.tile(np.arange(n_x), n_y)
+        instance_ids = np.arange(pixel_count)
         
-        coords_df = pd.DataFrame(coords)
-        slice_id = f"{self.dataset_id}_z{z_value}"
-        coords_df['region'] = f"{slice_id}_pixels"
-        # Make sure instance_id is a string to avoid issues
+        # Create DataFrame in one operation
+        coords_df = pd.DataFrame({
+            'y': y_values,
+            'x': x_values,
+            'instance_id': instance_ids,
+            'region': f"{self.dataset_id}_z{z_value}_pixels"
+        })
+        
+        # Set index efficiently
         coords_df['instance_id'] = coords_df['instance_id'].astype(str)
         coords_df.set_index('instance_id', inplace=True)
         
-        # Add spatial coordinates
+        # Add spatial coordinates in a vectorized operation
         coords_df['spatial_x'] = coords_df['x'] * self.pixel_size_um
         coords_df['spatial_y'] = coords_df['y'] * self.pixel_size_um
         
@@ -161,9 +173,6 @@ class SpatialDataConverter(BaseMSIConverter):
                         var=data_structures['var_df']
                     )
                     
-                    # Store spatial coordinates
-                    adata.obsm['spatial'] = slice_data['coords_df'][['x', 'y']].values
-                    
                     # Make sure region column exists and is correct
                     region_key = f"{slice_id}_pixels"
                     if 'region' not in adata.obs.columns:
@@ -202,12 +211,6 @@ class SpatialDataConverter(BaseMSIConverter):
                     var=data_structures['var_df']
                 )
                 
-                # Store spatial coordinates
-                if self.handle_3d:
-                    adata.obsm['spatial'] = data_structures['coords_df'][['x', 'y', 'z']].values
-                else:
-                    adata.obsm['spatial'] = data_structures['coords_df'][['x', 'y']].values
-                
                 # Make sure region column exists and is correct
                 region_key = f"{self.dataset_id}_pixels"
                 if 'region' not in adata.obs.columns:
@@ -234,7 +237,7 @@ class SpatialDataConverter(BaseMSIConverter):
                 logging.debug(f"Detailed traceback:\n{traceback.format_exc()}")
                 raise
     
-    def _create_pixel_shapes(self, adata: AnnData, is_3d: bool = False) -> gpd.GeoDataFrame:
+    def _create_pixel_shapes(self, adata: AnnData, is_3d: bool = False):
         """
         Create geometric shapes for pixels with proper transformations.
         
@@ -247,30 +250,32 @@ class SpatialDataConverter(BaseMSIConverter):
         --------
         ShapesModel: SpatialData shapes model
         """
-        coordinates = adata.obsm['spatial']
+        # Use the coordinate columns directly from the AnnData observation DataFrame
+        # instead of obsm['spatial'] which is deprecated
         
-        # Create a list of square geometries for each pixel
+        # Extract coordinates directly from obs
+        x_coords = adata.obs['spatial_x'].values
+        y_coords = adata.obs['spatial_y'].values
+        
+        # Create geometries efficiently using vectorized operations
+        half_pixel = self.pixel_size_um / 2
+        
+        # Create geometries list - this can be optimized but must remain a list for geopandas
         geometries = []
         for i in range(len(adata)):
-            if is_3d and coordinates.shape[1] >= 3:  # 3D data
-                x, y, z = coordinates[i][:3]
-            else:  # 2D data
-                x, y = coordinates[i][:2]
-                
+            x, y = x_coords[i], y_coords[i]
+            
             # Create a square centered at pixel coordinates
             pixel_box = box(
-                x - self.pixel_size_um/2, 
-                y - self.pixel_size_um/2,
-                x + self.pixel_size_um/2,
-                y + self.pixel_size_um/2
+                x - half_pixel, 
+                y - half_pixel,
+                x + half_pixel,
+                y + half_pixel
             )
             geometries.append(pixel_box)
         
         # Create GeoDataFrame
-        gdf = gpd.GeoDataFrame(
-            geometry=geometries,
-            index=adata.obs.index
-        )
+        gdf = gpd.GeoDataFrame(geometry=geometries, index=adata.obs.index)
         
         # Set up transform
         transform = Identity()
@@ -299,6 +304,7 @@ class SpatialDataConverter(BaseMSIConverter):
             
             # Write to disk
             sdata.write(str(self.output_path))
+            logging.info(f"Successfully saved SpatialData to {self.output_path}")
             return True
         except Exception as e:
             logging.error(f"Error saving SpatialData: {e}")
