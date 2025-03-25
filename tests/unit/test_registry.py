@@ -47,7 +47,7 @@ class TestRegistry:
             def get_metadata(self): pass
             def get_dimensions(self): pass
             def get_common_mass_axis(self): pass
-            def iter_spectra(self): pass
+            def iter_spectra(self, batch_size=None): pass
             def close(self): pass
         
         # Register it

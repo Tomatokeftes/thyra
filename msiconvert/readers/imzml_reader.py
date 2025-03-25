@@ -1,4 +1,4 @@
-# msiconvert/readers/imzml_reader.py
+# msiconvert/readers/imzml_reader.py (updated)
 import numpy as np
 from typing import Dict, Any, Tuple, Generator, Optional, Union
 from pathlib import Path
@@ -20,7 +20,8 @@ class ImzMLReader(BaseMSIReader):
         Initialize an ImzML reader.
         
         Args:
-            imzml_path: Path to the imzML file. If not provided, can be set later using read().
+            imzml_path: Path to the imzML file. If not provided, can be set later.
+
             batch_size: Default batch size for spectrum iteration
             cache_coordinates: Whether to cache coordinates upfront
         """
@@ -31,7 +32,8 @@ class ImzMLReader(BaseMSIReader):
         self.ibd_file = None
         
         # Cached properties
-        self._common_mass_axis = None  # Will hold all unique m/z values
+        self._common_mass_axis = None
+
         self._dimensions = None
         self._metadata = None
         self._coordinates_cache = {}
@@ -81,7 +83,7 @@ class ImzMLReader(BaseMSIReader):
         # Cache coordinates if requested
         if self.cache_coordinates:
             self._cache_all_coordinates()
-    
+
     def _cache_all_coordinates(self):
         """Cache all coordinates for faster access."""
         if not hasattr(self, 'parser') or self.parser is None:
@@ -96,10 +98,7 @@ class ImzMLReader(BaseMSIReader):
             
         logging.info(f"Cached {len(self._coordinates_cache)} coordinates")
     
-    def can_read(self, filepath: str) -> bool:
-        """Check if this reader can read the given file."""
-        return isinstance(filepath, str) and filepath.lower().endswith('.imzml')
-    
+
     def get_metadata(self) -> Dict[str, Any]:
         """Return metadata about the imzML dataset."""
         if not hasattr(self, 'parser') or self.parser is None:
@@ -178,13 +177,17 @@ class ImzMLReader(BaseMSIReader):
                 total_spectra = len(self.parser.coordinates)
                 
                 all_mzs = []
-                for idx in range(total_spectra):
-                    try:
-                        mzs, _ = self.parser.getspectrum(idx)
-                        if mzs.size > 0:
-                            all_mzs.append(mzs)
-                    except Exception as e:
-                        logging.warning(f"Error getting spectrum {idx}: {e}")
+
+                with tqdm(total=total_spectra, desc="Building common mass axis", unit="spectrum") as pbar:
+                    for idx in range(total_spectra):
+                        try:
+                            mzs, _ = self.parser.getspectrum(idx)
+                            if mzs.size > 0:
+                                all_mzs.append(mzs)
+                        except Exception as e:
+                            logging.warning(f"Error getting spectrum {idx}: {e}")
+                        pbar.update(1)
+
                 
                 if all_mzs:
                     # Concatenate and find unique values
@@ -203,20 +206,23 @@ class ImzMLReader(BaseMSIReader):
                 
         return self._common_mass_axis
     
-    def iter_spectra(self, batch_size: int = None) -> Generator[Tuple[Tuple[int, int, int], np.ndarray, np.ndarray], None, None]:
+
+    def iter_spectra(self, batch_size: Optional[int] = None) -> Generator[Tuple[Tuple[int, int, int], np.ndarray, np.ndarray], None, None]:
         """
         Iterate through spectra with progress monitoring and batch processing.
         
         Maps m/z values to the common mass axis using searchsorted for accurate
         representation in the output data structures.
         
+
         Args:
             batch_size: Number of spectra to process in each batch (None for default)
             
         Yields:
             Tuple of:
-                - Coordinates (x, y, z)
-                - Indices in common mass axis
+                - Coordinates (x, y, z) - 0-based
+                - m/z values array
+
                 - Intensity values array
         """
         if not hasattr(self, 'parser') or self.parser is None:
@@ -228,9 +234,6 @@ class ImzMLReader(BaseMSIReader):
         # Use default batch size if not specified
         if batch_size is None:
             batch_size = self.batch_size
-        
-        # Ensure common mass axis is built before starting iteration
-        common_axis = self.get_common_mass_axis()
         
         total_spectra = len(self.parser.coordinates)
         dimensions = self.get_dimensions()
@@ -245,7 +248,9 @@ class ImzMLReader(BaseMSIReader):
                 # Process one at a time
                 for idx in range(total_spectra):
                     try:
-                        # Get coordinates (with adjustment to 0-based)
+
+                        # Get coordinates (using cached 0-based coordinates if available)
+
                         if idx in self._coordinates_cache:
                             coords = self._coordinates_cache[idx]
                         else:
@@ -257,11 +262,9 @@ class ImzMLReader(BaseMSIReader):
                         mzs, intensities = self.parser.getspectrum(idx)
                         
                         if mzs.size > 0 and intensities.size > 0:
-                            # Map to common mass axis
-                            common_indices, mapped_intensities = self.map_mz_to_common_axis(mzs, intensities, common_axis)
-                            
-                            if common_indices.size > 0:
-                                yield coords, common_indices, mapped_intensities
+
+                            yield coords, mzs, intensities
+
                         
                         pbar.update(1)
                     except Exception as e:
@@ -277,7 +280,9 @@ class ImzMLReader(BaseMSIReader):
                     for offset in range(batch_size_actual):
                         idx = batch_start + offset
                         try:
-                            # Get coordinates (with adjustment to 0-based)
+
+                            # Get coordinates (using cached 0-based coordinates if available)
+
                             if idx in self._coordinates_cache:
                                 coords = self._coordinates_cache[idx]
                             else:
@@ -289,17 +294,14 @@ class ImzMLReader(BaseMSIReader):
                             mzs, intensities = self.parser.getspectrum(idx)
                             
                             if mzs.size > 0 and intensities.size > 0:
-                                # Map to common mass axis
-                                common_indices, mapped_intensities = self.map_mz_to_common_axis(mzs, intensities, common_axis)
-                                
-                                if common_indices.size > 0:
-                                    yield coords, common_indices, mapped_intensities
-                            
+
+                                yield coords, mzs, intensities
+          
                             pbar.update(1)
                         except Exception as e:
                             logging.warning(f"Error processing spectrum {idx}: {e}")
                             pbar.update(1)
-    
+
     def read(self):
         """
         Read the entire imzML file and return a structured data dictionary.
@@ -346,6 +348,7 @@ class ImzMLReader(BaseMSIReader):
             "height": height,
             "depth": depth
         }
+
     
     def close(self) -> None:
         """Close all open file handles."""

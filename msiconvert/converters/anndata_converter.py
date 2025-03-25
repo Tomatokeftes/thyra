@@ -77,7 +77,7 @@ class AnnDataConverter(BaseMSIConverter):
             )
             
             # Add metadata
-            self.add_metadata(metadata=adata)
+            self.add_metadata(adata)
             
             # Save to disk
             self._save_anndata(adata)
@@ -85,20 +85,22 @@ class AnnDataConverter(BaseMSIConverter):
             return True
         except Exception as e:
             logging.error(f"Error saving AnnData: {e}")
+            import traceback
+            logging.error(f"Traceback: {traceback.format_exc()}")
             return False
     
-    def add_metadata(self, metadata: Any) -> None:
+    def add_metadata(self, metadata: AnnData) -> None:
         """Add metadata to the AnnData object."""
-        # Check if metadata is AnnData object
-        if isinstance(metadata, AnnData):
-            adata = metadata
-            # Add dataset-level metadata
-            adata.uns['metadata'] = self._metadata
-            adata.uns['dataset_id'] = self.dataset_id
-            adata.uns['pixel_size_um'] = self.pixel_size_um
-        else:
-            # Handle base class implementation
-            super().add_metadata(metadata)
+        # Add dataset-level metadata
+        metadata.uns['metadata'] = self._metadata
+        metadata.uns['dataset_id'] = self.dataset_id
+        metadata.uns['pixel_size_um'] = self.pixel_size_um
+        
+        # Add spatial coordinates reference (without using deprecated obsm['spatial'])
+        metadata.uns['spatial'] = {
+            'coordinate_cols': ['x', 'y', 'z'],
+            'pixel_size_um': self.pixel_size_um
+        }
     
     def _save_anndata(self, adata: AnnData) -> None:
         """Save AnnData object to disk, using zarr backing for large datasets."""
@@ -127,3 +129,4 @@ class AnnDataConverter(BaseMSIConverter):
         else:
             # For smaller datasets, use standard h5ad format
             adata.write_h5ad(output_path)
+            logging.info(f"Successfully saved AnnData to h5ad file: {output_path}")

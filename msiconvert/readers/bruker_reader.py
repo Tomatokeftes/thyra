@@ -1,7 +1,8 @@
-# msiconvert/readers/bruker_reader.py
+# msiconvert/readers/bruker_reader.py (based on working version with standardization)
 import numpy as np
 import sqlite3
-from typing import Dict, Any, Tuple, Generator, List
+from typing import Dict, Any, Tuple, Generator, List, Optional
+
 from pathlib import Path
 import os
 import logging
@@ -162,6 +163,22 @@ class BrukerReader(BaseMSIReader):
             self._dll.tims_index_to_mz.argtypes = convfunc_argtypes
             self._dll.tims_index_to_mz.restype = c_uint32
     
+    def _throw_last_error(self):
+        """Retrieve and raise the last error from the DLL."""
+        if self.file_type == "tsf":
+            len_buf = self._dll.tsf_get_last_error_string(None, 0)
+        else:  # TDF
+            len_buf = self._dll.tims_get_last_error_string(None, 0)
+            
+        buf = create_string_buffer(len_buf)
+        
+        if self.file_type == "tsf":
+            self._dll.tsf_get_last_error_string(buf, len_buf)
+        else:  # TDF
+            self._dll.tims_get_last_error_string(buf, len_buf)
+            
+        raise RuntimeError(buf.value.decode('utf-8'))
+    
     def _open_data(self):
         """Open the Bruker data file and database connection."""
         try:
@@ -192,22 +209,6 @@ class BrukerReader(BaseMSIReader):
             self.close()
             raise
     
-    def _throw_last_error(self):
-        """Retrieve and raise the last error from the DLL."""
-        if self.file_type == "tsf":
-            len_buf = self._dll.tsf_get_last_error_string(None, 0)
-        else:  # TDF
-            len_buf = self._dll.tims_get_last_error_string(None, 0)
-            
-        buf = create_string_buffer(len_buf)
-        
-        if self.file_type == "tsf":
-            self._dll.tsf_get_last_error_string(buf, len_buf)
-        else:  # TDF
-            self._dll.tims_get_last_error_string(buf, len_buf)
-            
-        raise RuntimeError(buf.value.decode('utf-8'))
-    
     def _load_minimal_metadata(self):
         """Load minimal required metadata to determine dimensions and frame count."""
         cursor = self.conn.cursor()
@@ -233,7 +234,7 @@ class BrukerReader(BaseMSIReader):
     
     def _execute_query(self, query: str, params: tuple = ()) -> List[tuple]:
         """Execute a SQL query against the database.
-        
+   
         Args:
             query: SQL query to execute
             params: Parameters for the query
@@ -258,11 +259,13 @@ class BrukerReader(BaseMSIReader):
         return results
     
     def get_metadata(self) -> Dict[str, Any]:
+
         """Return metadata about the Bruker dataset.
         
         Returns:
             Dictionary of metadata
         """
+        
         if self._metadata is None:
             self._metadata = {
                 'source': str(self.analysis_directory),
@@ -282,21 +285,22 @@ class BrukerReader(BaseMSIReader):
         return self._metadata
     
     def get_dimensions(self) -> Tuple[int, int, int]:
-        """Return the dimensions of the MSI dataset (x, y, z).
-        
-        Returns:
-            Tuple of (width, height, depth)
-        """
+
+        """Return the dimensions of the MSI dataset (x, y, z) using 0-based indexing."""
         if self._dimensions is None:
             if self._frame_positions is not None:
                 # For MALDI data, use the max XY positions
+                # Adding 1 to convert from 0-based max index to dimension size
+
                 x_max = int(np.max(self._frame_positions[:, 0])) + 1
                 y_max = int(np.max(self._frame_positions[:, 1])) + 1
                 z_max = 1  # Assume 2D data for now
                 self._dimensions = (x_max, y_max, z_max)
             else:
                 # For non-MALDI data, just use frame count for now
+
                 # This is likely LC data, so dimensions aren't as meaningful
+
                 self._dimensions = (self._frame_count, 1, 1)
                 
         return self._dimensions
@@ -306,25 +310,23 @@ class BrukerReader(BaseMSIReader):
         
         This collects all unique m/z values in the dataset to create an accurate
         common mass axis, rather than using a linearly spaced approximation.
-        
-        Returns:
-            Array of m/z values in ascending order
         """
         if self._common_mass_axis is None:
             logging.info("Building common mass axis from all unique m/z values")
             
-            # Collect all m/z values
+            # Collect all m/z values with progress tracking
             all_mzs = []
-            for frame_id in range(1, self._frame_count + 1):
-                try:
-
-                    mzs, _ = self._get_spectrum_data(frame_id)
-                    if mzs is not None and mzs.size > 0:
-                        all_mzs.append(mzs)
+            with tqdm(total=self._frame_count, desc="Building common mass axis", unit="frame") as pbar:
+                for frame_id in range(1, self._frame_count + 1):
+                    try:
+                        mzs, _ = self._get_spectrum_data(frame_id)
+                        if mzs is not None and mzs.size > 0:
+                            all_mzs.append(mzs)
+                    except Exception as e:
+                        logging.warning(f"Error reading spectrum for frame {frame_id}: {e}")
+                    pbar.update(1)
             
-                except Exception as e:
-                    logging.warning(f"Error reading spectrum for frame {frame_id}: {e}")
-                    
+
             if all_mzs:
                 # Concatenate and find unique values
                 try:
@@ -400,7 +402,7 @@ class BrukerReader(BaseMSIReader):
             
             if result < 0:
                 self._throw_last_error()
-                
+
             if result > buffer_size:
                 # Buffer too small, resize and try again
                 buffer_size = result
@@ -473,6 +475,7 @@ class BrukerReader(BaseMSIReader):
         if current_idx == 0:
             return np.array([]), np.array([])
         
+
         # Get views of the filled portions of the buffers
         mzs = self._tdf_mz_buffer[:current_idx].copy()
         intensities = self._tdf_intensity_buffer[:current_idx].copy()
@@ -683,19 +686,23 @@ class BrukerReader(BaseMSIReader):
                      f"dimensions: {self._dimensions}, "
                      f"common mass axis: {len(self._common_mass_axis) if self._common_mass_axis is not None else 0} points")
         
-    def iter_spectra(self, batch_size: int = None) -> Generator[Tuple[Tuple[int, int, int], np.ndarray, np.ndarray], None, None]:
-        """Iterate through all spectra in the dataset, with optional batching for efficiency.
+
+    def iter_spectra(self, batch_size: Optional[int] = None) -> Generator[Tuple[Tuple[int, int, int], np.ndarray, np.ndarray], None, None]:
+        """
+        Iterate through all spectra in the dataset, with optional batching for efficiency.
         
-        For each spectrum, maps the m/z values to the common mass axis using
-        searchsorted for accurate representation.
+        For each spectrum, yields the coordinates and raw m/z and intensity values.
+        All coordinates are 0-based for internal consistency.
+
         
         Args:
             batch_size: Number of spectra to process in each batch (None for default)
         
         Yields:
             Tuple of:
-                - Coordinates (x, y, z)
-                - m/z indices in common mass axis
+                - Coordinates (x, y, z) using 0-based indexing
+                - m/z values array  
+
                 - Intensity values array
         """
         if not hasattr(self, 'handle') or self.handle is None:
@@ -724,7 +731,8 @@ class BrukerReader(BaseMSIReader):
                 # Process one at a time
                 for frame_id in range(1, self._frame_count + 1):
                     try:
-                        # Get coordinates from cache if possible
+                        # Get coordinates from cache if possible (already 0-based in cache)
+
                         if is_maldi:
                             if self._position_cache and frame_id in self._position_cache:
                                 x, y = self._position_cache[frame_id]
@@ -737,18 +745,18 @@ class BrukerReader(BaseMSIReader):
                                 pbar.update(1)
                                 continue  # Skip if position not found
                         else:
-                            # For non-MALDI, use frame ID
+
+                            # For non-MALDI, use frame ID (0-based)
+
                             coords = (frame_id - 1, 0, 0)
                         
                         # Get spectrum data
                         mzs, intensities = self._get_spectrum_data(frame_id)
                         
                         if mzs.size > 0 and intensities.size > 0:
-                            # Map to common mass axis
-                            common_indices, mapped_intensities = self.map_mz_to_common_axis(mzs, intensities, common_axis)
-                            
-                            if common_indices.size > 0:
-                                yield coords, common_indices, mapped_intensities
+
+                            yield coords, mzs, intensities
+
                         
                         pbar.update(1)
                     except Exception as e:
@@ -765,7 +773,9 @@ class BrukerReader(BaseMSIReader):
                     for offset in range(batch_size_actual):
                         frame_id = batch_start + offset
                         try:
-                            # Get coordinates
+
+                            # Get coordinates (already 0-based in cache)
+
                             if is_maldi:
                                 if self._position_cache and frame_id in self._position_cache:
                                     x, y = self._position_cache[frame_id]
@@ -778,18 +788,18 @@ class BrukerReader(BaseMSIReader):
                                     pbar.update(1)
                                     continue  # Skip if position not found
                             else:
-                                # For non-MALDI, use frame ID
+
+                                # For non-MALDI, use frame ID (0-based)
+
                                 coords = (frame_id - 1, 0, 0)
                             
                             # Get spectrum data
                             mzs, intensities = self._get_spectrum_data(frame_id)
                             
                             if mzs is not None and intensities is not None and mzs.size > 0 and intensities.size > 0:
-                                # Map to common mass axis
-                                common_indices, mapped_intensities = self.map_mz_to_common_axis(mzs, intensities, common_axis)
-                                
-                                if common_indices.size > 0:
-                                    yield coords, common_indices, mapped_intensities
+
+                                yield coords, mzs, intensities
+
                             
                             pbar.update(1)
                         except Exception as e:
