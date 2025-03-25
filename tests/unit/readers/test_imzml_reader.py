@@ -114,26 +114,35 @@ class TestImzMLReader:
         
         reader.close()
     
-    def test_read(self, create_minimal_imzml):
-        """Test the read method."""
-        imzml_path, _, _, _ = create_minimal_imzml
+    def test_iter_and_reconstruct(self, create_minimal_imzml):
+        """Test iterating through spectra and reconstructing full data."""
+        imzml_path, _, mzs, _ = create_minimal_imzml
         
         reader = ImzMLReader(imzml_path)
-        data = reader.read()
         
-        # Check returned data structure
-        assert "mzs" in data
-        assert "intensities" in data
-        assert "coordinates" in data
-        assert "width" in data
-        assert "height" in data
+        # Get common mass axis
+        common_axis = reader.get_common_mass_axis()
         
-        # Check dimensions
-        assert data["width"] == 2
-        assert data["height"] == 2
+        # Manually collect data similar to what the former 'read' method would do
+        coordinates = []
+        intensities = []
         
-        # Check intensities shape
-        assert data["intensities"].shape[0] == 4  # 4 spectra
+        # Iterate through all spectra
+        for coords, spectrum_mzs, spectrum_intensities in reader.iter_spectra():
+            coordinates.append(coords)
+            
+            # In a real application, you might need to map these to the common axis
+            # For the test, we'll just collect the data
+            intensities.append(spectrum_intensities)
+        
+        # We should have 4 spectra (2x2 grid)
+        assert len(coordinates) == 4
+        assert len(intensities) == 4
+        
+        # Get dimensions
+        dimensions = reader.get_dimensions()
+        assert dimensions[0] == 2  # width
+        assert dimensions[1] == 2  # height
         
         reader.close()
     

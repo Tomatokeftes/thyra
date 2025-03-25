@@ -140,11 +140,13 @@ class TestImzMLConversion:
             assert table.n_obs == 4  # 2x2 grid = 4 pixels
             assert table.n_vars == len(mzs)  # Should match number of m/z values
             
-            # Check spatial data
-            assert "spatial" in table.obsm
+            # Check spatial coordinates are now in the obs dataframe
+            assert "spatial_x" in table.obs.columns
+            assert "spatial_y" in table.obs.columns
             
         except Exception as e:
             pytest.fail(f"Failed to load generated SpatialData file: {e}")
+
     
     def test_convert_nonexistent_file(self, temp_dir):
         """Test error handling with nonexistent input file."""

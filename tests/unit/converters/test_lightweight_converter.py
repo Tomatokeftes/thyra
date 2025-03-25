@@ -238,7 +238,6 @@ class TestLightweightConverter:
         # Mock zarr functionality
         mock_root = MagicMock()
         mock_zarr.open.return_value = mock_root
-        mock_zarr.consolidate_metadata = MagicMock()
         
         # Initialize converter
         converter = LightweightConverter(mock_reader, output_path)
@@ -247,11 +246,10 @@ class TestLightweightConverter:
         # Save output
         result = converter._save_output({})
         
-        # Check consolidate_metadata call
-        mock_zarr.consolidate_metadata.assert_called_once_with(mock_root.store)
-        
-        # Check result
+        # Check that output was saved successfully
         assert result is True
+        
+        # Note: consolidate_metadata is no longer called in the implementation
     
     @patch('msiconvert.converters.lightweight_converter.zarr')
     def test_convert_end_to_end(self, mock_zarr, mock_reader, temp_dir):
