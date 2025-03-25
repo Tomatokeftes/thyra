@@ -243,13 +243,14 @@ class TestLightweightConverter:
         converter = LightweightConverter(mock_reader, output_path)
         converter.root = mock_root
         
+        # Create data structures with the expected 'current_size' key
+        data_structures = {"current_size": 10}
+        
         # Save output
-        result = converter._save_output({})
+        result = converter._save_output(data_structures)
         
         # Check that output was saved successfully
         assert result is True
-        
-        # Note: consolidate_metadata is no longer called in the implementation
     
     @patch('msiconvert.converters.lightweight_converter.zarr')
     def test_convert_end_to_end(self, mock_zarr, mock_reader, temp_dir):
