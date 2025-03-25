@@ -1,6 +1,7 @@
 # msiconvert/core/registry.py
 from typing import Dict, Type, Callable
 from pathlib import Path
+import logging
 from .base_reader import BaseMSIReader
 from .base_converter import BaseMSIConverter
 
@@ -14,14 +15,24 @@ format_detectors: Dict[str, Callable[[Path], bool]] = {}
 def register_reader(format_name: str):
     """Decorator to register a reader class for a specific format."""
     def decorator(cls: Type[BaseMSIReader]):
+        if not issubclass(cls, BaseMSIReader):
+            raise TypeError(f"Class {cls.__name__} must inherit from BaseMSIReader")
+        if format_name in reader_registry:
+            logging.warning(f"Overwriting existing reader for format '{format_name}'")
         reader_registry[format_name] = cls
+        logging.info(f"Registered reader {cls.__name__} for format '{format_name}'")
         return cls
     return decorator
 
 def register_converter(format_name: str):
     """Decorator to register a converter class for a specific format."""
     def decorator(cls: Type[BaseMSIConverter]):
+        if not issubclass(cls, BaseMSIConverter):
+            raise TypeError(f"Class {cls.__name__} must inherit from BaseMSIConverter")
+        if format_name in converter_registry:
+            logging.warning(f"Overwriting existing converter for format '{format_name}'")
         converter_registry[format_name] = cls
+        logging.info(f"Registered converter {cls.__name__} for format '{format_name}'")
         return cls
     return decorator
 
@@ -47,17 +58,39 @@ def get_converter_class(format_name: str) -> Type[BaseMSIConverter]:
         raise ValueError(f"No converter registered for format '{format_name}'")
 
 def detect_format(input_path: Path) -> str:
-    """Detect the format of the input data."""
-    print(f"Attempting to detect format for: {input_path}")
-    print(f"File exists: {input_path.exists()}")
-    print(f"Is file: {input_path.is_file()}")
-    print(f"Suffix: {input_path.suffix.lower()}")
+    """
+    Detect the format of the input data.
+    
+    Args:
+        input_path: Path to input file or directory
+        
+    Returns:
+        Detected format name
+        
+    Raises:
+        ValueError: If format could not be detected
+    """
+    if not input_path.exists():
+        raise ValueError(f"Input path does not exist: {input_path}")
+        
+    logging.info(f"Attempting to detect format for: {input_path}")
+    logging.debug(f"File exists: {input_path.exists()}")
+    logging.debug(f"Is file: {input_path.is_file()}")
+    logging.debug(f"Suffix: {input_path.suffix.lower()}")
     
     for format_name, detector in format_detectors.items():
-        print(f"Checking detector for format: {format_name}")
-        result = detector(input_path)
-        print(f"  Result: {result}")
-        if result:
-            return format_name
+        logging.debug(f"Checking detector for format: {format_name}")
+        try:
+            result = detector(input_path)
+            logging.debug(f"  Result: {result}")
+            if result:
+                return format_name
+        except Exception as e:
+            logging.warning(f"Error in format detector for {format_name}: {e}")
     
-    raise ValueError(f"Unable to detect format for: {input_path}")
+    # If we get here, no format was detected
+    supported_formats = ", ".join(format_detectors.keys())
+    raise ValueError(
+        f"Unable to detect format for: {input_path}. "
+        f"Supported formats are: {supported_formats}"
+    )

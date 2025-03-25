@@ -6,6 +6,6 @@
 Archive
 *imzML
 *ibd
-*.coverage
 *.d
-*.egg-info
+*egg-info
+.coverage

@@ -70,12 +70,24 @@ class BaseMSIConverter(ABC):
     def _initialize_conversion(self) -> None:
         """Initialize conversion by loading dimensions, mass axis and metadata."""
         logging.info("Initializing conversion...")
-        self._dimensions = self.reader.get_dimensions()
-        self._common_mass_axis = self.reader.get_common_mass_axis()
-        self._metadata = self.reader.get_metadata()
-        
-        logging.info(f"Dataset dimensions: {self._dimensions}")
-        logging.info(f"Common mass axis length: {len(self._common_mass_axis)}")
+        try:
+            self._dimensions = self.reader.get_dimensions()
+            if any(d <= 0 for d in self._dimensions):
+                raise ValueError(f"Invalid dimensions: {self._dimensions}. All dimensions must be positive.")
+                
+            self._common_mass_axis = self.reader.get_common_mass_axis()
+            if self._common_mass_axis is None or len(self._common_mass_axis) == 0:
+                raise ValueError("Common mass axis is empty or None. Cannot proceed with conversion.")
+                
+            self._metadata = self.reader.get_metadata()
+            if self._metadata is None:
+                self._metadata = {}  # Initialize with empty dict if None
+                
+            logging.info(f"Dataset dimensions: {self._dimensions}")
+            logging.info(f"Common mass axis length: {len(self._common_mass_axis)}")
+        except Exception as e:
+            logging.error(f"Error during initialization: {e}")
+            raise
     
     @abstractmethod
     def _create_data_structures(self) -> Any:
@@ -100,11 +112,10 @@ class BaseMSIConverter(ABC):
         if self._dimensions is None:
             raise ValueError("Dimensions are not initialized.")
         n_x, n_y, n_z = self._dimensions
-        total_pixels = n_x * n_y * n_z
         
         # Process spectra with progress tracking
         with tqdm(desc="Processing spectra", unit="spectrum") as pbar:
-            for coords, mzs, intensities in self.reader.iter_spectra():
+            for coords, mzs, intensities in self.reader.iter_spectra(batch_size=self._buffer_size):
                 self._process_single_spectrum(data_structures, coords, mzs, intensities)
                 pbar.update(1)
     
@@ -251,7 +262,7 @@ class BaseMSIConverter(ABC):
     
     def _map_mass_to_indices(self, mzs: np.ndarray) -> np.ndarray:
         """
-        Map m/z values to indices in the common mass axis.
+        Map m/z values to indices in the common mass axis with high accuracy.
         
         Parameters:
         -----------
@@ -263,13 +274,27 @@ class BaseMSIConverter(ABC):
         """
         if self._common_mass_axis is None:
             raise ValueError("Common mass axis is not initialized.")
-        return np.searchsorted(self._common_mass_axis, mzs)
-    
+            
+        if mzs.size == 0:
+            return np.array([], dtype=int)
+            
+        # Use searchsorted for exact mapping
+        indices = np.searchsorted(self._common_mass_axis, mzs)
+        
+        # Ensure indices are within bounds
+        indices = np.clip(indices, 0, len(self._common_mass_axis) - 1)
+        
+        # For complete accuracy, validate the indices
+        max_diff = 1e-6  # Very small tolerance threshold for floating point differences
+        mask = np.abs(self._common_mass_axis[indices] - mzs) <= max_diff
+        
+        return indices[mask]
+
     def _add_to_sparse_matrix(self, sparse_matrix: sparse.lil_matrix, 
                             pixel_idx: int, mz_indices: np.ndarray, 
                             intensities: np.ndarray) -> None:
         """
-        Add intensity values to a sparse matrix.
+        Add intensity values to a sparse matrix efficiently.
         
         Parameters:
         -----------
@@ -280,9 +305,20 @@ class BaseMSIConverter(ABC):
         """
         if self._common_mass_axis is None:
             raise ValueError("Common mass axis is not initialized.")
+            
+        if mz_indices.size == 0 or intensities.size == 0:
+            return
+            
         n_masses = len(self._common_mass_axis)
         
-        # Only store valid, non-zero values
-        for mz_idx, intensity in zip(mz_indices, intensities):
-            if intensity > 0 and mz_idx < n_masses:
-                sparse_matrix[pixel_idx, mz_idx] = intensity
+        # Filter out invalid indices and zero intensities in a single pass
+        valid_mask = (mz_indices < n_masses) & (intensities > 0)
+        if not np.any(valid_mask):
+            return
+            
+        # Extract valid values
+        valid_indices = mz_indices[valid_mask]
+        valid_intensities = intensities[valid_mask]
+        
+        # Use bulk assignment for better performance
+        sparse_matrix[pixel_idx, valid_indices] = valid_intensities

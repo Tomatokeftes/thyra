@@ -65,7 +65,7 @@ class TestBaseMSIConverter:
             def get_metadata(self): return {}
             def get_dimensions(self): return (1, 1, 1)
             def get_common_mass_axis(self): return np.array([])
-            def iter_spectra(self): yield ((0, 0, 0), np.array([]), np.array([]))
+            def iter_spectra(self, batch_size=None): yield ((0, 0, 0), np.array([]), np.array([]))
             def close(self): pass
         
         # Subclassing without implementing methods should fail
@@ -96,7 +96,7 @@ class TestBaseMSIConverter:
             def get_common_mass_axis(self): 
                 return np.array([100.0, 200.0, 300.0])
                 
-            def iter_spectra(self):
+            def iter_spectra(self, batch_size=None):
                 for x in range(2):
                     for y in range(2):
                         yield ((x, y, 0), 

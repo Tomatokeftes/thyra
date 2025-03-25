@@ -3,8 +3,6 @@ Tests for the imzML reader.
 """
 import pytest
 import numpy as np
-from pathlib import Path
-import os
 
 from msiconvert.readers.imzml_reader import ImzMLReader
 
