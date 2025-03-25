@@ -19,6 +19,7 @@ warnings.filterwarnings(
     category=CryptographyDeprecationWarning
 )
 
+
 def convert_msi(
     input_path: str,
     output_path: str,

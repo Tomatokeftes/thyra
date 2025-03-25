@@ -2,6 +2,7 @@
 import numpy as np
 import sqlite3
 from typing import Dict, Any, Tuple, Generator, List, Optional
+
 from pathlib import Path
 import os
 import logging
@@ -233,7 +234,7 @@ class BrukerReader(BaseMSIReader):
     
     def _execute_query(self, query: str, params: tuple = ()) -> List[tuple]:
         """Execute a SQL query against the database.
-        
+   
         Args:
             query: SQL query to execute
             params: Parameters for the query
@@ -258,7 +259,13 @@ class BrukerReader(BaseMSIReader):
         return results
     
     def get_metadata(self) -> Dict[str, Any]:
-        """Return metadata about the Bruker dataset."""
+
+        """Return metadata about the Bruker dataset.
+        
+        Returns:
+            Dictionary of metadata
+        """
+        
         if self._metadata is None:
             self._metadata = {
                 'source': str(self.analysis_directory),
@@ -278,17 +285,22 @@ class BrukerReader(BaseMSIReader):
         return self._metadata
     
     def get_dimensions(self) -> Tuple[int, int, int]:
+
         """Return the dimensions of the MSI dataset (x, y, z) using 0-based indexing."""
         if self._dimensions is None:
             if self._frame_positions is not None:
                 # For MALDI data, use the max XY positions
                 # Adding 1 to convert from 0-based max index to dimension size
+
                 x_max = int(np.max(self._frame_positions[:, 0])) + 1
                 y_max = int(np.max(self._frame_positions[:, 1])) + 1
                 z_max = 1  # Assume 2D data for now
                 self._dimensions = (x_max, y_max, z_max)
             else:
                 # For non-MALDI data, just use frame count for now
+
+                # This is likely LC data, so dimensions aren't as meaningful
+
                 self._dimensions = (self._frame_count, 1, 1)
                 
         return self._dimensions
@@ -314,6 +326,7 @@ class BrukerReader(BaseMSIReader):
                         logging.warning(f"Error reading spectrum for frame {frame_id}: {e}")
                     pbar.update(1)
             
+
             if all_mzs:
                 # Concatenate and find unique values
                 try:
@@ -389,7 +402,7 @@ class BrukerReader(BaseMSIReader):
             
             if result < 0:
                 self._throw_last_error()
-                
+
             if result > buffer_size:
                 # Buffer too small, resize and try again
                 buffer_size = result
@@ -462,6 +475,7 @@ class BrukerReader(BaseMSIReader):
         if current_idx == 0:
             return np.array([]), np.array([])
         
+
         # Get views of the filled portions of the buffers
         mzs = self._tdf_mz_buffer[:current_idx].copy()
         intensities = self._tdf_intensity_buffer[:current_idx].copy()
@@ -672,12 +686,14 @@ class BrukerReader(BaseMSIReader):
                      f"dimensions: {self._dimensions}, "
                      f"common mass axis: {len(self._common_mass_axis) if self._common_mass_axis is not None else 0} points")
         
+
     def iter_spectra(self, batch_size: Optional[int] = None) -> Generator[Tuple[Tuple[int, int, int], np.ndarray, np.ndarray], None, None]:
         """
         Iterate through all spectra in the dataset, with optional batching for efficiency.
         
         For each spectrum, yields the coordinates and raw m/z and intensity values.
         All coordinates are 0-based for internal consistency.
+
         
         Args:
             batch_size: Number of spectra to process in each batch (None for default)
@@ -686,6 +702,7 @@ class BrukerReader(BaseMSIReader):
             Tuple of:
                 - Coordinates (x, y, z) using 0-based indexing
                 - m/z values array  
+
                 - Intensity values array
         """
         if not hasattr(self, 'handle') or self.handle is None:
@@ -715,6 +732,7 @@ class BrukerReader(BaseMSIReader):
                 for frame_id in range(1, self._frame_count + 1):
                     try:
                         # Get coordinates from cache if possible (already 0-based in cache)
+
                         if is_maldi:
                             if self._position_cache and frame_id in self._position_cache:
                                 x, y = self._position_cache[frame_id]
@@ -727,14 +745,18 @@ class BrukerReader(BaseMSIReader):
                                 pbar.update(1)
                                 continue  # Skip if position not found
                         else:
+
                             # For non-MALDI, use frame ID (0-based)
+
                             coords = (frame_id - 1, 0, 0)
                         
                         # Get spectrum data
                         mzs, intensities = self._get_spectrum_data(frame_id)
                         
                         if mzs.size > 0 and intensities.size > 0:
+
                             yield coords, mzs, intensities
+
                         
                         pbar.update(1)
                     except Exception as e:
@@ -751,7 +773,9 @@ class BrukerReader(BaseMSIReader):
                     for offset in range(batch_size_actual):
                         frame_id = batch_start + offset
                         try:
+
                             # Get coordinates (already 0-based in cache)
+
                             if is_maldi:
                                 if self._position_cache and frame_id in self._position_cache:
                                     x, y = self._position_cache[frame_id]
@@ -764,14 +788,18 @@ class BrukerReader(BaseMSIReader):
                                     pbar.update(1)
                                     continue  # Skip if position not found
                             else:
+
                                 # For non-MALDI, use frame ID (0-based)
+
                                 coords = (frame_id - 1, 0, 0)
                             
                             # Get spectrum data
                             mzs, intensities = self._get_spectrum_data(frame_id)
                             
                             if mzs is not None and intensities is not None and mzs.size > 0 and intensities.size > 0:
+
                                 yield coords, mzs, intensities
+
                             
                             pbar.update(1)
                         except Exception as e:
