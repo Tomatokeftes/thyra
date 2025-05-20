@@ -191,7 +191,7 @@ class BaseMSIConverter(ABC):
         n_masses = len(self._common_mass_axis)
         
         logging.info(f"Creating sparse matrix for {n_pixels} pixels and {n_masses} mass values")
-        return sparse.lil_matrix((n_pixels, n_masses), dtype=np.float32)
+        return sparse.lil_matrix((n_pixels, n_masses), dtype=np.float64)
     
     def _create_coordinates_dataframe(self) -> pd.DataFrame:
         """

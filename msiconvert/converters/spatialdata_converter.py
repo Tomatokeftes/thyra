@@ -44,12 +44,15 @@ class SpatialDataConverter(BaseMSIConverter):
             handle_3d=handle_3d,
             **kwargs
         )
+
+        self._non_empty_pixel_count = 0
     
     def _create_data_structures(self) -> Dict[str, Any]:
         """Create data structures for SpatialData format."""
         # Return dictionaries to store tables, shapes, and sparse matrices
         tables = {}
         shapes = {}
+        images = {}
         
         # If 3D data but we want to treat as 2D slices
         n_x, n_y, n_z = self._dimensions
@@ -62,6 +65,7 @@ class SpatialDataConverter(BaseMSIConverter):
                 slices_data[slice_id] = {
                     'sparse_data': self._create_sparse_matrix_for_slice(z),
                     'coords_df': self._create_coordinates_dataframe_for_slice(z),
+                    'tic_values': np.zeros((n_y, n_x), dtype=np.float64)  # 2D array with conventional (row, col) = (y, x) ordering
                 }
             
             return {
@@ -69,7 +73,10 @@ class SpatialDataConverter(BaseMSIConverter):
                 'slices_data': slices_data,
                 'tables': tables,
                 'shapes': shapes,
-                'var_df': self._create_mass_dataframe()
+                'images': images,
+                'var_df': self._create_mass_dataframe(),
+                'total_intensity': np.zeros(len(self._common_mass_axis) if self._common_mass_axis is not None else 0, dtype=np.float64),
+                'pixel_count': 0,
             }
         else:
             # For full 3D dataset or single 2D slice
@@ -79,7 +86,11 @@ class SpatialDataConverter(BaseMSIConverter):
                 'coords_df': self._create_coordinates_dataframe(),
                 'var_df': self._create_mass_dataframe(),
                 'tables': tables,
-                'shapes': shapes
+                'shapes': shapes,
+                'images': images,  # Add this
+                'tic_values': np.zeros((n_y, n_x, n_z), dtype=np.float64),  # For TIC image
+                'total_intensity': np.zeros(len(self._common_mass_axis) if self._common_mass_axis is not None else 0, dtype=np.float64),
+                'pixel_count': 0,  # Count for normalization
             }
     
     def _create_sparse_matrix_for_slice(self, z_value: int) -> sparse.lil_matrix:
@@ -89,7 +100,7 @@ class SpatialDataConverter(BaseMSIConverter):
         n_masses = len(self._common_mass_axis)
         
         logging.info(f"Creating sparse matrix for slice z={z_value} with {n_pixels} pixels and {n_masses} mass values")
-        return sparse.lil_matrix((n_pixels, n_masses), dtype=np.float32)
+        return sparse.lil_matrix((n_pixels, n_masses), dtype=np.float64)
     
     def _create_coordinates_dataframe_for_slice(self, z_value: int) -> pd.DataFrame:
         """Create a coordinates dataframe for a single Z-slice."""
@@ -120,10 +131,18 @@ class SpatialDataConverter(BaseMSIConverter):
         return coords_df
     
     def _process_single_spectrum(self, data_structures: Dict[str, Any], 
-                               coords: Tuple[int, int, int], 
-                               mzs: np.ndarray, intensities: np.ndarray) -> None:
+                            coords: Tuple[int, int, int], 
+                            mzs: np.ndarray, intensities: np.ndarray) -> None:
         """Process a single spectrum for SpatialData format."""
         x, y, z = coords
+        
+        # Calculate TIC for this pixel (sum of all intensities)
+        tic_value = np.sum(intensities)
+        
+        # Update total intensity for average spectrum calculation
+        mz_indices = self._map_mass_to_indices(mzs)
+        data_structures['total_intensity'][mz_indices] += intensities
+        data_structures['pixel_count'] += 1
         
         if data_structures['mode'] == '2d_slices':
             # For 2D slices mode, add data to the appropriate slice
@@ -131,6 +150,9 @@ class SpatialDataConverter(BaseMSIConverter):
             if slice_id in data_structures['slices_data']:
                 slice_data = data_structures['slices_data'][slice_id]
                 pixel_idx = y * self._dimensions[0] + x
+                
+                # Store TIC value for this pixel
+                slice_data['tic_values'][y, x] = tic_value
                 
                 # Map m/z values to indices
                 mz_indices = self._map_mass_to_indices(mzs)
@@ -146,6 +168,9 @@ class SpatialDataConverter(BaseMSIConverter):
             # For 3D volume mode, add data to the single sparse matrix
             pixel_idx = self._get_pixel_index(x, y, z)
             
+            # Store TIC value for this pixel
+            data_structures['tic_values'][y, x, z] = tic_value
+            
             # Map m/z values to indices
             mz_indices = self._map_mass_to_indices(mzs)
             
@@ -158,7 +183,37 @@ class SpatialDataConverter(BaseMSIConverter):
             )
     
     def _finalize_data(self, data_structures: Dict[str, Any]) -> None:
-        """Finalize SpatialData structures by creating tables and shapes."""
+        """Finalize SpatialData structures by creating tables, shapes, and images."""
+        import xarray as xr
+        from spatialdata.models import Image2DModel
+        
+        # Calculate average mass spectrum using only non-zero pixels
+        if data_structures['pixel_count'] > 0:
+            avg_spectrum = data_structures['total_intensity'] / data_structures['pixel_count']
+        else:
+            avg_spectrum = data_structures['total_intensity']
+        
+        # Create a table for the average spectrum
+        avg_spectrum_table = pd.DataFrame({
+            'spectrum_type': ['average'],
+            'description': ['Average mass spectrum across all non-zero pixels']
+        })
+        avg_spectrum_table.set_index('spectrum_type', inplace=True)
+        
+        # Create the AnnData for the average spectrum
+        from anndata import AnnData
+        avg_adata = AnnData(
+            X=avg_spectrum.reshape(1, -1),
+            obs=avg_spectrum_table,
+            var=data_structures['var_df']
+        )
+        
+        # Add the average spectrum to tables
+        data_structures['tables']['average_spectrum'] = avg_adata
+
+        # Store pixel count for metadata
+        self._non_empty_pixel_count = data_structures['pixel_count']
+        
         if data_structures['mode'] == '2d_slices':
             # Process each slice
             for slice_id, slice_data in data_structures['slices_data'].items():
@@ -192,7 +247,33 @@ class SpatialDataConverter(BaseMSIConverter):
                     # Add to tables and create shapes
                     data_structures['tables'][slice_id] = table
                     data_structures['shapes'][region_key] = self._create_pixel_shapes(adata, is_3d=False)
-                
+                    
+                    # Create TIC image for this slice
+                    # Use the actual shape of the TIC values array for coordinates
+                    tic_values = slice_data['tic_values']
+                    y_size, x_size = tic_values.shape
+                    
+                    # Add channel dimension to make it (c, y, x) as required by SpatialData
+                    tic_values_with_channel = tic_values.reshape(1, y_size, x_size)
+                    
+                    tic_image = xr.DataArray(
+                        tic_values_with_channel,
+                        dims=('c', 'y', 'x'),
+                        coords={
+                            'c': [0],  # Single channel
+                            'y': np.arange(y_size) * self.pixel_size_um,
+                            'x': np.arange(x_size) * self.pixel_size_um,
+                        }
+                    )
+                    
+                    # Create Image2DModel for the TIC image
+                    transform = Identity()
+                    data_structures['images'][f"{slice_id}_tic"] = Image2DModel.parse(
+                        tic_image,
+                        transformations={slice_id: transform, "global": transform}
+                        # No need to specify dims here as it's already in the DataArray
+                    )
+                    
                 except Exception as e:
                     logging.error(f"Error processing slice {slice_id}: {e}")
                     import traceback
@@ -200,7 +281,7 @@ class SpatialDataConverter(BaseMSIConverter):
                     raise
         else:
             try:
-                # Process the single 3D volume
+                # Process the single 3D volume or 2D slice
                 # Convert to CSR format
                 data_structures['sparse_data'] = data_structures['sparse_data'].tocsr()
                 
@@ -230,7 +311,76 @@ class SpatialDataConverter(BaseMSIConverter):
                 # Add to tables and create shapes
                 data_structures['tables'][self.dataset_id] = table
                 data_structures['shapes'][region_key] = self._create_pixel_shapes(adata, is_3d=self.handle_3d)
-            
+                
+                # Create TIC image
+                if self.handle_3d:
+                    # 3D TIC image
+                    # Use the actual shape of the TIC values array for coordinates
+                    tic_values = data_structures['tic_values']
+                    z_size, y_size, x_size = tic_values.shape
+                    
+                    # Add channel dimension for 3D image
+                    tic_values_with_channel = tic_values.reshape(1, z_size, y_size, x_size)
+                    
+                    tic_image = xr.DataArray(
+                        tic_values_with_channel,
+                        dims=('c', 'z', 'y', 'x'),
+                        coords={
+                            'c': [0],  # Single channel
+                            'z': np.arange(z_size) * self.pixel_size_um,
+                            'y': np.arange(y_size) * self.pixel_size_um,
+                            'x': np.arange(x_size) * self.pixel_size_um,
+                        }
+                    )
+                    
+                    # Create Image model for 3D image
+                    transform = Identity()
+                    try:
+                        from spatialdata.models import Image3DModel
+                        data_structures['images'][f"{self.dataset_id}_tic"] = Image3DModel.parse(
+                            tic_image,
+                            transformations={self.dataset_id: transform, "global": transform}
+                        )
+                    except (ImportError, AttributeError):
+                        # Fallback if Image3DModel is not available
+                        logging.warning("Image3DModel not available, using generic image model")
+                        from spatialdata.models import ImageModel
+                        data_structures['images'][f"{self.dataset_id}_tic"] = ImageModel.parse(
+                            tic_image,
+                            transformations={self.dataset_id: transform, "global": transform}
+                        )
+                else:
+                    # 2D TIC image
+                    # Use the actual shape of the TIC values array for coordinates
+                    if len(data_structures['tic_values'].shape) == 3:
+                        # Take first z-plane from 3D array
+                        tic_values = data_structures['tic_values'][:, :, 0]
+                    else:
+                        tic_values = data_structures['tic_values']
+                    
+                    y_size, x_size = tic_values.shape
+                    
+                    # Add channel dimension to make it (c, y, x)
+                    tic_values_with_channel = tic_values.reshape(1, y_size, x_size)
+                    
+                    tic_image = xr.DataArray(
+                        tic_values_with_channel,
+                        dims=('c', 'y', 'x'),
+                        coords={
+                            'c': [0],  # Single channel
+                            'y': np.arange(y_size) * self.pixel_size_um,
+                            'x': np.arange(x_size) * self.pixel_size_um,
+                        }
+                    )
+                    
+                    # Create Image2DModel for the TIC image
+                    transform = Identity()
+                    data_structures['images'][f"{self.dataset_id}_tic"] = Image2DModel.parse(
+                        tic_image,
+                        transformations={self.dataset_id: transform, "global": transform}
+                        # No need to specify dims here
+                    )
+                
             except Exception as e:
                 logging.error(f"Error processing 3D volume: {e}")
                 import traceback
@@ -292,11 +442,11 @@ class SpatialDataConverter(BaseMSIConverter):
     def _save_output(self, data_structures: Dict[str, Any]) -> bool:
         """Save the data to SpatialData format."""
         try:
-            # Create SpatialData object
+            # Create SpatialData object with images included
             sdata = SpatialData(
                 tables=data_structures['tables'],
                 shapes=data_structures['shapes'],
-                images={}  # No images in MSI data
+                images=data_structures['images']  # Now includes TIC images
             )
             
             # Add metadata
@@ -312,13 +462,15 @@ class SpatialDataConverter(BaseMSIConverter):
             logging.debug(f"Detailed traceback:\n{traceback.format_exc()}")
             return False
     
-    def add_metadata(self, sdata: SpatialData) -> None:
+    def add_metadata(self, metadata: SpatialData) -> None:
         """Add metadata to the SpatialData object."""
         # Add dataset metadata if SpatialData supports it
-        if hasattr(sdata, 'metadata'):
-            sdata.metadata = {
+        if hasattr(metadata, 'metadata'):
+            metadata.metadata = {
                 'dataset_id': self.dataset_id,
                 'pixel_size_um': self.pixel_size_um,
                 'source': self._metadata.get('source', 'unknown'),
-                'msi_metadata': self._metadata
+                'msi_metadata': self._metadata,
+                'total_grid_pixels': self._dimensions[0] * self._dimensions[1] * self._dimensions[2],
+                'non_empty_pixels': self._non_empty_pixel_count
             }

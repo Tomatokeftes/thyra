@@ -103,7 +103,7 @@ class LightweightConverter(BaseMSIConverter):
         self.root.create_dataset(
             'sparse_data/data',
             shape=(0,),
-            dtype=np.float32,
+            dtype=np.float64,
             compressor=compressor,
             chunks=(10000,)
         )
@@ -182,7 +182,7 @@ class LightweightConverter(BaseMSIConverter):
         indices_array.resize((new_size, 2))
         
         # Convert data to numpy arrays for efficient bulk insertion
-        data_np = np.array(data_buffer, dtype=np.float32)
+        data_np = np.array(data_buffer, dtype=np.float64)
         indices_np = np.array(indices_buffer, dtype=np.int32)
         
         # Store data in a single operation

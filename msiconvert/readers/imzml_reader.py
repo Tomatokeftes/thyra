@@ -336,7 +336,7 @@ class ImzMLReader(BaseMSIReader):
             coordinates.append(coords)
             
             # Convert sparse representation to full array
-            full_spectrum = np.zeros(len(mzs), dtype=np.float32)
+            full_spectrum = np.zeros(len(mzs), dtype=np.float64)
             full_spectrum[spectrum_indices] = spectrum_intensities
             intensities.append(full_spectrum)
         

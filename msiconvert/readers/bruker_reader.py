@@ -388,7 +388,7 @@ class BrukerReader(BaseMSIReader):
             if hasattr(self, '_intensities_buffer') and len(self._intensities_buffer) >= buffer_size:
                 intensities = self._intensities_buffer
             else:
-                self._intensities_buffer = np.empty(buffer_size, dtype=np.float32)
+                self._intensities_buffer = np.empty(buffer_size, dtype=np.float64)
                 intensities = self._intensities_buffer
             
             # Read spectrum
@@ -449,7 +449,7 @@ class BrukerReader(BaseMSIReader):
             self._tdf_mz_buffer = np.zeros(estimated_peaks, dtype=np.float64)
             
         if not hasattr(self, '_tdf_intensity_buffer') or len(self._tdf_intensity_buffer) < estimated_peaks:
-            self._tdf_intensity_buffer = np.zeros(estimated_peaks, dtype=np.float32)
+            self._tdf_intensity_buffer = np.zeros(estimated_peaks, dtype=np.float64)
         
         # Read scans (simplified version without mobility data)
         scans = self._read_scans(frame_id -1, 0, scan_count)
