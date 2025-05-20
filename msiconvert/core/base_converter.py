@@ -1,12 +1,14 @@
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Any, Tuple, Union
+from typing import Any, Tuple, Union, Optional
 from os import PathLike
 import numpy as np
 import logging
 from scipy import sparse
 import pandas as pd
+from pandas import DataFrame
 from tqdm import tqdm
+from numpy.typing import NDArray
 
 from .base_reader import BaseMSIReader
 
@@ -16,22 +18,22 @@ class BaseMSIConverter(ABC):
     Implements common processing steps while allowing format-specific customization.
     """
     
-    def __init__(self, reader: BaseMSIReader, output_path: Union[str, Path, PathLike], 
+    def __init__(self, reader: BaseMSIReader, output_path: Union[str, Path, PathLike[str]], 
                  dataset_id: str = "msi_dataset",
                  pixel_size_um: float = 1.0,
                  compression_level: int = 5,
                  handle_3d: bool = False,
-                 **kwargs):
+                 **kwargs: Any):
         self.reader = reader
         self.output_path = Path(output_path)
         self.dataset_id = dataset_id
         self.pixel_size_um = pixel_size_um
         self.compression_level = compression_level
         self.handle_3d = handle_3d
-        self.options = kwargs
-        self._common_mass_axis = None
-        self._dimensions = None
-        self._metadata = None
+        self.options: dict[str, Any] = kwargs
+        self._common_mass_axis: Optional[NDArray[np.float64]] = None
+        self._dimensions: Optional[Tuple[int, int, int]] = None
+        self._metadata: Optional[dict[str, Any]] = None
         self._buffer_size = 100000  # Default buffer size for processing spectra
     
     def convert(self) -> bool:
@@ -76,11 +78,11 @@ class BaseMSIConverter(ABC):
                 raise ValueError(f"Invalid dimensions: {self._dimensions}. All dimensions must be positive.")
                 
             self._common_mass_axis = self.reader.get_common_mass_axis()
-            if self._common_mass_axis is None or len(self._common_mass_axis) == 0:
-                raise ValueError("Common mass axis is empty or None. Cannot proceed with conversion.")
+            if len(self._common_mass_axis) == 0:
+                raise ValueError("Common mass axis is empty. Cannot proceed with conversion.")
                 
             self._metadata = self.reader.get_metadata()
-            if self._metadata is None:
+            if self._metadata is None: # type: ignore
                 self._metadata = {}  # Initialize with empty dict if None
                 
             logging.info(f"Dataset dimensions: {self._dimensions}")
@@ -111,7 +113,6 @@ class BaseMSIConverter(ABC):
         logging.info("Processing spectra...")
         if self._dimensions is None:
             raise ValueError("Dimensions are not initialized.")
-        n_x, n_y, n_z = self._dimensions
         
         # Process spectra with progress tracking
         with tqdm(desc="Processing spectra", unit="spectrum") as pbar:
@@ -119,8 +120,13 @@ class BaseMSIConverter(ABC):
                 self._process_single_spectrum(data_structures, coords, mzs, intensities)
                 pbar.update(1)
     
-    def _process_single_spectrum(self, data_structures: Any, coords: Tuple[int, int, int], 
-                               mzs: np.ndarray, intensities: np.ndarray) -> None:
+    def _process_single_spectrum(
+        self,
+        data_structures: Any,
+        coords: Tuple[int, int, int],
+        mzs: NDArray[np.float64],
+        intensities: NDArray[np.float64]
+    ) -> None:
         """
         Process a single spectrum.
         
@@ -210,15 +216,15 @@ class BaseMSIConverter(ABC):
             for y in range(n_y):
                 for x in range(n_x):
                     pixel_idx = z * (n_y * n_x) + y * n_x + x
-                    coords.append({
+                    coords.append({ # type: ignore
                         'z': z,
                         'y': y, 
                         'x': x,
                         'pixel_id': str(pixel_idx)  # Convert to string for compatibility
                     })
         
-        coords_df = pd.DataFrame(coords)
-        coords_df.set_index('pixel_id', inplace=True)
+        coords_df: pd.DataFrame = pd.DataFrame(coords)
+        coords_df.set_index('pixel_id', inplace=True) # type: ignore
         
         # Add spatial coordinates
         coords_df['spatial_x'] = coords_df['x'] * self.pixel_size_um
@@ -237,10 +243,11 @@ class BaseMSIConverter(ABC):
         """
         if self._common_mass_axis is None:
             raise ValueError("Common mass axis is not initialized.")
-        var_df = pd.DataFrame({'mz': self._common_mass_axis})
+        var_df: DataFrame = pd.DataFrame({'mz': self._common_mass_axis})
         # Convert to string index for compatibility
         var_df['mz_str'] = var_df['mz'].astype(str)
-        var_df.set_index('mz_str', inplace=True)
+        var_df.set_index('mz_str', inplace=True) # type: ignore
+
         return var_df
     
     def _get_pixel_index(self, x: int, y: int, z: int) -> int:
@@ -260,7 +267,7 @@ class BaseMSIConverter(ABC):
         n_x, n_y, _ = self._dimensions
         return z * (n_y * n_x) + y * n_x + x
     
-    def _map_mass_to_indices(self, mzs: np.ndarray) -> np.ndarray:
+    def _map_mass_to_indices(self, mzs: NDArray[np.float64]) -> NDArray[np.int_]:
         """
         Map m/z values to indices in the common mass axis with high accuracy.
         
@@ -270,7 +277,7 @@ class BaseMSIConverter(ABC):
         
         Returns:
         --------
-        np.ndarray: Array of indices in common mass axis
+        NDArray[np.int_]: Array of indices in common mass axis
         """
         if self._common_mass_axis is None:
             raise ValueError("Common mass axis is not initialized.")
@@ -291,8 +298,8 @@ class BaseMSIConverter(ABC):
         return indices[mask]
 
     def _add_to_sparse_matrix(self, sparse_matrix: sparse.lil_matrix, 
-                            pixel_idx: int, mz_indices: np.ndarray, 
-                            intensities: np.ndarray) -> None:
+                            pixel_idx: int, mz_indices: NDArray[np.int_], 
+                            intensities: NDArray[np.float64]) -> None:
         """
         Add intensity values to a sparse matrix efficiently.
         

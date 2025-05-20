@@ -129,7 +129,8 @@ class TestImzMLConversion:
             sdata = spatialdata.SpatialData.read(str(output_path))
             
             # Check structure
-            assert len(sdata.tables) == 1
+            assert len(sdata.tables) == 2
+            assert "average_spectrum" in sdata.tables
             assert "test_dataset" in sdata.tables
             assert len(sdata.shapes) == 1
             

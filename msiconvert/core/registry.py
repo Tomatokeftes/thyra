@@ -15,8 +15,6 @@ format_detectors: Dict[str, Callable[[Path], bool]] = {}
 def register_reader(format_name: str):
     """Decorator to register a reader class for a specific format."""
     def decorator(cls: Type[BaseMSIReader]):
-        if not issubclass(cls, BaseMSIReader):
-            raise TypeError(f"Class {cls.__name__} must inherit from BaseMSIReader")
         if format_name in reader_registry:
             logging.warning(f"Overwriting existing reader for format '{format_name}'")
         reader_registry[format_name] = cls
@@ -27,8 +25,6 @@ def register_reader(format_name: str):
 def register_converter(format_name: str):
     """Decorator to register a converter class for a specific format."""
     def decorator(cls: Type[BaseMSIConverter]):
-        if not issubclass(cls, BaseMSIConverter):
-            raise TypeError(f"Class {cls.__name__} must inherit from BaseMSIConverter")
         if format_name in converter_registry:
             logging.warning(f"Overwriting existing converter for format '{format_name}'")
         converter_registry[format_name] = cls
