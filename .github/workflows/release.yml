@@ -13,12 +13,18 @@ jobs:
   release:
     name: Create Release
     runs-on: ubuntu-latest
+    permissions:
+      contents: write  # Required for creating releases
+      pull-requests: write  # Required for creating PRs (if needed)
+      
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           # We need to fetch all history and tags for semantic-release
           fetch-depth: 0
+          # Use PAT for authenticated git operations
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -30,6 +36,11 @@ jobs:
           python -m pip install --upgrade pip
           pip install python-semantic-release poetry
 
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
       - name: Create Release
         # This command does all the magic:
         # 1. Reads commit history since the last tag.
@@ -39,8 +50,15 @@ jobs:
         # 5. Generates a CHANGELOG.md from your commit messages.
         # 6. Creates a GitHub Release with the tag and changelog.
         # 7. Commits the changed files (like pyproject.toml and CHANGELOG.md) back to your repo.
-        run: semantic-release publish
+        run: semantic-release version --no-push
         env:
           # This token is automatically provided by GitHub.
           # It's needed to create releases and commit back to the repo.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push changes
+        run: |
+          git push origin main --follow-tags
+        env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
