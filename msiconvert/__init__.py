@@ -1,4 +1,4 @@
-__version__ = "1.0.0" 
+__version__ = "0.2.0" 
 
 from .convert import convert_msi
 # Import readers to ensure detectors are registered
