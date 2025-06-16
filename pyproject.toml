@@ -1,10 +1,13 @@
+
 [build-system]
 requires = ["setuptools>=61.0.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "msiconvert"
-version = "0.1.0"
+# The version is now dynamic and will be read from msiconvert/__init__.py
+# This is required for setuptools to work with the version file.
+dynamic = ["version"]
 description = "A library to convert MSI data into different formats"
 readme = "README.md"
 authors = [
@@ -42,11 +45,18 @@ dev = [
     "black>=23.0.0",
     "isort>=5.12.0",
     "flake8>=6.0.0",
+    # Add semantic-release here for local development and testing
+    "python-semantic-release", 
 ]
 
 [project.scripts]
 msiconvert = "msiconvert.__main__:main"
 
+# This section tells setuptools where to find the dynamic version number
+[tool.setuptools.dynamic]
+version = {attr = "msiconvert.__version__"}
+
+# This section replaces the old [tool.setuptools] section
 [tool.setuptools]
 packages = ["msiconvert"]
 
@@ -65,3 +75,20 @@ filterwarnings = [
     "ignore::DeprecationWarning:xarray_schema.*:",
     "ignore::UserWarning:spatialdata.models.models:1053"
 ]
+
+# =============================================================
+# === THIS IS THE NEW SECTION FOR AUTOMATED VERSIONING      ===
+# =============================================================
+[tool.semantic_release]
+# Tells semantic-release to look for the version in a file
+version_source = "file"
+
+# Specifies the exact file and variable for the version
+version_variable = "msiconvert/__init__.py:__version__"
+
+# The branch that will trigger a release when code is merged
+branch = "main"
+
+# The command to build your package before publishing.
+# This is a robust, modern command for setuptools-based projects.
+build_command = "python -m pip install build && python -m build"
