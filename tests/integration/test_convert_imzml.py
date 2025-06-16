@@ -129,8 +129,7 @@ class TestImzMLConversion:
             sdata = spatialdata.SpatialData.read(str(output_path))
             
             # Check structure
-            assert len(sdata.tables) == 2
-            assert "average_spectrum" in sdata.tables
+            assert len(sdata.tables) == 1
             assert "test_dataset" in sdata.tables
             assert len(sdata.shapes) == 1
             
@@ -140,6 +139,7 @@ class TestImzMLConversion:
             # Check table structure
             assert table.n_obs == 4  # 2x2 grid = 4 pixels
             assert table.n_vars == len(mzs)  # Should match number of m/z values
+            assert 'average_spectrum' in table.uns
             
             # Check spatial coordinates are now in the obs dataframe
             assert "spatial_x" in table.obs.columns
