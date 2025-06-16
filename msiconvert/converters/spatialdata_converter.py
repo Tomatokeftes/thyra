@@ -294,23 +294,6 @@ class SpatialDataConverter(BaseMSIConverter):
             avg_spectrum: NDArray[np.float64] = data_structures['total_intensity'] / data_structures['pixel_count']
         else:
             avg_spectrum: NDArray[np.float64] = data_structures['total_intensity'].copy()
-        
-        # Create a table for the average spectrum
-        avg_spectrum_table: pd.DataFrame = pd.DataFrame({
-            'spectrum_type': ['average'],
-            'description': ['Average mass spectrum across all non-zero pixels']
-        })
-        avg_spectrum_table.set_index('spectrum_type', inplace=True)  # type: ignore
-        
-        # Create the AnnData for the average spectrum
-        avg_adata: AnnData = AnnData(  # type: ignore
-            X=avg_spectrum.reshape(1, -1),
-            obs=avg_spectrum_table,
-            var=data_structures['var_df']
-        )
-        
-        # Add the average spectrum to tables
-        data_structures['tables']['average_spectrum'] = avg_adata
 
         # Store pixel count for metadata
         self._non_empty_pixel_count = data_structures['pixel_count']
@@ -329,6 +312,9 @@ class SpatialDataConverter(BaseMSIConverter):
                         var=data_structures['var_df']
                     )
                     
+                    # Add average spectrum to .uns
+                    adata.uns['average_spectrum'] = avg_spectrum
+
                     # Make sure region column exists and is correct
                     region_key: str = f"{slice_id}_pixels"
                     if 'region' not in adata.obs.columns:
@@ -391,6 +377,9 @@ class SpatialDataConverter(BaseMSIConverter):
                     obs=data_structures['coords_df'],
                     var=data_structures['var_df']
                 )
+                
+                # Add average spectrum to .uns
+                adata.uns['average_spectrum'] = data_structures['total_intensity']
                 
                 # Make sure region column exists and is correct
                 region_key: str = f"{self.dataset_id}_pixels"
