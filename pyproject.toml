@@ -50,6 +50,7 @@ dev = [
 
 [project.scripts]
 msiconvert = "msiconvert.__main__:main"
+msiconvert-check-ontology = "msiconvert.tools.check_ontology:main"
 
 # This section tells setuptools where to find the dynamic version number
 [tool.setuptools.dynamic]
