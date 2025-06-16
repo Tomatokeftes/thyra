@@ -20,15 +20,14 @@ The SpatialData object created by MSIConverter contains the following components
 
 ### Main Components
 
-1. **Tables**: Stores the primary MSI data (m/z values × pixels) and the average spectrum
-   - The MSI data table: `"{dataset_id}"` or `"{dataset_id}_z{slice_index}"` for sliced 3D data
-   - The average spectrum table: `"average_spectrum"`
+1.  **Tables**: Stores the primary MSI data (m/z values × pixels). The average spectrum is stored in the `.uns` attribute of this table.
+    -   The MSI data table: `"{dataset_id}"` or `"{dataset_id}_z{slice_index}"` for sliced 3D data
 
-2. **Images**: Contains the TIC image
-   - TIC image: `"{dataset_id}_tic"` or `"{dataset_id}_z{slice_index}_tic"` for sliced 3D data
+2.  **Images**: Contains the TIC image
+    -   TIC image: `"{dataset_id}_tic"` or `"{dataset_id}_z{slice_index}_tic"` for sliced 3D data
 
-3. **Shapes**: Contains the pixel shapes (geometry)
-   - Pixel shapes: `"{dataset_id}_pixels"` or `"{dataset_id}_z{slice_index}_pixels"` for sliced 3D data
+3.  **Shapes**: Contains the pixel shapes (geometry)
+    -   Pixel shapes: `"{dataset_id}_pixels"` or `"{dataset_id}_z{slice_index}_pixels"` for sliced 3D data
 
 ### Basic Access
 
@@ -101,7 +100,7 @@ plt.show()
 
 ## Accessing Average Mass Spectrum
 
-The average mass spectrum represents the mean intensity across all non-empty pixels for each m/z value.
+The average mass spectrum represents the mean intensity across all non-empty pixels for each m/z value. It is stored in the .uns attribute of the main data table.
 
 ### Finding Average Spectrum Keys
 
@@ -114,21 +113,18 @@ print("Average spectrum keys:", avg_keys)
 ### Accessing the Average Spectrum
 
 ```python
-# Get the average spectrum table
-avg_key = "average_spectrum"  # Default key name
-avg_table = sdata.tables[avg_key]
+# Get the main MSI data table (assuming a single dataset)
+main_table_key = list(sdata.tables.keys())[0]
+msi_table = sdata.tables[main_table_key]
 
-# The table is an AnnData object
-
-# Get m/z values from var DataFrame
-mz_values = avg_table.var["mz"].values if "mz" in avg_table.var.columns else np.arange(avg_table.n_vars)
-
-# Get intensity values from X matrix
-import scipy.sparse as sparse
-if sparse.issparse(avg_table.X):
-    intensities = avg_table.X.toarray().flatten()
+# Access the average spectrum from the .uns attribute
+if "average_spectrum" in msi_table.uns:
+    intensities = msi_table.uns["average_spectrum"]
 else:
-    intensities = avg_table.X.flatten()
+    raise KeyError("Average spectrum not found in table.uns")
+
+# Get m/z values from the table's var DataFrame
+mz_values = msi_table.var["mz"].values if "mz" in msi_table.var else msi_table.var_names.to_numpy()
 ```
 
 ### Visualizing the Average Spectrum
