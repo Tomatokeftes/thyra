@@ -2,6 +2,19 @@
 
 <!-- version list -->
 
+## v1.1.0 (2025-06-16)
+
+### Documentation
+
+- Update documentation for SpatialData structure and average mass spectrum access
+  ([`fdb7275`](https://github.com/Tomatokeftes/MSIConverter/commit/fdb72752133b142187b5486aca5c959b484f43af))
+
+### Features
+
+- **validator**: Add CV term usage counting and reporting
+  ([`7906830`](https://github.com/Tomatokeftes/MSIConverter/commit/790683022632df22fec85ad007312da8959aca2a))
+
+
 ## v1.0.0 (2025-06-16)
 
 ### Bug Fixes
