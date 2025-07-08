@@ -1,8 +1,12 @@
 # msiconvert/__main__.py
+from dotenv import load_dotenv
+load_dotenv()  # Load environment variables from .env file
+
 import argparse
 import logging
 from .convert import convert_msi
 from .utils.data_processors import optimize_zarr_chunks
+
 
 def main():
     parser = argparse.ArgumentParser(description='Convert MSI data to SpatialData or lightweight format')
