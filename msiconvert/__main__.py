@@ -6,6 +6,7 @@ import argparse
 import logging
 from .convert import convert_msi
 from .utils.data_processors import optimize_zarr_chunks
+from .utils.logging_config import setup_logging
 
 
 def main():
@@ -46,14 +47,16 @@ def main():
         default='INFO',
         help='Set the logging level'
     )
+    parser.add_argument(
+        '--log-file',
+        default=None,
+        help='Path to the log file'
+    )
     
     args = parser.parse_args()
     
     # Configure logging
-    logging.basicConfig(
-        level=getattr(logging, args.log_level),
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    )
+    setup_logging(log_level=getattr(logging, args.log_level), log_file=args.log_file)
     
     # Convert MSI data
     success = convert_msi(
@@ -72,9 +75,9 @@ def main():
             optimize_zarr_chunks(args.output, f'tables/{args.dataset_id}/X')
     
     if success:
-        print(f"Conversion completed successfully. Output stored at {args.output}")
+        logging.info(f"Conversion completed successfully. Output stored at {args.output}")
     else:
-        print("Conversion failed.")
+        logging.error("Conversion failed.")
 
 if __name__ == '__main__':
     main()
