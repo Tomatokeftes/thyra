@@ -2,6 +2,31 @@
 
 <!-- version list -->
 
+## v1.2.0 (2025-07-17)
+
+### Documentation
+
+- Create GEMINI.md and PLANNING.md for project context and architecture
+  ([`6bdaa77`](https://github.com/Tomatokeftes/MSIConverter/commit/6bdaa77ea3f3bcd7217a91beeab167c48c17307e))
+
+- Update TASK.md with current development tasks and priorities
+  ([`6bdaa77`](https://github.com/Tomatokeftes/MSIConverter/commit/6bdaa77ea3f3bcd7217a91beeab167c48c17307e))
+
+### Features
+
+- **bruker**: Enhance DLL loading logic and add error handling for unsupported platforms
+  ([`827723d`](https://github.com/Tomatokeftes/MSIConverter/commit/827723d0e2aad2e29fdfab1f31aa3d840db56c86))
+
+- **metadata**: Add MetadataExtractor class for extracting metadata from MSI readers
+  ([`6bdaa77`](https://github.com/Tomatokeftes/MSIConverter/commit/6bdaa77ea3f3bcd7217a91beeab167c48c17307e))
+
+- **tests**: Implement unit tests for MetadataExtractor functionality
+  ([`6bdaa77`](https://github.com/Tomatokeftes/MSIConverter/commit/6bdaa77ea3f3bcd7217a91beeab167c48c17307e))
+
+- **tools**: Add ontology checking tool with CLI support and validation logic
+  ([`6bdaa77`](https://github.com/Tomatokeftes/MSIConverter/commit/6bdaa77ea3f3bcd7217a91beeab167c48c17307e))
+
+
 ## v1.1.0 (2025-06-16)
 
 ### Documentation
