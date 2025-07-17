@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v1.3.0 (2025-07-17)
+
+### Features
+
+- **planning**: Update project planning document with current state assessment and detailed
+  architecture
+  ([`ccde584`](https://github.com/Tomatokeftes/MSIConverter/commit/ccde5849c0249e72a05fe4c54e170813f6eabc48))
+
+
 ## v1.2.0 (2025-07-17)
 
 ### Documentation
