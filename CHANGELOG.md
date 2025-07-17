@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.4.0 (2025-07-17)
+
+### Features
+
+- Implement Logging system
+  ([`0fefbb2`](https://github.com/Tomatokeftes/MSIConverter/commit/0fefbb2f8a009e72394c2342586bde85e17319f7))
+
+
 ## v1.3.0 (2025-07-17)
 
 ### Features
