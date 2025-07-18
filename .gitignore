@@ -9,3 +9,6 @@ Archive
 *.d
 *egg-info
 .coverage
+*.mis
+*.slx
+*.tiff
