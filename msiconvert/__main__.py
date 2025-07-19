@@ -1,70 +1,68 @@
 # msiconvert/__main__.py
 from dotenv import load_dotenv
+
 load_dotenv()  # Load environment variables from .env file
 
 import argparse
 import logging
+
 from msiconvert.convert import convert_msi
 from msiconvert.utils.data_processors import optimize_zarr_chunks
 from msiconvert.utils.logging_config import setup_logging
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Convert MSI data to SpatialData format')
-    
-    parser.add_argument('input', help='Path to input MSI file or directory')
-    parser.add_argument('output', help='Path for output file')
+    parser = argparse.ArgumentParser(
+        description="Convert MSI data to SpatialData format"
+    )
+
+    parser.add_argument("input", help="Path to input MSI file or directory")
+    parser.add_argument("output", help="Path for output file")
     parser.add_argument(
-        '--format', 
-        choices=['spatialdata'], 
-        default='spatialdata',
-        help='Output format type: spatialdata (full SpatialData format)'
+        "--format",
+        choices=["spatialdata"],
+        default="spatialdata",
+        help="Output format type: spatialdata (full SpatialData format)",
     )
     parser.add_argument(
-        '--dataset-id',
-        default='msi_dataset',
-        help='Identifier for the dataset'
+        "--dataset-id", default="msi_dataset", help="Identifier for the dataset"
     )
     parser.add_argument(
-        '--pixel-size',
+        "--pixel-size",
         type=float,
         default=1.0,
-        help='Size of each pixel in micrometers'
+        help="Size of each pixel in micrometers",
     )
     parser.add_argument(
-        '--handle-3d',
-        action='store_true',
-        help='Process as 3D data (default: treat as 2D slices)'
+        "--handle-3d",
+        action="store_true",
+        help="Process as 3D data (default: treat as 2D slices)",
     )
     parser.add_argument(
-        '--optimize-chunks',
-        action='store_true',
-        help='Optimize Zarr chunks after conversion'
+        "--optimize-chunks",
+        action="store_true",
+        help="Optimize Zarr chunks after conversion",
     )
     parser.add_argument(
-        '--log-level',
-        choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
-        default='INFO',
-        help='Set the logging level'
+        "--log-level",
+        choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
+        default="INFO",
+        help="Set the logging level",
     )
-    parser.add_argument(
-        '--log-file',
-        default=None,
-        help='Path to the log file'
-    )
-    
+    parser.add_argument("--log-file", default=None, help="Path to the log file")
+
     args = parser.parse_args()
-    
+
     # Input validation
     if args.pixel_size <= 0:
         parser.error("Pixel size must be positive")
-    
+
     if not args.dataset_id.strip():
         parser.error("Dataset ID cannot be empty")
-    
+
     # Configure logging
     setup_logging(log_level=getattr(logging, args.log_level), log_file=args.log_file)
-    
+
     # Convert MSI data
     success = convert_msi(
         args.input,
@@ -72,19 +70,22 @@ def main():
         format_type=args.format,
         dataset_id=args.dataset_id,
         pixel_size_um=args.pixel_size,
-        handle_3d=args.handle_3d
+        handle_3d=args.handle_3d,
     )
-    
+
     if success and args.optimize_chunks:
         # Optimize chunks for better performance
-        if args.format == 'spatialdata':
+        if args.format == "spatialdata":
             # For SpatialData format, optimize the table's X array
-            optimize_zarr_chunks(args.output, f'tables/{args.dataset_id}/X')
-    
+            optimize_zarr_chunks(args.output, f"tables/{args.dataset_id}/X")
+
     if success:
-        logging.info(f"Conversion completed successfully. Output stored at {args.output}")
+        logging.info(
+            f"Conversion completed successfully. Output stored at {args.output}"
+        )
     else:
         logging.error("Conversion failed.")
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     main()

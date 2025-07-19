@@ -16,7 +16,7 @@ jobs:
     permissions:
       contents: write  # Required for creating releases
       pull-requests: write  # Required for creating PRs (if needed)
-      
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4

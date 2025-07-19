@@ -1,10 +1,13 @@
 from typing import Any, Dict
+
 from ..core.base_reader import BaseMSIReader
+
 
 class MetadataExtractor:
     """
     Extracts metadata from an MSI data reader.
     """
+
     def __init__(self, reader: BaseMSIReader):
         """
         Initializes the MetadataExtractor with a reader.
