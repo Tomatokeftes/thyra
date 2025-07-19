@@ -2,6 +2,22 @@
 
 <!-- version list -->
 
+## v1.5.1 (2025-07-19)
+
+### Bug Fixes
+
+- Final end-of-file formatting by pre-commit hooks
+  ([`a50553f`](https://github.com/Tomatokeftes/MSIConverter/commit/a50553fc8635ce172ce52cc314ae11215c555071))
+
+### Documentation
+
+- Add commit policy to TASK.md
+  ([`2475992`](https://github.com/Tomatokeftes/MSIConverter/commit/24759924234b59a61387d084fd3e1bceb6080b0b))
+
+- Update TASK.md with accurate completion status
+  ([`99578c2`](https://github.com/Tomatokeftes/MSIConverter/commit/99578c23784b9b4f6a11f6276f1e6a51fae5c195))
+
+
 ## v1.5.0 (2025-07-19)
 
 ### Features
