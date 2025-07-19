@@ -4,7 +4,7 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
 name = "msiconvert"
-version = "1.4.0"
+version = "1.5.0"
 description = "A library to convert MSI data into SpatialData"
 authors = ["Theodoros Visvikis <t.visvikis@maastrichtuniversity.nl>"]
 license = "MIT"

@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.5.0 (2025-07-19)
+
+### Features
+
+- Reorganize Bruker reader and fix converter registration
+  ([`49613af`](https://github.com/Tomatokeftes/MSIConverter/commit/49613afcc3341138269d6db2b74a5638a5ca0f16))
+
+
 ## v1.4.0 (2025-07-17)
 
 ### Features
