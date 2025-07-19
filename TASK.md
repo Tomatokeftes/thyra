@@ -32,6 +32,8 @@ This document outlines the comprehensive refactoring tasks needed to transform m
 
 **Note**: Currently using lenient flake8 rules and skipped bandit security scanning due to existing code quality issues. See tasks below for gradual improvements.
 
+**Commit Policy**: All commits should appear as human-authored. No AI co-authorship or AI generation mentions in commit messages.
+
 ### Total Completed: 20 major tasks ✅
 
 ---
