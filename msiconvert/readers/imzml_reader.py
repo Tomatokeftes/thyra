@@ -232,8 +232,7 @@ class ImzMLReader(BaseMSIReader):
                 
                 all_mzs: List[NDArray[np.float64]] = []
 
-                with tqdm(total=total_spectra, desc="Building common mass axis", unit="spectrum", 
-                         disable=getattr(self, '_quiet_mode', False)) as pbar:
+                with tqdm(total=total_spectra, desc="Building common mass axis", unit="spectrum") as pbar:
                     for idx in range(total_spectra):
                         try: 
                             spectrum_data = parser.getspectrum(idx) # type: ignore
