@@ -110,15 +110,52 @@ class BaseMSIConverter(ABC):
         -----------
         data_structures: Format-specific data containers created by _create_data_structures.
         """
-        logging.info("Processing spectra...")
         if self._dimensions is None:
             raise ValueError("Dimensions are not initialized.")
         
-        # Process spectra with progress tracking
-        with tqdm(desc="Processing spectra", unit="spectrum") as pbar:
+        # Get total number of spectra for progress tracking
+        # Since there's no standard n_spectra property, we'll calculate it on the fly
+        # For most readers, this comes from coordinate count or similar
+        total_spectra = self._get_total_spectra_count()
+        logging.info(f"Converting {total_spectra} spectra to {self.__class__.__name__.replace('Converter', '')} format...")
+        
+        # Enable quiet mode on reader to avoid duplicate progress bars
+        setattr(self.reader, '_quiet_mode', True)
+        
+        # Process spectra with unified progress tracking
+        with tqdm(total=total_spectra, desc="Converting spectra", unit="spectrum") as pbar:
             for coords, mzs, intensities in self.reader.iter_spectra(batch_size=self._buffer_size):
                 self._process_single_spectrum(data_structures, coords, mzs, intensities)
                 pbar.update(1)
+    
+    def _get_total_spectra_count(self) -> int:
+        """
+        Get the total number of spectra for progress tracking.
+        
+        This is a helper method to calculate the total spectra count since
+        different readers may store this information differently.
+        """
+        # Try common patterns for getting spectra count
+        if hasattr(self.reader, 'n_spectra'):
+            return self.reader.n_spectra
+        
+        # For ImzML readers, count coordinates
+        if hasattr(self.reader, 'parser') and self.reader.parser is not None:
+            if hasattr(self.reader.parser, 'coordinates'):
+                return len(self.reader.parser.coordinates)
+        
+        # For Bruker readers, try frame count methods
+        if hasattr(self.reader, '_get_frame_count'):
+            return self.reader._get_frame_count()
+        
+        # Fallback: calculate dimensions and assume all pixels have data
+        # This is less accurate but provides a reasonable estimate
+        dimensions = self.reader.get_dimensions()
+        total_pixels = dimensions[0] * dimensions[1] * dimensions[2]
+        
+        # Log a warning since this is an estimate
+        logging.warning(f"Could not determine exact spectra count, estimating {total_pixels} from dimensions")
+        return total_pixels
     
     def _process_single_spectrum(
         self,
