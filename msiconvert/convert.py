@@ -30,6 +30,32 @@ def convert_msi(
     **kwargs
 ) -> bool:
     """Convert MSI data to the specified format with enhanced error handling."""
+    
+    # Input validation
+    if not input_path or not isinstance(input_path, (str, Path)):
+        logging.error("Input path must be a valid string or Path object")
+        return False
+    
+    if not output_path or not isinstance(output_path, (str, Path)):
+        logging.error("Output path must be a valid string or Path object")
+        return False
+    
+    if not isinstance(format_type, str) or not format_type.strip():
+        logging.error("Format type must be a non-empty string")
+        return False
+    
+    if not isinstance(dataset_id, str) or not dataset_id.strip():
+        logging.error("Dataset ID must be a non-empty string")
+        return False
+    
+    if not isinstance(pixel_size_um, (int, float)) or pixel_size_um <= 0:
+        logging.error("Pixel size must be a positive number")
+        return False
+    
+    if not isinstance(handle_3d, bool):
+        logging.error("handle_3d must be a boolean value")
+        return False
+    
     input_path = Path(input_path).resolve()
     output_path = Path(output_path).resolve()
     

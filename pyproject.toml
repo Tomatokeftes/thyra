@@ -5,10 +5,32 @@ build-backend = "poetry.core.masonry.api"
 [tool.poetry]
 name = "msiconvert"
 version = "1.5.0"
-description = "A library to convert MSI data into SpatialData"
+description = "A library to convert Mass Spectrometry Imaging (MSI) data into SpatialData/Zarr format"
 authors = ["Theodoros Visvikis <t.visvikis@maastrichtuniversity.nl>"]
+maintainers = ["Theodoros Visvikis <t.visvikis@maastrichtuniversity.nl>"]
 license = "MIT"
 readme = "README.md"
+homepage = "https://github.com/tvisvikis/MSIConverter"
+repository = "https://github.com/tvisvikis/MSIConverter"
+documentation = "https://github.com/tvisvikis/MSIConverter#readme"
+keywords = ["mass-spectrometry", "imaging", "spatialdata", "zarr", "omics", "bioinformatics"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+    "Topic :: Scientific/Engineering :: Information Analysis",
+    "Topic :: Scientific/Engineering :: Medical Science Apps.",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: File Formats",
+    "Typing :: Typed",
+    "Environment :: Console",
+]
 packages = [{include = "msiconvert"}]
 
 [tool.poetry.dependencies]
