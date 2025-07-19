@@ -2,6 +2,7 @@ import logging
 import logging.handlers
 import sys
 
+
 def setup_logging(log_level=logging.INFO, log_file=None):
     """
     Set up logging for the application.
@@ -32,7 +33,7 @@ def setup_logging(log_level=logging.INFO, log_file=None):
     # Create a file handler if a log file is specified
     if log_file:
         file_handler = logging.handlers.RotatingFileHandler(
-            log_file, maxBytes=10*1024*1024, backupCount=5
+            log_file, maxBytes=10 * 1024 * 1024, backupCount=5
         )
         file_handler.setLevel(log_level)
         file_handler.setFormatter(formatter)

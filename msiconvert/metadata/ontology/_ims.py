@@ -110,7 +110,10 @@ terms = {
     "IMS:1002013": ("embedded", "xsd:string"),
     "IMS:1002014": ("sample storage attribute", None),
     "IMS:1002015": ("sample storage time before sectioning", "xsd:float"),
-    "IMS:1002016": ("section storage time after sectioning and before analysis", "xsd:float"),
+    "IMS:1002016": (
+        "section storage time after sectioning and before analysis",
+        "xsd:float",
+    ),
     "IMS:1002017": ("sample storage temperature", "xsd:float"),
     "IMS:1002018": ("freezing method", "xsd:string"),
     "IMS:1002019": ("flash frozen", None),
@@ -174,7 +177,10 @@ terms = {
     "IMS:1006009": ("optical image attribute", None),
     "IMS:1006010": ("optical image subject", None),
     "IMS:1006011": ("optical image of analysed sample", "xsd:string"),
-    "IMS:1006012": ("optical image of adjacent section of analysed sample", "xsd:string"),
+    "IMS:1006012": (
+        "optical image of adjacent section of analysed sample",
+        "xsd:string",
+    ),
     "IMS:1006013": ("sample morphological classification", "xsd:string"),
     "IMS:1006014": ("sampling location", "xsd:string"),
     "IMS:1006015": ("staining method used for optical image", "xsd:string"),
