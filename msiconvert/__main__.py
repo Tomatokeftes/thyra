@@ -111,6 +111,13 @@ def main():
     
     args = parser.parse_args()
     
+    # Input validation
+    if args.pixel_size <= 0:
+        parser.error("Pixel size must be positive")
+    
+    if not args.dataset_id.strip():
+        parser.error("Dataset ID cannot be empty")
+    
     # Configure logging
     setup_logging(log_level=getattr(logging, args.log_level), log_file=args.log_file)
     
