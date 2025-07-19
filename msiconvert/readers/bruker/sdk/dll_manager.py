@@ -6,10 +6,17 @@ with comprehensive error handling and fallback mechanisms.
 """
 
 import os
+import platform
 from pathlib import Path
 from typing import Optional, Any
 import logging
-from ctypes import cdll, windll, CDLL
+from ctypes import cdll, CDLL
+
+# Import windll only on Windows
+if platform.system() == 'Windows':
+    from ctypes import windll
+else:
+    windll = None
 
 from ..core.exceptions import SDKError, ConfigurationError
 from .platform_detector import PlatformDetector, get_dll_paths, validate_library_path
@@ -120,6 +127,8 @@ class DLLManager:
             OSError: If library cannot be loaded
         """
         if PlatformDetector.is_windows():
+            if windll is None:
+                raise OSError("windll not available on this platform")
             return windll.LoadLibrary(str(lib_path))
         else:
             return cdll.LoadLibrary(str(lib_path))
@@ -138,6 +147,8 @@ class DLLManager:
             OSError: If library cannot be loaded
         """
         if PlatformDetector.is_windows():
+            if windll is None:
+                raise OSError("windll not available on this platform")
             return windll.LoadLibrary(lib_name)
         else:
             return cdll.LoadLibrary(lib_name)
