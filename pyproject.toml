@@ -40,6 +40,8 @@ isort = ">=5.12.0"
 flake8 = ">=6.0.0"
 python-semantic-release = "*"
 python-dotenv = "^1.1.1"
+pre-commit = ">=3.0.0"
+bandit = ">=1.7.0"
 
 [tool.poetry.scripts]
 msiconvert = "msiconvert.__main__:main"
