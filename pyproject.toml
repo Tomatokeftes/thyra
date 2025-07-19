@@ -12,7 +12,7 @@ readme = "README.md"
 packages = [{include = "msiconvert"}]
 
 [tool.poetry.dependencies]
-python = ">=3.12, <3.13"
+python = ">=3.10, <3.13"
 
 dask = ">=2023.0.0"
 geopandas = ">=0.9.0"
@@ -26,7 +26,6 @@ spatialdata = ">=0.2.1" # Example: updated to a newer working version
 tqdm = ">=4.50.0"
 zarr = ">=2.10.0"
 cryptography = "^45.0.5"
-python-dotenv = "^1.1.1"
 
 anndata = ">=0.9.0"
 
@@ -40,6 +39,7 @@ black = ">=23.0.0"
 isort = ">=5.12.0"
 flake8 = ">=6.0.0"
 python-semantic-release = "*"
+python-dotenv = "^1.1.1"
 
 [tool.poetry.scripts]
 msiconvert = "msiconvert.__main__:main"
