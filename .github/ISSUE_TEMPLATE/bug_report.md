@@ -34,7 +34,7 @@ Add any other context about the problem here.
 
 ## Sample Data
 If applicable, provide information about the input data that caused the issue:
-- File size: 
+- File size:
 - Number of spectra:
 - Instrument type:
 - Can you share a minimal example? (Yes/No)

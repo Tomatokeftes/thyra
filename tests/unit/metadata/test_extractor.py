@@ -1,8 +1,10 @@
-import pytest
-from unittest.mock import MagicMock, patch
 from pathlib import Path
+from unittest.mock import MagicMock, patch
+
+import pytest
 
 from msiconvert.metadata.extractor import MetadataExtractor
+
 
 class TestMetadataExtractor:
     def test_extract_imzml_metadata(self):
@@ -10,7 +12,7 @@ class TestMetadataExtractor:
         mock_reader.get_metadata.return_value = {
             "acquisition_date": "2023-01-01",
             "instrument_type": "TOF",
-            "frame_count": 100
+            "frame_count": 100,
         }
         mock_reader.analysis_directory = Path("/test/imzml/data")
         mock_reader.file_type = "imzml"
@@ -21,7 +23,7 @@ class TestMetadataExtractor:
         assert metadata == {
             "acquisition_date": "2023-01-01",
             "instrument_type": "TOF",
-            "frame_count": 100
+            "frame_count": 100,
         }
         mock_reader.get_metadata.assert_called_once()
 
@@ -30,7 +32,7 @@ class TestMetadataExtractor:
         mock_reader.get_metadata.return_value = {
             "bruker_software_version": "1.0",
             "data_format": "TSF",
-            "frame_count": 50
+            "frame_count": 50,
         }
         mock_reader.analysis_directory = Path("/test/bruker/data")
         mock_reader.file_type = "bruker"
@@ -41,7 +43,7 @@ class TestMetadataExtractor:
         assert metadata == {
             "bruker_software_version": "1.0",
             "data_format": "TSF",
-            "frame_count": 50
+            "frame_count": 50,
         }
         mock_reader.get_metadata.assert_called_once()
 

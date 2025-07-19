@@ -165,15 +165,15 @@ def count_pixels(sdata):
     tic_key = [key for key in sdata.images.keys() if "tic" in key.lower()][0]
     tic_image = sdata.images[tic_key]
     tic_array = tic_image.data.sel(c=0).values if hasattr(tic_image.data, 'sel') else tic_image.data
-    
+
     # Count total and non-empty pixels
     total_pixels = tic_array.size
     non_empty_pixels = np.count_nonzero(tic_array)
-    
+
     print(f"Total pixels in grid: {total_pixels}")
     print(f"Non-empty pixels with data: {non_empty_pixels}")
     print(f"Percentage of grid with data: {non_empty_pixels/total_pixels*100:.1f}%")
-    
+
     return total_pixels, non_empty_pixels
 ```
 
@@ -310,18 +310,18 @@ if is_sliced_3d:
     # Get available z indices
     z_indices = sorted(set(int(key.split("_z")[1].split("_")[0]) for key in slice_keys))
     print(f"Available z-slices: {z_indices}")
-    
+
     # Access a specific z-slice
     z_idx = z_indices[0]  # First slice
     slice_key = f"{dataset_id}_z{z_idx}"
     slice_table = sdata.tables[slice_key]
-    
+
     # Get corresponding TIC image
     slice_tic_key = f"{slice_key}_tic"
     if slice_tic_key in sdata.images:
         slice_tic = sdata.images[slice_tic_key]
         slice_tic_array = slice_tic.data.sel(c=0).values
-        
+
         # Visualize slice
         plt.figure(figsize=(10, 8))
         plt.imshow(slice_tic_array)
@@ -338,19 +338,19 @@ if is_true_3d:
     z_coord = main_table.obs["spatial_z"] if "spatial_z" in main_table.obs.columns else main_table.obs["z"]
     z_values = sorted(set(z_coord))
     print(f"Z values: {z_values}")
-    
+
     # Get data for a specific z plane
     z_value = z_values[0]  # First z-plane
     z_mask = z_coord == z_value
     z_indices = np.where(z_mask)[0]
-    
+
     if sparse.issparse(X):
         z_plane_data = X[z_indices].toarray() if len(z_indices) < 1e5 else X[z_indices]
     else:
         z_plane_data = X[z_indices]
-    
+
     print(f"Extracted data for z-plane {z_value} with {len(z_indices)} pixels")
-    
+
     # Calculate TIC for this z-plane
     if sparse.issparse(z_plane_data):
         z_tic = np.array(z_plane_data.sum(axis=1)).flatten()
@@ -381,17 +381,17 @@ else:
 if "spatial_x" in msi_table.obs.columns and "spatial_y" in msi_table.obs.columns:
     x_positions = msi_table.obs["spatial_x"].values
     y_positions = msi_table.obs["spatial_y"].values
-    
+
     x_unique = np.sort(np.unique(x_positions))
     y_unique = np.sort(np.unique(y_positions))
-    
+
     # Create empty image
     recalc_tic = np.zeros((len(y_unique), len(x_unique)))
-    
+
     # Convert to pixel indices
     x_indices = np.round((x_positions - x_unique.min()) / (x_unique[1] - x_unique[0])).astype(int)
     y_indices = np.round((y_positions - y_unique.min()) / (y_unique[1] - y_unique[0])).astype(int)
-    
+
     # Fill image with TIC values
     for i, (x_idx, y_idx, tic) in enumerate(zip(x_indices, y_indices, tic_values)):
         if 0 <= x_idx < len(x_unique) and 0 <= y_idx < len(y_unique):
@@ -443,13 +443,13 @@ found_mz = mz_values[mz_idx]
 
 if abs(found_mz - target_mz) <= mz_tolerance:
     print(f"Found m/z {found_mz} (requested {target_mz})")
-    
+
     # Extract intensity values for this m/z across all pixels
     if sparse.issparse(X):
         intensity_values = X[:, mz_idx].toarray().flatten()
     else:
         intensity_values = X[:, mz_idx]
-    
+
     # Reshape to image format (simplified example)
     # (Similarly to TIC reshape above)
 ```
