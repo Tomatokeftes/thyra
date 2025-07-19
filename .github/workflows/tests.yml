@@ -26,4 +26,4 @@ jobs:
         poetry install
     - name: Test with pytest
       run: |
-        pytest -m "not integration" --disable-warnings
+        poetry run pytest -m "not integration" --disable-warnings
