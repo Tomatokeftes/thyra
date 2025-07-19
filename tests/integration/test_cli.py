@@ -143,14 +143,14 @@ class TestCommandLineInterface:
         imzml_path, _, _, _ = create_minimal_imzml
         output_path = temp_dir / "cli_log_test.h5ad"
         
-        # Mock the logging.basicConfig function
+        # Mock the setup_logging function
         configured_level = None
         
-        def mock_basic_config(**kwargs):
+        def mock_setup_logging(log_level=None, log_file=None):
             nonlocal configured_level
-            configured_level = kwargs.get("level")
+            configured_level = log_level
             
-        monkeypatch.setattr("logging.basicConfig", mock_basic_config)
+        monkeypatch.setattr("msiconvert.__main__.setup_logging", mock_setup_logging)
         
         # Mock convert_msi to always return True
         monkeypatch.setattr("msiconvert.__main__.convert_msi", lambda *args, **kwargs: True)

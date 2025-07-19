@@ -214,6 +214,8 @@ class ImzMLReader(BaseMSIReader):
                 # For continuous data, all spectra share the same m/z values
                 logging.info("Using m/z values from first spectrum (continuous mode)")
                 spectrum_data = parser.getspectrum(0) # type: ignore
+                print(f"First spectrum data: {spectrum_data}") # Debugging line
+                print(spectrum_data[0].shape)
                 if spectrum_data is None or len(spectrum_data) < 1: # type: ignore
                     raise ValueError("Could not get first spectrum")
                 

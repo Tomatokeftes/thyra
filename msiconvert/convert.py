@@ -3,7 +3,7 @@ from pathlib import Path
 import logging
 import traceback
 import warnings
-from cryptography.utils import CryptographyDeprecationWarning
+# from cryptography.utils import CryptographyDeprecationWarning
 
 from .core.registry import detect_format, get_reader_class, get_converter_class
 
@@ -14,10 +14,10 @@ warnings.filterwarnings(
     module=r"pyimzml.ontology.ontology"
 )
 
-warnings.filterwarnings(
-    "ignore", 
-    category=CryptographyDeprecationWarning
-)
+# warnings.filterwarnings(
+#     "ignore", 
+#     category=CryptographyDeprecationWarning
+# )
 
 
 def convert_msi(

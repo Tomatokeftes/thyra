@@ -8,19 +8,31 @@ from typing import Dict, Any, Tuple, List
 import logging
 from numpy.typing import NDArray
 
-# Import SpatialData dependencies
+# Check SpatialData availability (defer imports to avoid issues)
+SPATIALDATA_AVAILABLE = False
+_import_error_msg = None
 try:
-    from spatialdata import SpatialData  #type: ignore
-    from spatialdata.models import ShapesModel, TableModel  #type: ignore
-    from spatialdata.transformations import Identity  #type: ignore
+    import spatialdata
+    from spatialdata import SpatialData
+    from spatialdata.models import TableModel, ShapesModel, Image2DModel
+    from spatialdata.transformations import Identity
+    import shapely
     from shapely.geometry import box
     import geopandas as gpd
-    import xarray as xr
-    from geopandas import GeoDataFrame
+    import xarray
     SPATIALDATA_AVAILABLE = True
-except ImportError:
-    logging.warning("SpatialData dependencies not available. SpatialDataConverter will not work.")
-    SPATIALDATA_AVAILABLE = False  #type: ignore
+except (ImportError, NotImplementedError) as e:
+    _import_error_msg = str(e)
+    logging.warning(f"SpatialData dependencies not available: {e}")
+    SPATIALDATA_AVAILABLE = False
+    # Create dummy classes for registration
+    SpatialData = None
+    TableModel = None
+    ShapesModel = None
+    Image2DModel = None
+    Identity = None
+    box = None
+    gpd = None
 
 from ..core.base_converter import BaseMSIConverter
 from ..core.base_reader import BaseMSIReader
@@ -55,7 +67,8 @@ class SpatialDataConverter(BaseMSIConverter):
         """
         # Check if SpatialData is available
         if not SPATIALDATA_AVAILABLE:
-            raise ImportError("SpatialData dependencies not available. Please install required packages.")
+            error_msg = f"SpatialData dependencies not available: {_import_error_msg}. Please install required packages or fix dependency conflicts."
+            raise ImportError(error_msg)
             
         super().__init__(
             reader, 
@@ -324,7 +337,7 @@ class SpatialDataConverter(BaseMSIConverter):
                     adata.obs['instance_key'] = adata.obs.index.astype(str)  #type: ignore
                     
                     # Create table model
-                    table: 'TableModel' = TableModel.parse(  # type: ignore
+                    table = TableModel.parse(
                         adata,
                         region=region_key,
                         region_key="region",
@@ -343,7 +356,7 @@ class SpatialDataConverter(BaseMSIConverter):
                     # Add channel dimension to make it (c, y, x) as required by SpatialData
                     tic_values_with_channel: NDArray[np.float64] = tic_values.reshape(1, y_size, x_size)
                     
-                    tic_image: 'xr.DataArray' = xr.DataArray(  # type: ignore
+                    tic_image = xr.DataArray(
                         tic_values_with_channel,
                         dims=('c', 'y', 'x'),
                         coords={
@@ -354,8 +367,8 @@ class SpatialDataConverter(BaseMSIConverter):
                     )
                     
                     # Create Image2DModel for the TIC image
-                    transform: 'Identity' = Identity()  # type: ignore
-                    data_structures['images'][f"{slice_id}_tic"] = Image2DModel.parse(  # type: ignore
+                    transform = Identity()
+                    data_structures['images'][f"{slice_id}_tic"] = Image2DModel.parse(
                         tic_image,
                         transformations={slice_id: transform, "global": transform}
                     )
@@ -390,7 +403,7 @@ class SpatialDataConverter(BaseMSIConverter):
                 adata.obs['instance_key'] = adata.obs.index.astype(str)  #type: ignore
                 
                 # Create table model
-                table: 'TableModel' = TableModel.parse(  # type: ignore
+                table = TableModel.parse(
                     adata,
                     region=region_key,
                     region_key="region",
@@ -411,7 +424,7 @@ class SpatialDataConverter(BaseMSIConverter):
                     # Add channel dimension for 3D image
                     tic_values_with_channel: NDArray[np.float64] = tic_values.reshape(1, z_size, y_size, x_size)
                     
-                    tic_image: 'xr.DataArray' = xr.DataArray(  # type: ignore
+                    tic_image = xr.DataArray(
                         tic_values_with_channel,
                         dims=('c', 'z', 'y', 'x'),
                         coords={
@@ -423,10 +436,10 @@ class SpatialDataConverter(BaseMSIConverter):
                     )
                     
                     # Create Image model for 3D image
-                    transform: 'Identity' = Identity()  # type: ignore
+                    transform = Identity()
                     try:
                         from spatialdata.models import Image3DModel  # type: ignore
-                        data_structures['images'][f"{self.dataset_id}_tic"] = Image3DModel.parse(  # type: ignore
+                        data_structures['images'][f"{self.dataset_id}_tic"] = Image3DModel.parse(
                             tic_image,
                             transformations={self.dataset_id: transform, "global": transform}
                         )
@@ -434,7 +447,7 @@ class SpatialDataConverter(BaseMSIConverter):
                         # Fallback if Image3DModel is not available
                         logging.warning("Image3DModel not available, using generic image model")
                         from spatialdata.models import ImageModel  # type: ignore
-                        data_structures['images'][f"{self.dataset_id}_tic"] = ImageModel.parse(  # type: ignore
+                        data_structures['images'][f"{self.dataset_id}_tic"] = ImageModel.parse(
                             tic_image,
                             transformations={self.dataset_id: transform, "global": transform}
                         )
@@ -452,7 +465,7 @@ class SpatialDataConverter(BaseMSIConverter):
                     # Add channel dimension to make it (c, y, x)
                     tic_values_with_channel: NDArray[np.float64] = tic_values.reshape(1, y_size, x_size)
                     
-                    tic_image: 'xr.DataArray' = xr.DataArray(  # type: ignore
+                    tic_image = xr.DataArray(
                         tic_values_with_channel,
                         dims=('c', 'y', 'x'),
                         coords={
@@ -463,8 +476,8 @@ class SpatialDataConverter(BaseMSIConverter):
                     )
                     
                     # Create Image2DModel for the TIC image
-                    transform: 'Identity' = Identity()  # type: ignore
-                    data_structures['images'][f"{self.dataset_id}_tic"] = Image2DModel.parse(  # type: ignore
+                    transform = Identity()
+                    data_structures['images'][f"{self.dataset_id}_tic"] = Image2DModel.parse(
                         tic_image,
                         transformations={self.dataset_id: transform, "global": transform}
                     )
@@ -514,14 +527,14 @@ class SpatialDataConverter(BaseMSIConverter):
             geometries.append(pixel_box)
         
         # Create GeoDataFrame
-        gdf: 'GeoDataFrame' = gpd.GeoDataFrame(geometry=geometries, index=adata.obs.index)  # type: ignore
+        gdf = gpd.GeoDataFrame(geometry=geometries, index=adata.obs.index)
         
         # Set up transform
-        transform: 'Identity' = Identity()  # type: ignore
-        transformations: Dict[str, 'Identity'] = {self.dataset_id: transform, "global": transform}
+        transform = Identity()
+        transformations = {self.dataset_id: transform, "global": transform}
         
         # Parse shapes
-        shapes: 'ShapesModel' = ShapesModel.parse(  # type: ignore
+        shapes = ShapesModel.parse(
             gdf,
             transformations=transformations
         )
@@ -543,7 +556,7 @@ class SpatialDataConverter(BaseMSIConverter):
             
         try:
             # Create SpatialData object with images included
-            sdata: 'SpatialData' = SpatialData(  # type: ignore
+            sdata = SpatialData(
                 tables=data_structures['tables'],
                 shapes=data_structures['shapes'],
                 images=data_structures['images']

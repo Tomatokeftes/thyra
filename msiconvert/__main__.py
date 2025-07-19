@@ -4,9 +4,9 @@ load_dotenv()  # Load environment variables from .env file
 
 import argparse
 import logging
-from .convert import convert_msi
-from .utils.data_processors import optimize_zarr_chunks
-from .utils.logging_config import setup_logging
+from msiconvert.convert import convert_msi
+from msiconvert.utils.data_processors import optimize_zarr_chunks
+from msiconvert.utils.logging_config import setup_logging
 
 
 def main():

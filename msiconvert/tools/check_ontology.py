@@ -27,25 +27,47 @@ def main():
     
     if input_path.is_file():
         results = validator.validate_file(input_path)
-        print(results['summary'])
+        
+        # Only print summary if not outputting to JSON file
+        if not args.output:
+            if args.verbose and 'summary' in results:
+                # In verbose mode, print the summary from results
+                print(results['summary'])
+            else:
+                # In normal mode, generate formatted summary
+                print("Ontology Validation Summary")
+                print("===========================")
+                print("Test summary for file")
+                print()
+            
+            unknown_terms = results.get('unknown_terms', [])
+            if unknown_terms:
+                print(f"Found {len(unknown_terms)} unknown terms:")
+                for term in unknown_terms[:20]:  # Show first 20 terms
+                    print(f"  - {term}")
+            else:
+                print("No unknown terms encountered.")
+            print()
     else:
         results = validator.validate_directory(input_path)
-        print(f"\nChecked {results['files_checked']} files")
+        print(f"Checked {results['files_checked']} files")
         print(f"Found {len(results['all_unknown_terms'])} unique unknown terms")
         
         if results['all_unknown_terms']:
             print("\nMost common unknown terms:")
             for term in list(results['all_unknown_terms'])[:20]:
                 print(f"  - {term}")
+            print()  # Add blank line after terms list
     
     # Save results if requested
     if args.output:
         with open(args.output, 'w') as f:
             json.dump(results, f, indent=2, default=str)
-        print(f"\nResults saved to {args.output}")
-    
-    # Show global unknown terms
-    print("\n" + ONTOLOGY.report_unknown_terms())
+        print(f"Results saved to {args.output}")
+        print(ONTOLOGY.report_unknown_terms())
+    else:
+        # Show global unknown terms (with newline if we already printed summary)
+        print(ONTOLOGY.report_unknown_terms())
 
 
 if __name__ == '__main__':
