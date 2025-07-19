@@ -311,7 +311,8 @@ class BrukerReader(BaseMSIReader):
         frame_count = self._get_frame_count()
         
         # Setup progress tracking
-        with tqdm(total=frame_count, desc="Reading spectra", unit="spectrum") as pbar:
+        with tqdm(total=frame_count, desc="Reading spectra", unit="spectrum",
+                  disable=getattr(self, '_quiet_mode', False)) as pbar:
             
             for frame_id in range(1, frame_count + 1):
                 try:

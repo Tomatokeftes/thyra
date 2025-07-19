@@ -110,12 +110,18 @@ class BaseMSIConverter(ABC):
         -----------
         data_structures: Format-specific data containers created by _create_data_structures.
         """
-        logging.info("Processing spectra...")
         if self._dimensions is None:
             raise ValueError("Dimensions are not initialized.")
         
-        # Process spectra with progress tracking
-        with tqdm(desc="Processing spectra", unit="spectrum") as pbar:
+        # Get total number of spectra for progress tracking
+        total_spectra = self.reader.n_spectra
+        logging.info(f"Converting {total_spectra} spectra to {self.__class__.__name__.replace('Converter', '')} format...")
+        
+        # Enable quiet mode on reader to avoid duplicate progress bars
+        setattr(self.reader, '_quiet_mode', True)
+        
+        # Process spectra with unified progress tracking
+        with tqdm(total=total_spectra, desc="Converting spectra", unit="spectrum") as pbar:
             for coords, mzs, intensities in self.reader.iter_spectra(batch_size=self._buffer_size):
                 self._process_single_spectrum(data_structures, coords, mzs, intensities)
                 pbar.update(1)

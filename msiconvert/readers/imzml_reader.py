@@ -232,7 +232,8 @@ class ImzMLReader(BaseMSIReader):
                 
                 all_mzs: List[NDArray[np.float64]] = []
 
-                with tqdm(total=total_spectra, desc="Building common mass axis", unit="spectrum") as pbar:
+                with tqdm(total=total_spectra, desc="Building common mass axis", unit="spectrum", 
+                         disable=getattr(self, '_quiet_mode', False)) as pbar:
                     for idx in range(total_spectra):
                         try: 
                             spectrum_data = parser.getspectrum(idx) # type: ignore
@@ -308,7 +309,8 @@ class ImzMLReader(BaseMSIReader):
         logging.info(f"Processing {total_spectra} spectra in a grid of {total_pixels} pixels")
         
         # Process in batches
-        with tqdm(total=total_spectra, desc="Reading spectra", unit="spectrum") as pbar:
+        with tqdm(total=total_spectra, desc="Reading spectra", unit="spectrum",
+                  disable=getattr(self, '_quiet_mode', False)) as pbar:
             if batch_size <= 1:
                 # Process one at a time
                 for idx in range(total_spectra):
