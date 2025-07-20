@@ -387,7 +387,7 @@ class BrukerReaderTester:
         print(f"Success Rate: {(passed_tests / total_tests * 100):.1f}%")
 
         if failed_tests > 0:
-            print(f"\nFAILED TESTS:")
+            print("\nFAILED TESTS:")
             for test_name, error in self.errors:
                 print(f"  - {test_name}: {error}")
 

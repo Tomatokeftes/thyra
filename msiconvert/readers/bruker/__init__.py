@@ -498,12 +498,12 @@ class BrukerReader(BaseMSIReader):
             if hasattr(self, "dll_manager") and self.dll_manager.library_path:
                 return str(self.dll_manager.library_path)
             return None
-        except:
+        except Exception:
             return None
 
     def __del__(self) -> None:
         """Destructor to ensure cleanup."""
         try:
             self.close()
-        except:
+        except Exception:
             pass  # Ignore errors during destruction

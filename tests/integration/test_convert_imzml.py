@@ -1,11 +1,6 @@
 """
 Integration tests for converting imzML files to various formats.
 """
-import os
-import shutil
-from pathlib import Path
-
-import numpy as np
 import pytest
 
 from msiconvert.convert import convert_msi

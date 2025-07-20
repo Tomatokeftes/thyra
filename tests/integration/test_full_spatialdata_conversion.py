@@ -47,16 +47,16 @@ def test_spatialdata_integration():
         print(f"📁 Output directory: {output_path}")
 
         # Step 1: Test reader initialization
-        print(f"\n🔧 Step 1: Initialize Bruker Reader...")
+        print("\n🔧 Step 1: Initialize Bruker Reader...")
 
         reader = BrukerReader(
             data_path=data_path, cache_coordinates=True, memory_limit_gb=2.0
         )
 
-        print(f"   ✅ Reader initialized successfully")
+        print("   ✅ Reader initialized successfully")
 
         # Step 2: Test spatialdata_converter import
-        print(f"\n📦 Step 2: Import spatialdata_converter...")
+        print("\n📦 Step 2: Import spatialdata_converter...")
 
         try:
             # Import the converter - we need to check the actual import path
@@ -239,7 +239,7 @@ def test_spatialdata_integration():
             return test_reader_interface_only(reader)
 
         # Step 3: Create converter and test conversion
-        print(f"\n🔄 Step 3: Create SpatialDataConverter and test conversion...")
+        print("\n🔄 Step 3: Create SpatialDataConverter and test conversion...")
 
         try:
             # Create converter instance
@@ -262,7 +262,7 @@ def test_spatialdata_integration():
             dimensions = converter._dimensions
             mass_axis = converter._common_mass_axis
 
-            print(f"   📊 Dataset info:")
+            print("   📊 Dataset info:")
             print(f"      - Dimensions: {dimensions}")
             print(f"      - Mass axis size: {len(mass_axis):,}")
             print(f"      - File type: {metadata.get('file_type', 'unknown')}")
@@ -307,7 +307,7 @@ def test_spatialdata_integration():
             print("   ✅ Data structures finalized")
 
             # Check what was created
-            print(f"\n📋 Step 4: Verify created data structures...")
+            print("\n📋 Step 4: Verify created data structures...")
 
             print(f"   Tables created: {len(data_structures['tables'])}")
             for table_name in data_structures["tables"].keys():
@@ -325,7 +325,7 @@ def test_spatialdata_integration():
                 print(f"      - {image_name}: {image.image.shape}")
 
             # Save the SpatialData object
-            print(f"\n💾 Step 5: Save SpatialData object...")
+            print("\n💾 Step 5: Save SpatialData object...")
 
             success = converter._save_output(data_structures)
 
@@ -340,7 +340,7 @@ def test_spatialdata_integration():
                     print("   🔍 Verifying saved SpatialData...")
                     try:
                         loaded_sdata = SpatialData.read(str(output_path))
-                        print(f"   ✅ SpatialData loaded successfully")
+                        print("   ✅ SpatialData loaded successfully")
                         print(f"      - Tables: {list(loaded_sdata.tables.keys())}")
                         print(f"      - Shapes: {list(loaded_sdata.shapes.keys())}")
                         print(f"      - Images: {list(loaded_sdata.images.keys())}")
@@ -361,13 +361,13 @@ def test_spatialdata_integration():
                         return False
 
                 else:
-                    print(f"   ❌ Output file not found after saving")
+                    print("   ❌ Output file not found after saving")
                     return False
             else:
-                print(f"   ❌ Failed to save SpatialData")
+                print("   ❌ Failed to save SpatialData")
                 return False
 
-            print(f"\n✅ FULL SPATIALDATA CONVERSION TEST PASSED!")
+            print("\n✅ FULL SPATIALDATA CONVERSION TEST PASSED!")
             print("=" * 80)
             print("The Bruker Reader successfully:")
             print("• Integrated with the real spatialdata_converter.py")
@@ -395,7 +395,7 @@ def test_spatialdata_integration():
         # Cleanup
         try:
             reader.close()
-        except:
+        except Exception:
             pass
 
         try:

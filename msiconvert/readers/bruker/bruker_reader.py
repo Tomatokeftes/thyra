@@ -501,5 +501,5 @@ class BrukerReader(BaseMSIReader):
         """Destructor to ensure cleanup."""
         try:
             self.close()
-        except:
+        except Exception:
             pass  # Ignore errors during destruction

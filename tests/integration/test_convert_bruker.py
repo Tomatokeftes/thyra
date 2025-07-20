@@ -2,13 +2,9 @@
 Integration tests for converting Bruker files to various formats.
 These tests will be skipped if Bruker dependencies are not available.
 """
-import ctypes
-import os
+import sys
 
 # Skip all tests if Bruker DLL/shared library is not available
-import platform
-import shutil
-import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
