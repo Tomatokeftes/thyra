@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.7.0 (2025-07-20)
+
+### Features
+
+- Add missing reader properties to fix dry-run functionality
+  ([`1feee33`](https://github.com/Tomatokeftes/MSIConverter/commit/1feee3342eb7e4b93cf7d855747e67df2bc78094))
+
+
 ## v1.6.0 (2025-07-20)
 
 ### Features
