@@ -4,7 +4,7 @@
 import logging
 import xml.etree.ElementTree as ET
 from pathlib import Path
-from typing import Any, Dict, List, Set
+from typing import Any, Dict, List
 
 from .ontology.cache import ONTOLOGY
 

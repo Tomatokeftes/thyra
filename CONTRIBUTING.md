@@ -254,7 +254,7 @@ MSIConverter follows [Semantic Versioning](https://semver.org/) (SemVer):
 
 If you have questions about contributing that aren't covered here, please:
 
-1. Check the existing [GitHub Discussions](https://github.com/tvisvikis/MSIConverter/discussions)
+1. Check the existing [GitHub Discussions](https://github.com/Tomatokeftes/MSIConverter/discussions)
 2. Open a new discussion if your question hasn't been asked
 3. Tag maintainers if you need urgent clarification
 

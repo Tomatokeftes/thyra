@@ -2,8 +2,7 @@
 """Local ontology cache for imzML terms."""
 
 import logging
-from pathlib import Path
-from typing import Any, Dict, Optional, Set, Tuple
+from typing import Dict, Optional, Set, Tuple
 
 from ._ims import terms as ims_terms
 from ._ms import terms as ms_terms
