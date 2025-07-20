@@ -60,9 +60,9 @@ This document outlines the comprehensive refactoring tasks needed to transform m
 ### Data Integrity & Automation
 
 - [ ] **Implement Intelligent Mass Axis Resampling for Bruker Data**
-  - **Description:** Bruker datasets often contain mass axes with unrealistically high resolution (e.g., 0.001 Da spacing) that doesn't reflect actual instrument capabilities, leading to unnecessarily large file sizes. This task involves implementing an intelligent resampling algorithm that: 1) Analyzes the actual peak widths in the data. 2) Determines appropriate mass axis spacing based on instrument resolution. 3) Resamples the data during the Dask processing stage to reduce file size while preserving all meaningful information.
-  - **Rationale:** This can reduce output file sizes by 50-90% without losing scientifically relevant information, making data storage and sharing more practical.
-  - **Labels:** `priority:high`, `area:data-integrity`, `area:performance`
+  - **Description:** Bruker datasets often contain mass axes with unrealistically high resolution (e.g., 0.001 Da spacing) that doesn't reflect actual instrument capabilities, leading to unnecessarily large file sizes. This task implements an intelligent resampling algorithm that: 1) **REQUIRES**: Metadata-based bounds detection providing MzAcqRangeLower/Upper from GlobalMetadata and spatial bounds from ImagingArea parameters. 2) Uses mass analyzer physics equations to create optimal non-linear mass axis based on instrument resolution. 3) Implements interpolation during Dask processing or asynchronously during batch reading. 4) Eliminates need to store full high-resolution mass axis in memory by using bounds-only approach. **STRICT PREREQUISITE**: Must complete "Implement Metadata-Based Efficient Bounds Detection" task first - this task cannot function without efficient metadata extraction.
+  - **Rationale:** This can reduce output file sizes by 50-90% without losing scientifically relevant information. Memory usage is dramatically reduced by avoiding full mass axis storage. The metadata approach makes this computationally feasible for large datasets.
+  - **Labels:** `priority:high`, `area:data-integrity`, `area:performance`, `depends-on:metadata-bounds`
 
 - [ ] **Extract and Preserve Complete Metadata**
   - **Description:** Critical metadata from raw files (instrument model, acquisition parameters, scan settings, etc.) is currently lost during conversion. This task involves: 1) Implementing comprehensive metadata extraction for each supported format. 2) Designing a standardized metadata schema. 3) Embedding all metadata into the SpatialData object's attributes for self-contained, reproducible results.
@@ -70,9 +70,19 @@ This document outlines the comprehensive refactoring tasks needed to transform m
   - **Labels:** `priority:high`, `area:data-integrity`
 
 - [ ] **Implement Automatic Pixel Size Detection**
-  - **Description:** Users currently must manually specify pixel size, which is error-prone and inconvenient. This task involves parsing spatial resolution information from the raw data file's metadata across all supported formats (ImzML, Bruker, etc.) and using it automatically, with an option for manual override.
-  - **Rationale:** Automation reduces user errors and improves workflow efficiency. Most MSI formats contain this information, so manual input should only be a fallback.
-  - **Labels:** `priority:medium`, `area:automation`, `area:ux`, `good-first-issue`
+  - **Description:** Users currently must manually specify pixel size, which is error-prone and inconvenient. For Bruker data, implement intelligent pixel size extraction from MaldiFrameLaserInfo table: 1) Use BeamScanSizeX/Y (e.g., 46 μm) as primary pixel size - represents actual scanning step size. 2) Use SpotSize (e.g., 45 μm) for validation - represents physical laser spot diameter. 3) Compare with user input (e.g., 50 μm nominal) to understand Bruker's optimization (typically ~92% efficiency factor). 4) Fallback to MotorPositionX/Y differences if laser info unavailable. 5) Implement similar metadata extraction for ImzML format. 6) Provide automatic detection with manual override option.
+  - **Rationale:** Instrument metadata is more accurate than user input since Bruker optimizes scanning parameters automatically. BeamScanSizeX/Y reflects actual pixel spacing after accounting for spot overlap and beam profile. Eliminates user errors and improves spatial accuracy.
+  - **Labels:** `priority:medium`, `area:automation`, `area:ux`, `area:data-integrity`
+
+- [ ] **Add Missing Reader Properties for CLI Compatibility**
+  - **Description:** The CLI dry-run functionality expects `shape`, `n_spectra`, and `mass_range` properties on readers that don't exist, causing crashes. This task involves: 1) Adding @property methods to BaseMSIReader for `shape` (returns dimensions), `n_spectra` (returns total spectrum count), and `mass_range` (returns min/max mass values). 2) Implementing these properties in both ImzMLReader and BrukerReader. 3) Ensuring the properties work efficiently without triggering expensive full-dataset scans.
+  - **Rationale:** Fixes broken dry-run functionality and provides standard interface for basic dataset information. Essential for CLI usability.
+  - **Labels:** `priority:high`, `area:cli`, `area:api-design`, `good-first-issue`
+
+- [ ] **Implement Metadata-Based Efficient Bounds Detection**
+  - **Description:** Instead of scanning all spectra/coordinates to determine dataset bounds, leverage metadata tables for immediate extraction. For Bruker data: 1) **Mass bounds**: Extract from GlobalMetadata (MzAcqRangeLower=40.0, MzAcqRangeUpper=600.0) instead of building full mass axis. 2) **Spatial bounds**: Extract from GlobalMetadata (ImagingAreaMinXIndexPos=669, ImagingAreaMaxXIndexPos=837, ImagingAreaMinYIndexPos=109, ImagingAreaMaxYIndexPos=308). 3) **Pixel size analysis**: Extract BeamScanSizeX/Y (46μm) and SpotSize (45μm) from MaldiFrameLaserInfo table, understand efficiency factor vs user input (50μm → 46μm = 92% efficiency). 4) Implement similar metadata extraction for ImzML format. 5) Add fast bounds checking methods to both readers. 6) Create preallocation utilities that use these bounds for efficient memory allocation. **NOTE**: This task is a PREREQUISITE for intelligent mass axis resampling.
+  - **Rationale:** This dramatically improves initialization performance by avoiding expensive full-dataset scans. Enables efficient memory preallocation and provides foundation for intelligent interpolation algorithms. Critical for processing large datasets (100+ GB) where scanning all spectra is prohibitively slow. Essential foundation for memory-efficient interpolation methods.
+  - **Labels:** `priority:critical`, `area:performance`, `area:optimization`, `area:data-integrity`, `prerequisite-for:interpolation`
 
 ### Code Quality & Project Structure
 
@@ -325,19 +335,23 @@ This document outlines the comprehensive refactoring tasks needed to transform m
 ## Implementation Priority
 
 1. **Critical (Do First):**
+   - Implement Metadata-Based Efficient Bounds Detection (prerequisite for interpolation)
    - Implement Robust Batch Processing Pipeline
    - Extract Configuration Management System
-   - Create Professional README.md
    - Improve Cross-Platform Compatibility
 
-2. **High Priority:**
-   - Implement Intelligent Mass Axis Resampling
+2. **High Priority (Quick Wins):**
+   - Add Missing Reader Properties for CLI Compatibility (fixes dry-run crashes)
+   - Implement Automatic Pixel Size Detection (leverages new metadata insights)
+
+3. **High Priority (Major Features):**
+   - Implement Intelligent Mass Axis Resampling (REQUIRES bounds detection first)
    - Extract and Preserve Complete Metadata
    - Implement Comprehensive Test Suite
    - Design Public API for Library Usage
    - Implement Comprehensive Error Handling Strategy
 
-3. **Medium Priority:**
+4. **Medium Priority:**
    - All other refactoring and optimization tasks
    - Documentation and community tasks
    - Performance optimizations
