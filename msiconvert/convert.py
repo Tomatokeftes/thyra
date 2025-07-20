@@ -85,6 +85,8 @@ def convert_msi(
 
         # Handle automatic pixel size detection if not provided
         final_pixel_size = pixel_size_um
+        pixel_size_detection_info = None
+
         if pixel_size_um is None:
             logging.info("Attempting automatic pixel size detection...")
             detected_pixel_size = reader.get_pixel_size()
@@ -95,6 +97,16 @@ def convert_msi(
                 logging.info(
                     f"✓ Automatically detected pixel size: {detected_pixel_size[0]:.1f} x {detected_pixel_size[1]:.1f} μm"
                 )
+
+                # Create pixel size detection provenance metadata
+                pixel_size_detection_info = {
+                    "method": "automatic",
+                    "detected_x_um": float(detected_pixel_size[0]),
+                    "detected_y_um": float(detected_pixel_size[1]),
+                    "source_format": input_format,
+                    "detection_successful": True,
+                    "note": "Pixel size automatically detected from source metadata and applied to coordinate systems",
+                }
             else:
                 logging.error(
                     "✗ Could not automatically detect pixel size from metadata"
@@ -103,6 +115,14 @@ def convert_msi(
                     "Please specify --pixel-size manually or ensure the input file contains pixel size metadata"
                 )
                 return False
+        else:
+            # Manual pixel size was provided
+            pixel_size_detection_info = {
+                "method": "manual",
+                "source_format": input_format,
+                "detection_successful": False,
+                "note": "Pixel size manually specified via --pixel-size parameter and applied to coordinate systems",
+            }
 
         # Create converter
         converter_class = get_converter_class(format_type.lower())
@@ -113,6 +133,7 @@ def convert_msi(
             dataset_id=dataset_id,
             pixel_size_um=final_pixel_size,
             handle_3d=handle_3d,
+            pixel_size_detection_info=pixel_size_detection_info,
             **kwargs,
         )
 

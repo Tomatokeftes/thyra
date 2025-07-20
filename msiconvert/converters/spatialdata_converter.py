@@ -1,7 +1,7 @@
 # msiconvert/converters/spatialdata_converter.py (improved)
 import logging
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -52,6 +52,7 @@ class SpatialDataConverter(BaseMSIConverter):
         dataset_id: str = "msi_dataset",
         pixel_size_um: float = 1.0,
         handle_3d: bool = False,
+        pixel_size_detection_info: Optional[Dict[str, Any]] = None,
         **kwargs: Any,
     ) -> None:
         """
@@ -63,6 +64,7 @@ class SpatialDataConverter(BaseMSIConverter):
             dataset_id: Identifier for the dataset
             pixel_size_um: Size of each pixel in micrometers
             handle_3d: Whether to process as 3D data (True) or 2D slices (False)
+            pixel_size_detection_info: Optional metadata about pixel size detection
             **kwargs: Additional keyword arguments
 
         Raises:
@@ -73,16 +75,25 @@ class SpatialDataConverter(BaseMSIConverter):
             error_msg = f"SpatialData dependencies not available: {_import_error_msg}. Please install required packages or fix dependency conflicts."
             raise ImportError(error_msg)
 
+        # Extract pixel_size_detection_info from kwargs if provided
+        kwargs_filtered = dict(kwargs)
+        if (
+            pixel_size_detection_info is None
+            and "pixel_size_detection_info" in kwargs_filtered
+        ):
+            pixel_size_detection_info = kwargs_filtered.pop("pixel_size_detection_info")
+
         super().__init__(
             reader,
             output_path,
             dataset_id=dataset_id,
             pixel_size_um=pixel_size_um,
             handle_3d=handle_3d,
-            **kwargs,
+            **kwargs_filtered,
         )
 
         self._non_empty_pixel_count: int = 0
+        self._pixel_size_detection_info = pixel_size_detection_info
 
     def _create_data_structures(self) -> Dict[str, Any]:
         """
@@ -632,7 +643,7 @@ class SpatialDataConverter(BaseMSIConverter):
 
         # Add dataset metadata if SpatialData supports it
         if hasattr(metadata, "metadata"):
-            metadata.metadata = {  # type: ignore
+            metadata_dict = {
                 "dataset_id": self.dataset_id,
                 "pixel_size_um": self.pixel_size_um,
                 "source": self._metadata.get("source", "unknown"),
@@ -642,3 +653,9 @@ class SpatialDataConverter(BaseMSIConverter):
                 * self._dimensions[2],
                 "non_empty_pixels": self._non_empty_pixel_count,
             }
+
+            # Add pixel size detection provenance if available
+            if self._pixel_size_detection_info is not None:
+                metadata_dict["pixel_size_provenance"] = self._pixel_size_detection_info
+
+            metadata.metadata = metadata_dict  # type: ignore
