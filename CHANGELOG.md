@@ -2,6 +2,27 @@
 
 <!-- version list -->
 
+## v1.8.0 (2025-07-20)
+
+### Documentation
+
+- Update TASK.md to reflect completed code quality improvements
+  ([`3592d7b`](https://github.com/Tomatokeftes/MSIConverter/commit/3592d7b3fceaae2569d1e21c6a2ab1370edaab49))
+
+### Features
+
+- Add automatic pixel size detection for ImzML and Bruker formats
+  ([`e20df80`](https://github.com/Tomatokeftes/MSIConverter/commit/e20df80179c5ae2d64cee56fbe291b308dd19f1c))
+
+- Add pixel size detection provenance to SpatialData metadata
+  ([`1ce7787`](https://github.com/Tomatokeftes/MSIConverter/commit/1ce778790bb15010b520ee5d7c6861835e6e90e1))
+
+### Refactoring
+
+- Improve code quality with comprehensive flake8 fixes
+  ([`afd7f43`](https://github.com/Tomatokeftes/MSIConverter/commit/afd7f4339680834edf6ec88997eda6492755f22e))
+
+
 ## v1.7.0 (2025-07-20)
 
 ### Features
