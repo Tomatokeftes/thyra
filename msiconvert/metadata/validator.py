@@ -84,8 +84,8 @@ class ImzMLOntologyValidator:
     def _generate_summary(self, results: Dict[str, Any]) -> str:
         """Generate a human-readable summary."""
         lines = [
-            f"Ontology Validation Summary",
-            f"===========================",
+            "Ontology Validation Summary",
+            "===========================",
             f"Total CV terms found: {results['total_terms']}",
             # To avoid division by zero if no terms are found
             f"Unique CV terms: {len(results['term_counts'])}",

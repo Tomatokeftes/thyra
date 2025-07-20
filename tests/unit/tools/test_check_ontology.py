@@ -2,8 +2,6 @@ import json
 import sys
 from unittest.mock import patch
 
-import pytest
-
 from msiconvert.tools.check_ontology import main
 
 

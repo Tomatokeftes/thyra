@@ -31,7 +31,7 @@ def dry_run_conversion(
     # Check if output would overwrite
     if output_path.exists():
         logging.warning(
-            f"Output path already exists and would be overwritten: {output_path}"
+            f"Output path already exists and would be overwritten: " f"{output_path}"
         )
 
     try:

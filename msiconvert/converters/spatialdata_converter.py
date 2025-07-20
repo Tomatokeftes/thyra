@@ -9,6 +9,10 @@ from anndata import AnnData  # type: ignore
 from numpy.typing import NDArray
 from scipy import sparse
 
+from ..core.base_converter import BaseMSIConverter
+from ..core.base_reader import BaseMSIReader
+from ..core.registry import register_converter
+
 # Check SpatialData availability (defer imports to avoid issues)
 SPATIALDATA_AVAILABLE = False
 _import_error_msg = None
@@ -35,10 +39,6 @@ except (ImportError, NotImplementedError) as e:
     Identity = None
     box = None
     gpd = None
-
-from ..core.base_converter import BaseMSIConverter
-from ..core.base_reader import BaseMSIReader
-from ..core.registry import register_converter
 
 
 @register_converter("spatialdata")

@@ -1,10 +1,7 @@
 """
 Integration tests for the command-line interface.
 """
-import shutil
-import subprocess
 import sys
-from pathlib import Path
 
 import pytest
 
