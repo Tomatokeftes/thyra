@@ -27,11 +27,11 @@ def convert_msi(
     output_path: str,
     format_type: str = "spatialdata",
     dataset_id: str = "msi_dataset",
-    pixel_size_um: float = 1.0,
+    pixel_size_um: float = None,
     handle_3d: bool = False,
     **kwargs,
 ) -> bool:
-    """Convert MSI data to the specified format with enhanced error handling."""
+    """Convert MSI data to the specified format with enhanced error handling and automatic pixel size detection."""
 
     # Input validation
     if not input_path or not isinstance(input_path, (str, Path)):
@@ -50,7 +50,9 @@ def convert_msi(
         logging.error("Dataset ID must be a non-empty string")
         return False
 
-    if not isinstance(pixel_size_um, (int, float)) or pixel_size_um <= 0:
+    if pixel_size_um is not None and (
+        not isinstance(pixel_size_um, (int, float)) or pixel_size_um <= 0
+    ):
         logging.error("Pixel size must be a positive number")
         return False
 
@@ -81,6 +83,27 @@ def convert_msi(
         logging.info(f"Using reader: {reader_class.__name__}")
         reader = reader_class(input_path)
 
+        # Handle automatic pixel size detection if not provided
+        final_pixel_size = pixel_size_um
+        if pixel_size_um is None:
+            logging.info("Attempting automatic pixel size detection...")
+            detected_pixel_size = reader.get_pixel_size()
+            if detected_pixel_size is not None:
+                final_pixel_size = detected_pixel_size[
+                    0
+                ]  # Use X size (assuming square pixels)
+                logging.info(
+                    f"✓ Automatically detected pixel size: {detected_pixel_size[0]:.1f} x {detected_pixel_size[1]:.1f} μm"
+                )
+            else:
+                logging.error(
+                    "✗ Could not automatically detect pixel size from metadata"
+                )
+                logging.error(
+                    "Please specify --pixel-size manually or ensure the input file contains pixel size metadata"
+                )
+                return False
+
         # Create converter
         converter_class = get_converter_class(format_type.lower())
         logging.info(f"Using converter: {converter_class.__name__}")
@@ -88,7 +111,7 @@ def convert_msi(
             reader,
             output_path,
             dataset_id=dataset_id,
-            pixel_size_um=pixel_size_um,
+            pixel_size_um=final_pixel_size,
             handle_3d=handle_3d,
             **kwargs,
         )
@@ -101,5 +124,5 @@ def convert_msi(
     except Exception as e:
         logging.error(f"Error during conversion: {e}")
         # Log detailed traceback for debugging
-        logging.debug(f"Detailed traceback:\n{traceback.format_exc()}")
+        logging.error(f"Detailed traceback:\n{traceback.format_exc()}")
         return False

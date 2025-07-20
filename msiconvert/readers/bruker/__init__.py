@@ -249,6 +249,163 @@ class BrukerReader(BaseMSIReader):
         logger.debug(f"Loaded metadata with {len(metadata)} keys")
         return metadata
 
+    def get_pixel_size(self) -> Optional[Tuple[float, float]]:
+        """
+        Extract pixel size from Bruker database metadata.
+
+        Queries the MaldiFrameLaserInfo table for:
+        - Primary: BeamScanSizeX/Y (actual scanning step size)
+        - Validation: SpotSize (physical laser spot diameter)
+        - Fallback: Calculate from MotorPositionX/Y differences
+
+        Returns:
+            Optional[Tuple[float, float]]: Pixel size as (x_size, y_size) in micrometers,
+                                         or None if not available in metadata.
+        """
+        if not hasattr(self, "conn") or self.conn is None:
+            logger.warning("Database connection not available for pixel size detection")
+            return None
+
+        cursor = self.conn.cursor()
+        x_size = None
+        y_size = None
+        spot_size = None
+
+        # Method 1: Query MaldiFrameLaserInfo table for BeamScanSizeX/Y
+        try:
+            logger.debug("Attempting to query MaldiFrameLaserInfo table...")
+            # Directly query for beam scan size data (if table doesn't exist, this will fail gracefully)
+            cursor.execute(
+                """
+                SELECT BeamScanSizeX, BeamScanSizeY, SpotSize
+                FROM MaldiFrameLaserInfo
+                LIMIT 1
+            """
+            )
+
+            result = cursor.fetchone()
+            logger.debug(f"Query result: {result}")
+            if result:
+                beam_x, beam_y, spot = result
+                logger.debug(
+                    f"Parsed values: beam_x={beam_x}, beam_y={beam_y}, spot={spot}"
+                )
+                if beam_x is not None and beam_y is not None:
+                    x_size = float(beam_x)
+                    y_size = float(beam_y)
+                    if spot is not None:
+                        spot_size = float(spot)
+
+                    logger.info(
+                        f"Detected pixel size from Bruker MaldiFrameLaserInfo: "
+                        f"BeamScanSizeX={x_size} μm, BeamScanSizeY={y_size} μm"
+                    )
+                    if spot_size:
+                        efficiency_x = (
+                            (x_size / spot_size) * 100 if spot_size > 0 else 100
+                        )
+                        efficiency_y = (
+                            (y_size / spot_size) * 100 if spot_size > 0 else 100
+                        )
+                        logger.debug(
+                            f"SpotSize={spot_size} μm, "
+                            f"Scanning efficiency: X={efficiency_x:.1f}%, Y={efficiency_y:.1f}%"
+                        )
+
+                    return (x_size, y_size)
+                else:
+                    logger.debug(
+                        "beam_x or beam_y is None, continuing to fallback methods"
+                    )
+            else:
+                logger.debug("No result from query, continuing to fallback methods")
+
+        except sqlite3.OperationalError as e:
+            logger.debug(f"Could not query MaldiFrameLaserInfo table: {e}")
+            # Table doesn't exist or other SQL error - continue to fallback methods
+
+        # Method 2: Fallback to calculate from MotorPositionX/Y differences
+        try:
+            # Check if we have frame position data
+            cursor.execute(
+                """
+                SELECT name FROM sqlite_master
+                WHERE type='table' AND name='MaldiFrameInfo'
+            """
+            )
+
+            if cursor.fetchone():
+                # Get distinct motor positions and calculate step size
+                cursor.execute(
+                    """
+                    SELECT DISTINCT MotorPositionX, MotorPositionY
+                    FROM MaldiFrameInfo
+                    ORDER BY MotorPositionX, MotorPositionY
+                    LIMIT 10
+                """
+                )
+
+                positions = cursor.fetchall()
+                if len(positions) >= 2:
+                    # Calculate step sizes from position differences
+                    x_positions = sorted(
+                        set(pos[0] for pos in positions if pos[0] is not None)
+                    )
+                    y_positions = sorted(
+                        set(pos[1] for pos in positions if pos[1] is not None)
+                    )
+
+                    x_step = None
+                    y_step = None
+
+                    if len(x_positions) >= 2:
+                        x_diffs = [
+                            x_positions[i + 1] - x_positions[i]
+                            for i in range(len(x_positions) - 1)
+                        ]
+                        x_step = min(
+                            diff for diff in x_diffs if diff > 0
+                        )  # Smallest positive difference
+
+                    if len(y_positions) >= 2:
+                        y_diffs = [
+                            y_positions[i + 1] - y_positions[i]
+                            for i in range(len(y_positions) - 1)
+                        ]
+                        y_step = min(
+                            diff for diff in y_diffs if diff > 0
+                        )  # Smallest positive difference
+
+                    if x_step and y_step:
+                        logger.info(
+                            f"Calculated pixel size from Bruker motor positions: "
+                            f"X={x_step} μm, Y={y_step} μm"
+                        )
+                        return (float(x_step), float(y_step))
+
+        except sqlite3.OperationalError as e:
+            logger.debug(f"Could not calculate pixel size from motor positions: {e}")
+
+        # Method 3: Check GlobalMetadata for pixel size information
+        try:
+            cursor.execute(
+                """
+                SELECT Key, Value FROM GlobalMetadata
+                WHERE Key LIKE '%pixel%' OR Key LIKE '%PixelSize%' OR Key LIKE '%stepsize%'
+            """
+            )
+
+            metadata_pixels = cursor.fetchall()
+            if metadata_pixels:
+                logger.debug(f"Found pixel-related metadata: {metadata_pixels}")
+                # This would need specific implementation based on actual metadata keys
+
+        except sqlite3.OperationalError as e:
+            logger.debug(f"Could not query GlobalMetadata for pixel size: {e}")
+
+        logger.warning("Could not detect pixel size from Bruker metadata")
+        return None
+
     def get_dimensions(self) -> Tuple[int, int, int]:
         """
         Return the dimensions of the dataset using 0-based indexing.
@@ -322,7 +479,9 @@ class BrukerReader(BaseMSIReader):
         frame_count = self._get_frame_count()
 
         # Setup progress tracking
-        with tqdm(total=frame_count, desc="Reading spectra", unit="spectrum") as pbar:
+        with tqdm(
+            total=frame_count, desc="Reading spectra", unit="spectrum", disable=True
+        ) as pbar:
             for frame_id in range(1, frame_count + 1):
                 try:
                     # Get coordinates
@@ -392,20 +551,15 @@ class BrukerReader(BaseMSIReader):
 
             return results
 
-        # Create frame ID batches
+        # Create frame ID iterator
         frame_ids = list(range(1, frame_count + 1))
 
         # Process in batches
         for batch_results in self.batch_processor.process_spectrum_batches(
-            iter(
-                [
-                    frame_ids[i : i + batch_size]
-                    for i in range(0, len(frame_ids), batch_size)
-                ]
-            ),
-            (frame_count + batch_size - 1) // batch_size,  # Number of batches
+            iter(frame_ids),  # Simple iterator over frame IDs
+            frame_count,  # Total number of frames
             batch_processor_func,
-            batch_size=1,  # Process one batch at a time
+            batch_size=batch_size,  # Use the requested batch size
         ):
             for spectrum_data in batch_results:
                 yield spectrum_data

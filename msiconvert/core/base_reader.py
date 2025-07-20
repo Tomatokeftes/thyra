@@ -132,3 +132,18 @@ class BaseMSIReader(ABC):
         if len(mass_axis) == 0:
             return (0.0, 0.0)
         return (float(np.min(mass_axis)), float(np.max(mass_axis)))
+
+    def get_pixel_size(self) -> Optional[Tuple[float, float]]:
+        """
+        Extract pixel size from format-specific metadata.
+
+        Returns:
+            Optional[Tuple[float, float]]: Pixel size as (x_size, y_size) in micrometers,
+                                         or None if not available in metadata.
+
+        Notes:
+            - For ImzML: Extracts from cvParam IMS:1000046 and IMS:1000047
+            - For Bruker: Extracts from MaldiFrameLaserInfo table (BeamScanSizeX/Y)
+            - Default implementation returns None (no automatic detection)
+        """
+        return None

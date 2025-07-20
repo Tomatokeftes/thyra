@@ -71,7 +71,7 @@ class BaseMSIConverter(ABC):
             logging.error(f"Error during conversion: {e}")
             import traceback
 
-            logging.debug(f"Detailed traceback:\n{traceback.format_exc()}")
+            logging.error(f"Detailed traceback:\n{traceback.format_exc()}")
             return False
         finally:
             self.reader.close()
