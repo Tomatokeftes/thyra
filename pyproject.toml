@@ -4,7 +4,7 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
 name = "msiconvert"
-version = "1.5.1"
+version = "1.6.0"
 description = "A library to convert Mass Spectrometry Imaging (MSI) data into SpatialData/Zarr format"
 authors = ["Theodoros Visvikis <t.visvikis@maastrichtuniversity.nl>"]
 maintainers = ["Theodoros Visvikis <t.visvikis@maastrichtuniversity.nl>"]
