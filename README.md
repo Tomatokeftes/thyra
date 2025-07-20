@@ -31,7 +31,7 @@ conda install -c conda-forge msiconvert
 
 ### From source
 ```bash
-git clone https://github.com/tvisvikis/MSIConverter.git
+git clone https://github.com/Tomatokeftes/MSIConverter.git
 cd MSIConverter
 poetry install
 ```
@@ -136,7 +136,7 @@ print(f"Mass channels: {msi_data.var.index}")
 
 ```bash
 # Clone repository
-git clone https://github.com/tvisvikis/MSIConverter.git
+git clone https://github.com/Tomatokeftes/MSIConverter.git
 cd MSIConverter
 
 # Install with development dependencies
@@ -175,7 +175,7 @@ poetry run pre-commit run --all-files
 
 ## 📚 Documentation
 
-- **API Documentation**: [Auto-generated docs](https://github.com/tvisvikis/MSIConverter#readme)
+- **API Documentation**: [Auto-generated docs](https://github.com/Tomatokeftes/MSIConverter#readme)
 - **Contributing Guide**: [CONTRIBUTING.md](CONTRIBUTING.md)
 - **Architecture Overview**: [docs/architecture.md](docs/architecture.md)
 - **Changelog**: [CHANGELOG.md](CHANGELOG.md)
@@ -200,8 +200,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 📞 Support
 
-- **Issues**: [GitHub Issues](https://github.com/tvisvikis/MSIConverter/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/tvisvikis/MSIConverter/discussions)
+- **Issues**: [GitHub Issues](https://github.com/Tomatokeftes/MSIConverter/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/Tomatokeftes/MSIConverter/discussions)
 - **Email**: t.visvikis@maastrichtuniversity.nl
 
 ## 🏆 Citation
@@ -213,7 +213,7 @@ If you use MSIConverter in your research, please cite:
   title = {MSIConverter: Modern Mass Spectrometry Imaging Data Conversion},
   author = {Visvikis, Theodoros},
   year = {2024},
-  url = {https://github.com/tvisvikis/MSIConverter}
+  url = {https://github.com/Tomatokeftes/MSIConverter}
 }
 ```
 

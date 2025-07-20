@@ -10,10 +10,24 @@ authors = ["Theodoros Visvikis <t.visvikis@maastrichtuniversity.nl>"]
 maintainers = ["Theodoros Visvikis <t.visvikis@maastrichtuniversity.nl>"]
 license = "MIT"
 readme = "README.md"
-homepage = "https://github.com/tvisvikis/MSIConverter"
-repository = "https://github.com/tvisvikis/MSIConverter"
-documentation = "https://github.com/tvisvikis/MSIConverter#readme"
-keywords = ["mass-spectrometry", "imaging", "spatialdata", "zarr", "omics", "bioinformatics"]
+homepage = "https://github.com/Tomatokeftes/MSIConverter"
+repository = "https://github.com/Tomatokeftes/MSIConverter"
+documentation = "https://github.com/Tomatokeftes/MSIConverter#readme"
+keywords = [
+    "mass-spectrometry",
+    "imaging",
+    "spatialdata",
+    "zarr",
+    "omics",
+    "bioinformatics",
+    "msi",
+    "imzml",
+    "bruker",
+    "spatial-omics",
+    "data-conversion",
+    "scientific-computing"
+]
+
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Science/Research",
@@ -32,6 +46,12 @@ classifiers = [
     "Environment :: Console",
 ]
 packages = [{include = "msiconvert"}]
+
+[tool.poetry.urls]
+"Bug Tracker" = "https://github.com/Tomatokeftes/MSIConverter/issues"
+"Discussions" = "https://github.com/Tomatokeftes/MSIConverter/discussions"
+"Changelog" = "https://github.com/Tomatokeftes/MSIConverter/blob/main/CHANGELOG.md"
+"Contributing" = "https://github.com/Tomatokeftes/MSIConverter/blob/main/CONTRIBUTING.md"
 
 [tool.poetry.dependencies]
 python = ">=3.10, <3.13"

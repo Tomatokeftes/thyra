@@ -60,7 +60,7 @@ This document outlines the comprehensive refactoring tasks needed to transform m
 ### Data Integrity & Automation
 
 - [ ] **Implement Intelligent Mass Axis Resampling for Bruker Data**
-  - **Description:** Bruker datasets often contain mass axes with unrealistically high resolution (e.g., 0.001 Da spacing) that doesn't reflect actual instrument capabilities, leading to unnecessarily large file sizes. This task involves implementing an intelligent resampling algorithm that: 1) Analyzes the actual peak widths in the data. 2) Determines appropriate mass axis spacing based on instrument resolution. 3) Resamples the data during the Dask processing stage to reduce file size while preserving all meaningful information.
+  - **Description:** Bruker datasets often contain mass axes with unrealistically high resolution (e.g., 0.00...001 Da spacing) that doesn't reflect actual instrument capabilities, leading to unnecessarily large file sizes. This task involves implementing an intelligent interpolation algorithm that: 1) Using the minimum and maximum of the mass range to create a new mass axis based on physical equation of the mass analyzer  2) Using the mass analyzer equation, and the number of bins or a specific bin width at a specific mass, it creates a non-linear downbinned axis. 3) It the interpolates every pixel and fits them into the proper non-linear common mass axis to reduce file size while preserving all meaningful information. This is better performed after the dataset is written, or if batched processing is occuring, it can happen asynchronously while we read.This is an extremely important but complicated tool to implement.
   - **Rationale:** This can reduce output file sizes by 50-90% without losing scientifically relevant information, making data storage and sharing more practical.
   - **Labels:** `priority:high`, `area:data-integrity`, `area:performance`
 
@@ -109,7 +109,7 @@ This document outlines the comprehensive refactoring tasks needed to transform m
 ### Documentation & Community
 
 - [ ] **Set Up Documentation Framework**
-  - **Description:** Establish a documentation infrastructure using Sphinx or MkDocs. Start with: 1) Auto-generated API documentation from docstrings. 2) Installation guide. 3) Tutorial for basic conversion workflow. 4) Architecture overview for contributors. Deploy to Read the Docs or GitHub Pages.
+  - **Description:** Establish a documentation infrastructure using Sphinx. Start with: 1) Auto-generated API documentation from docstrings. 2) Installation guide. 3) Tutorial for basic conversion workflow. 4) Architecture overview for contributors. Deploy to Read the Docs or GitHub Pages.
   - **Rationale:** Good documentation is essential for user adoption and contributor onboarding. Starting with auto-generated docs provides immediate value while the codebase evolves.
   - **Labels:** `priority:medium`, `area:documentation`, `area:community`
 
@@ -160,7 +160,7 @@ This document outlines the comprehensive refactoring tasks needed to transform m
   - **Labels:** `priority:high`, `area:code-quality`, `area:maintainability`
 
 - [ ] **Refactor Large Methods into Smaller Units**
-  - **Description:** Several methods exceed 100 lines (e.g., `_finalize_data` with 200+ lines, `get_common_mass_axis` with 78 lines). This task involves breaking down complex methods into smaller, focused functions following the Single Responsibility Principle.
+  - **Description:** Several methods exceed 100 lines (e.g., `_finalize_data` with 200+ lines, `get_common_mass_axis` with 78 lines). This task involves breaking down complex methods into smaller, focused functions following the Single Responsibility Principle. Important to note that they should be doing one thing and one thing only, and if it takes more lines it's okay as long as we follow the Single Responsibility Principle.
   - **Rationale:** Smaller methods are easier to test, understand, and maintain. They enable better code reuse and make debugging simpler.
   - **Labels:** `priority:medium`, `area:code-quality`, `area:maintainability`
 
@@ -211,7 +211,7 @@ This document outlines the comprehensive refactoring tasks needed to transform m
 ### Cross-Platform & Distribution
 
 - [ ] **Improve Cross-Platform Compatibility**
-  - **Description:** Current code has platform-specific paths and dependencies (e.g., Windows DLLs). This task involves: 1) Abstracting platform-specific code. 2) Testing on Windows, Linux, and macOS. 3) Handling path separators correctly. 4) Documenting platform-specific requirements.
+  - **Description:** Current code has platform-specific paths and dependencies (e.g., Windows DLLs). This task involves: 1) Abstracting platform-specific code. 2) Testing on Windows, Linux 3) Handling path separators correctly. 4) Documenting platform-specific requirements.
   - **Rationale:** Cross-platform support increases user base and makes the tool more professional.
   - **Labels:** `priority:high`, `area:compatibility`, `area:distribution`
 
