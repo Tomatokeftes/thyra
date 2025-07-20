@@ -487,6 +487,16 @@ class BrukerReader(BaseMSIReader):
             f"frames={self._get_frame_count()})"
         )
 
+    @property
+    def n_spectra(self) -> int:
+        """
+        Return the total number of spectra in the dataset.
+
+        Returns:
+            Total number of frames (efficient implementation using cached frame count)
+        """
+        return self._get_frame_count()
+
     def __del__(self) -> None:
         """Destructor to ensure cleanup."""
         try:

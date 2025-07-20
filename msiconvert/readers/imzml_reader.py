@@ -460,3 +460,21 @@ class ImzMLReader(BaseMSIReader):
             if hasattr(self.parser, "m") and self.parser.m is not None:
                 self.parser.m.close()  # type: ignore
             self.parser = None
+
+    @property
+    def n_spectra(self) -> int:
+        """
+        Return the total number of spectra in the dataset.
+
+        Returns:
+            Total number of spectra (efficient implementation using parser)
+        """
+        if not hasattr(self, "parser") or self.parser is None:
+            if self.filepath:
+                self._initialize_parser(self.filepath)
+            else:
+                raise ValueError("Parser not initialized and no filepath available")
+
+        # Use parser coordinates which is efficient
+        parser = cast(ImzMLParser, self.parser)
+        return len(parser.coordinates)  # type: ignore

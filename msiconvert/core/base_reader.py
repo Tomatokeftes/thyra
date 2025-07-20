@@ -95,3 +95,40 @@ class BaseMSIReader(ABC):
     def close(self) -> None:
         """Close all open file handles."""
         pass
+
+    @property
+    def shape(self) -> Tuple[int, int, int]:
+        """
+        Return the shape of the dataset (x, y, z dimensions).
+
+        Returns:
+            Tuple of (x, y, z) dimensions
+        """
+        return self.get_dimensions()
+
+    @property
+    def n_spectra(self) -> int:
+        """
+        Return the total number of spectra in the dataset.
+
+        Returns:
+            Total number of spectra
+        """
+        # Default implementation counts actual spectra
+        count = 0
+        for _ in self.iter_spectra():
+            count += 1
+        return count
+
+    @property
+    def mass_range(self) -> Tuple[float, float]:
+        """
+        Return the mass range (min_mass, max_mass) of the dataset.
+
+        Returns:
+            Tuple of (min_mass, max_mass) values
+        """
+        mass_axis = self.get_common_mass_axis()
+        if len(mass_axis) == 0:
+            return (0.0, 0.0)
+        return (float(np.min(mass_axis)), float(np.max(mass_axis)))
