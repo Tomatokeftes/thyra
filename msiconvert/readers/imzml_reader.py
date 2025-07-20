@@ -153,6 +153,86 @@ class ImzMLReader(BaseMSIReader):
 
         return self._metadata
 
+    def get_pixel_size(self) -> Optional[Tuple[float, float]]:
+        """
+        Extract pixel size from ImzML metadata.
+
+        Searches for cvParam elements with accessions:
+        - IMS:1000046: pixel size x
+        - IMS:1000047: pixel size y
+
+        Returns:
+            Optional[Tuple[float, float]]: Pixel size as (x_size, y_size) in micrometers,
+                                         or None if not found in metadata.
+        """
+        if not hasattr(self, "parser") or self.parser is None:
+            if self.filepath:
+                self._initialize_parser(self.filepath)
+            else:
+                return None
+
+        parser = cast(ImzMLParser, self.parser)
+
+        # Look for pixel size in imzmldict first (parsed cvParams)
+        x_size = None
+        y_size = None
+
+        if hasattr(parser, "imzmldict") and parser.imzmldict:
+            # Check for pixel size parameters in the parsed dictionary
+            x_size = parser.imzmldict.get("pixel size x")
+            y_size = parser.imzmldict.get("pixel size y")
+
+        # If not found in imzmldict, try accessing the raw XML metadata
+        if x_size is None or y_size is None:
+            try:
+                import xml.etree.ElementTree as ET
+
+                # Access the XML root if available
+                if hasattr(parser, "metadata") and hasattr(parser.metadata, "root"):
+                    root = parser.metadata.root
+
+                    # Define namespaces for XML parsing
+                    namespaces = {
+                        "mzml": "http://psi.hupo.org/ms/mzml",
+                        "ims": "http://www.maldi-msi.org/download/imzml/imagingMS.obo",
+                    }
+
+                    # Search for cvParam elements with the pixel size accessions
+                    for cvparam in root.findall(".//mzml:cvParam", namespaces):
+                        accession = cvparam.get("accession")
+                        if accession == "IMS:1000046":  # pixel size x
+                            x_size = float(cvparam.get("value", 0))
+                        elif accession == "IMS:1000047":  # pixel size y
+                            y_size = float(cvparam.get("value", 0))
+
+            except Exception as e:
+                logging.warning(f"Failed to parse XML metadata for pixel size: {e}")
+
+        # Convert to float if found as strings
+        try:
+            if x_size is not None:
+                x_size = float(x_size)
+            if y_size is not None:
+                y_size = float(y_size)
+        except (ValueError, TypeError):
+            logging.warning("Invalid pixel size values found in metadata")
+            return None
+
+        # Return pixel sizes if both found
+        if x_size is not None and y_size is not None:
+            logging.info(
+                f"Detected pixel size from ImzML metadata: x={x_size} μm, y={y_size} μm"
+            )
+            return (x_size, y_size)
+
+        # Log if only partial information found
+        if x_size is not None or y_size is not None:
+            logging.warning(
+                f"Partial pixel size information found: x={x_size}, y={y_size}"
+            )
+
+        return None
+
     def get_dimensions(self) -> Tuple[int, int, int]:
         """
         Return the dimensions of the imzML dataset (x, y, z).
@@ -219,8 +299,6 @@ class ImzMLReader(BaseMSIReader):
                 # For continuous data, all spectra share the same m/z values
                 logging.info("Using m/z values from first spectrum (continuous mode)")
                 spectrum_data = parser.getspectrum(0)  # type: ignore
-                print(f"First spectrum data: {spectrum_data}")  # Debugging line
-                print(spectrum_data[0].shape)
                 if spectrum_data is None or len(spectrum_data) < 1:  # type: ignore
                     raise ValueError("Could not get first spectrum")
 

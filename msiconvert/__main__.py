@@ -1,6 +1,7 @@
 # msiconvert/__main__.py
 import argparse
 import logging
+import sys
 from pathlib import Path
 
 from msiconvert.convert import convert_msi
@@ -9,12 +10,77 @@ from msiconvert.utils.data_processors import optimize_zarr_chunks
 from msiconvert.utils.logging_config import setup_logging
 
 
+def prompt_for_pixel_size(detected_size=None):
+    """
+    Interactively prompt user for pixel size.
+
+    Args:
+        detected_size: Optional tuple of (x_size, y_size) if detection succeeded
+
+    Returns:
+        float: Pixel size in micrometers
+    """
+    if detected_size is not None:
+        print(
+            f"\n✓ Automatically detected pixel size: {detected_size[0]:.1f} x {detected_size[1]:.1f} μm"
+        )
+        while True:
+            response = input("Use detected pixel size? [Y/n]: ").strip().lower()
+            if response in ["", "y", "yes"]:
+                return detected_size[0]  # Use X size (assuming square pixels)
+            elif response in ["n", "no"]:
+                break
+            else:
+                print("Please enter 'y' for yes or 'n' for no.")
+
+    # Manual input
+    while True:
+        try:
+            print("\n✗ Pixel size could not be automatically detected.")
+            pixel_size_input = input(
+                "Please enter pixel size in micrometers (μm): "
+            ).strip()
+            pixel_size = float(pixel_size_input)
+            if pixel_size <= 0:
+                print("Error: Pixel size must be positive. Please try again.")
+                continue
+            return pixel_size
+        except ValueError:
+            print("Error: Please enter a valid number. Please try again.")
+        except KeyboardInterrupt:
+            print("\nConversion cancelled by user.")
+            sys.exit(1)
+
+
+def detect_pixel_size_interactive(reader):
+    """
+    Try automatic detection and fall back to interactive prompt if needed.
+
+    Args:
+        reader: MSI reader instance
+
+    Returns:
+        float: Pixel size in micrometers
+    """
+    logging.info("Attempting automatic pixel size detection...")
+    detected_pixel_size = reader.get_pixel_size()
+
+    if detected_pixel_size is not None:
+        logging.info(
+            f"✓ Automatically detected pixel size: {detected_pixel_size[0]:.1f} x {detected_pixel_size[1]:.1f} μm"
+        )
+        return prompt_for_pixel_size(detected_pixel_size)
+    else:
+        logging.warning("✗ Could not automatically detect pixel size from metadata")
+        return prompt_for_pixel_size(None)
+
+
 def dry_run_conversion(
     input_path,
     output_path,
     format_type="spatialdata",
     dataset_id="msi_dataset",
-    pixel_size_um=1.0,
+    pixel_size_um=None,
     handle_3d=False,
 ):
     """Simulate conversion process without writing files."""
@@ -45,13 +111,33 @@ def dry_run_conversion(
 
         reader = reader_class(input_path)
 
+        # Try automatic pixel size detection if not provided
+        final_pixel_size = pixel_size_um
+        if pixel_size_um is None:
+            logging.info("Attempting automatic pixel size detection...")
+            detected_pixel_size = reader.get_pixel_size()
+            if detected_pixel_size is not None:
+                final_pixel_size = detected_pixel_size[
+                    0
+                ]  # Use X size (assuming square pixels)
+                logging.info(
+                    f"✓ Automatically detected pixel size: {detected_pixel_size[0]:.1f} x {detected_pixel_size[1]:.1f} μm"
+                )
+            else:
+                logging.warning("✗ Could not automatically detect pixel size")
+                final_pixel_size = 1.0  # Default fallback for dry-run
+                logging.info(
+                    f"Using default pixel size: {final_pixel_size} μm (dry-run mode)"
+                )
+
         # Get basic metadata
         logging.info(f"Dataset dimensions: {reader.shape}")
         logging.info(f"Number of spectra: {reader.n_spectra}")
         logging.info(f"Mass range: {reader.mass_range}")
 
         # Estimate output size (very rough)
-        estimated_size_mb = (reader.n_spectra * len(reader.mass_range) * 4) / (
+        common_mass_axis = reader.get_common_mass_axis()
+        estimated_size_mb = (reader.n_spectra * len(common_mass_axis) * 4) / (
             1024 * 1024
         )  # 4 bytes per float32
         logging.info(f"Estimated output size: ~{estimated_size_mb:.1f} MB")
@@ -59,10 +145,11 @@ def dry_run_conversion(
         # Show conversion parameters
         logging.info(f"Output format: {format_type}")
         logging.info(f"Dataset ID: {dataset_id}")
-        logging.info(f"Pixel size: {pixel_size_um} μm")
+        logging.info(f"Pixel size: {final_pixel_size} μm")
         logging.info(f"3D handling: {handle_3d}")
         logging.info(f"Output path: {output_path}")
 
+        reader.close()
         logging.info("=== DRY RUN COMPLETED SUCCESSFULLY ===")
         return True
 
@@ -90,8 +177,8 @@ def main():
     parser.add_argument(
         "--pixel-size",
         type=float,
-        default=1.0,
-        help="Size of each pixel in micrometers",
+        default=None,
+        help="Size of each pixel in micrometers (if not specified, automatic detection will be attempted)",
     )
     parser.add_argument(
         "--handle-3d",
@@ -119,7 +206,7 @@ def main():
     args = parser.parse_args()
 
     # Input validation
-    if args.pixel_size <= 0:
+    if args.pixel_size is not None and args.pixel_size <= 0:
         parser.error("Pixel size must be positive")
 
     if not args.dataset_id.strip():
@@ -128,6 +215,27 @@ def main():
     # Configure logging
     setup_logging(log_level=getattr(logging, args.log_level), log_file=args.log_file)
 
+    # Determine pixel size (auto-detect or use provided value)
+    final_pixel_size = args.pixel_size
+    if args.pixel_size is None and not args.dry_run:
+        # For actual conversion, use interactive detection
+        try:
+            # Detect format and create reader for pixel size detection
+            input_path = Path(args.input).resolve()
+            input_format = detect_format(input_path)
+            reader_class = get_reader_class(input_format)
+            reader = reader_class(input_path)
+
+            # Get pixel size interactively
+            final_pixel_size = detect_pixel_size_interactive(reader)
+            reader.close()
+
+            logging.info(f"Using pixel size: {final_pixel_size} μm")
+        except Exception as e:
+            logging.error(f"Error during pixel size detection: {e}")
+            logging.error("Conversion aborted.")
+            return
+
     # Handle dry-run mode
     if args.dry_run:
         success = dry_run_conversion(
@@ -135,7 +243,7 @@ def main():
             args.output,
             format_type=args.format,
             dataset_id=args.dataset_id,
-            pixel_size_um=args.pixel_size,
+            pixel_size_um=final_pixel_size,
             handle_3d=args.handle_3d,
         )
     else:
@@ -145,7 +253,7 @@ def main():
             args.output,
             format_type=args.format,
             dataset_id=args.dataset_id,
-            pixel_size_um=args.pixel_size,
+            pixel_size_um=final_pixel_size,
             handle_3d=args.handle_3d,
         )
 

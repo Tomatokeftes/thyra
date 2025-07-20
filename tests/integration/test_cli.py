@@ -119,7 +119,14 @@ class TestCommandLineInterface:
         monkeypatch.setattr("msiconvert.__main__.convert_msi", mock_convert_msi)
 
         # Set up command line arguments with 3D handling
-        sys.argv = ["msiconvert", str(imzml_path), str(output_path), "--handle-3d"]
+        sys.argv = [
+            "msiconvert",
+            str(imzml_path),
+            str(output_path),
+            "--handle-3d",
+            "--pixel-size",
+            "1.0",
+        ]
 
         # Run main
         try:
@@ -159,6 +166,8 @@ class TestCommandLineInterface:
             str(output_path),
             "--log-level",
             "DEBUG",
+            "--pixel-size",
+            "1.0",
         ]
 
         # Run main
