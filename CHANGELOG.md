@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.6.0 (2025-07-20)
+
+### Features
+
+- Enhance package metadata and fix GitHub URLs
+  ([`9f5310e`](https://github.com/Tomatokeftes/MSIConverter/commit/9f5310e2bdcabbc197e6b06c80f320ba10583dec))
+
+
 ## v1.5.1 (2025-07-19)
 
 ### Bug Fixes

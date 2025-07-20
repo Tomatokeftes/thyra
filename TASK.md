@@ -119,7 +119,7 @@ This document outlines the comprehensive refactoring tasks needed to transform m
 ### Documentation & Community
 
 - [ ] **Set Up Documentation Framework**
-  - **Description:** Establish a documentation infrastructure using Sphinx or MkDocs. Start with: 1) Auto-generated API documentation from docstrings. 2) Installation guide. 3) Tutorial for basic conversion workflow. 4) Architecture overview for contributors. Deploy to Read the Docs or GitHub Pages.
+  - **Description:** Establish a documentation infrastructure using Sphinx. Start with: 1) Auto-generated API documentation from docstrings. 2) Installation guide. 3) Tutorial for basic conversion workflow. 4) Architecture overview for contributors. Deploy to Read the Docs or GitHub Pages.
   - **Rationale:** Good documentation is essential for user adoption and contributor onboarding. Starting with auto-generated docs provides immediate value while the codebase evolves.
   - **Labels:** `priority:medium`, `area:documentation`, `area:community`
 
@@ -170,7 +170,7 @@ This document outlines the comprehensive refactoring tasks needed to transform m
   - **Labels:** `priority:high`, `area:code-quality`, `area:maintainability`
 
 - [ ] **Refactor Large Methods into Smaller Units**
-  - **Description:** Several methods exceed 100 lines (e.g., `_finalize_data` with 200+ lines, `get_common_mass_axis` with 78 lines). This task involves breaking down complex methods into smaller, focused functions following the Single Responsibility Principle.
+  - **Description:** Several methods exceed 100 lines (e.g., `_finalize_data` with 200+ lines, `get_common_mass_axis` with 78 lines). This task involves breaking down complex methods into smaller, focused functions following the Single Responsibility Principle. Important to note that they should be doing one thing and one thing only, and if it takes more lines it's okay as long as we follow the Single Responsibility Principle.
   - **Rationale:** Smaller methods are easier to test, understand, and maintain. They enable better code reuse and make debugging simpler.
   - **Labels:** `priority:medium`, `area:code-quality`, `area:maintainability`
 
@@ -221,7 +221,7 @@ This document outlines the comprehensive refactoring tasks needed to transform m
 ### Cross-Platform & Distribution
 
 - [ ] **Improve Cross-Platform Compatibility**
-  - **Description:** Current code has platform-specific paths and dependencies (e.g., Windows DLLs). This task involves: 1) Abstracting platform-specific code. 2) Testing on Windows, Linux, and macOS. 3) Handling path separators correctly. 4) Documenting platform-specific requirements.
+  - **Description:** Current code has platform-specific paths and dependencies (e.g., Windows DLLs). This task involves: 1) Abstracting platform-specific code. 2) Testing on Windows, Linux 3) Handling path separators correctly. 4) Documenting platform-specific requirements.
   - **Rationale:** Cross-platform support increases user base and makes the tool more professional.
   - **Labels:** `priority:high`, `area:compatibility`, `area:distribution`
 
