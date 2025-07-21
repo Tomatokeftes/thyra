@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.8.2 (2025-07-21)
+
+### Bug Fixes
+
+- Correct pixel size detection metadata for interactive mode
+  ([`5101d66`](https://github.com/Tomatokeftes/MSIConverter/commit/5101d660ad24191a03a917006a60524b8c3948c7))
+
+
 ## v1.8.1 (2025-07-21)
 
 ### Bug Fixes
