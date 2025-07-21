@@ -30,11 +30,18 @@ This document outlines the comprehensive refactoring tasks needed to transform m
 - **Code Standards Enforcement** - Consistent formatting and linting across the entire codebase
 - **Developer Workflow** - Streamlined development process with automated quality assurance
 
+### Round 5 - Metadata and User Experience ✅
+- **Explicit Pixel Size Metadata Storage** - Added pixel size metadata to SpatialData.attrs (stored in root .zattrs)
+- **Enhanced Interactive Pixel Size Detection** - Fixed incorrect "manual" detection method when user accepts auto-detected values
+- **Improved Detection Provenance Tracking** - Now correctly records "automatic_interactive", "manual_override", and "manual" methods
+- **Unicode Compatibility Fix** - Resolved Windows encoding issues with Unicode characters in console output
+- **SpatialData Standards Compliance** - Metadata now follows SpatialData conventions using object-level attributes
+
 **Note**: Currently using lenient flake8 rules and skipped bandit security scanning due to existing code quality issues. See tasks below for gradual improvements.
 
 **Commit Policy**: All commits should appear as human-authored. No AI co-authorship or AI generation mentions in commit messages.
 
-### Total Completed: 20 major tasks ✅
+### Total Completed: 25 major tasks ✅
 
 ---
 
@@ -69,9 +76,9 @@ This document outlines the comprehensive refactoring tasks needed to transform m
   - **Rationale:** Metadata is crucial for data reproducibility, quality control, and downstream analysis. A self-contained output file with complete metadata enables better scientific workflows.
   - **Labels:** `priority:high`, `area:data-integrity`
 
-- [ ] **Implement Automatic Pixel Size Detection**
-  - **Description:** Users currently must manually specify pixel size, which is error-prone and inconvenient. For Bruker data, implement intelligent pixel size extraction from MaldiFrameLaserInfo table: 1) Use BeamScanSizeX/Y (e.g., 46 μm) as primary pixel size - represents actual scanning step size. 2) Use SpotSize (e.g., 45 μm) for validation - represents physical laser spot diameter. 3) Compare with user input (e.g., 50 μm nominal) to understand Bruker's optimization (typically ~92% efficiency factor). 4) Fallback to MotorPositionX/Y differences if laser info unavailable. 5) Implement similar metadata extraction for ImzML format. 6) Provide automatic detection with manual override option.
-  - **Rationale:** Instrument metadata is more accurate than user input since Bruker optimizes scanning parameters automatically. BeamScanSizeX/Y reflects actual pixel spacing after accounting for spot overlap and beam profile. Eliminates user errors and improves spatial accuracy.
+- [x] **Implement Automatic Pixel Size Detection** *(Significantly Enhanced)*
+  - **Description:** ✅ **COMPLETED:** Enhanced automatic pixel size detection with proper metadata storage and provenance tracking. Now correctly extracts pixel size from both Bruker and ImzML formats with comprehensive detection method tracking: 1) "automatic_interactive" when user accepts detected size. 2) "manual_override" when user specifies different value after detection. 3) "manual" when no detection possible. 4) Explicit pixel size metadata stored in SpatialData.attrs following standard conventions. 5) Detection info includes source format, detected values, and processing notes. 6) Interactive mode properly preserves detection provenance instead of incorrectly marking as manual input.
+  - **Rationale:** Instrument metadata is more accurate than user input. Enhanced implementation now provides complete transparency about detection methods and stores metadata in standardized SpatialData format for better interoperability.
   - **Labels:** `priority:medium`, `area:automation`, `area:ux`, `area:data-integrity`
 
 - [x] **Add Missing Reader Properties for CLI Compatibility**
@@ -341,8 +348,8 @@ This document outlines the comprehensive refactoring tasks needed to transform m
    - Improve Cross-Platform Compatibility
 
 2. **High Priority (Quick Wins):**
-   - Add Missing Reader Properties for CLI Compatibility (fixes dry-run crashes)
-   - Implement Automatic Pixel Size Detection (leverages new metadata insights)
+   - ✅ Add Missing Reader Properties for CLI Compatibility (fixes dry-run crashes) - COMPLETED
+   - ✅ Implement Automatic Pixel Size Detection (leverages new metadata insights) - COMPLETED
 
 3. **High Priority (Major Features):**
    - Implement Intelligent Mass Axis Resampling (REQUIRES bounds detection first)

@@ -654,7 +654,7 @@ class SpatialDataConverter(BaseMSIConverter):
             'pixel_size_y_um': float(self.pixel_size_um),
             'pixel_size_units': 'micrometers',
             'coordinate_system': 'physical_micrometers',
-            'msi_converter_version': '1.8.1',  # Could be made dynamic
+            'msi_converter_version': '1.8.2',  # Could be made dynamic
             'conversion_timestamp': pd.Timestamp.now().isoformat(),
         }
         
