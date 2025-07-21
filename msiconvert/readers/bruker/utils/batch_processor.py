@@ -175,7 +175,12 @@ class BatchProcessor:
         batches = self.create_batches(total_spectra, batch_size)
 
         # Setup progress tracking
-        pbar = tqdm(total=total_spectra, desc="Processing batches", unit="spectrum")
+        pbar = tqdm(
+            total=total_spectra, 
+            desc="Processing batches", 
+            unit="spectrum",
+            disable=getattr(self, "_quiet_mode", False)
+        )
 
         try:
             current_batch = []
@@ -259,7 +264,12 @@ class BatchProcessor:
         else:
             batch_size = initial_batch_size
 
-        pbar = tqdm(total=total_spectra, desc="Adaptive processing", unit="spectrum")
+        pbar = tqdm(
+            total=total_spectra, 
+            desc="Adaptive processing", 
+            unit="spectrum",
+            disable=getattr(self, "_quiet_mode", False)
+        )
 
         try:
             current_batch = []
@@ -354,7 +364,12 @@ class BatchProcessor:
         batch_size = self.min_batch_size
         processed = 0
 
-        pbar = tqdm(total=total_items, desc="Memory-aware processing", unit="item")
+        pbar = tqdm(
+            total=total_items, 
+            desc="Memory-aware processing", 
+            unit="item",
+            disable=getattr(self, "_quiet_mode", False)
+        )
 
         try:
             while processed < total_items:

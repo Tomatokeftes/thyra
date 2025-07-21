@@ -21,7 +21,7 @@ class TestBaseMSIReader:
             class IncompleteReader(BaseMSIReader):
                 pass
 
-            reader = IncompleteReader()
+            reader = IncompleteReader(Path("/test/path"))
 
     def test_implementation(self):
         """Test that implementing all required methods works."""
@@ -44,7 +44,7 @@ class TestBaseMSIReader:
                 pass
 
         # Should instantiate without errors
-        reader = MinimalReader()
+        reader = MinimalReader(Path("/test/path"))
 
         # Check method functionality
         assert reader.get_metadata() == {"test": "metadata"}
@@ -89,7 +89,7 @@ class TestBaseMSIConverter:
             class IncompleteConverter(BaseMSIConverter):
                 pass
 
-            converter = IncompleteConverter(MockReader(), "test.out")
+            converter = IncompleteConverter(MockReader(Path("/test/path")), "test.out")
 
     def test_utility_methods(self):
         """Test the utility methods in the base converter."""
@@ -126,7 +126,7 @@ class TestBaseMSIConverter:
                 pass
 
         # Create the converter
-        converter = MinimalConverter(MockReader(), Path("test.out"))
+        converter = MinimalConverter(MockReader(Path("/test/path")), Path("test.out"))
 
         # Initialize for testing utility methods
         converter._initialize_conversion()

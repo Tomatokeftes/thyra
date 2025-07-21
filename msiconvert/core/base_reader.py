@@ -1,5 +1,6 @@
 # msiconvert/core/base_reader.py
 from abc import ABC, abstractmethod
+from pathlib import Path
 from typing import Any, Dict, Generator, Optional, Tuple
 
 import numpy as np
@@ -8,6 +9,16 @@ from numpy.typing import NDArray
 
 class BaseMSIReader(ABC):
     """Abstract base class for reading MSI data formats."""
+
+    def __init__(self, data_path: Path, **kwargs):
+        """
+        Initialize the reader with the path to the data.
+
+        Args:
+            data_path: Path to the data file or directory
+            **kwargs: Additional reader-specific parameters
+        """
+        self.data_path = Path(data_path)
 
     @abstractmethod
     def get_metadata(self) -> Dict[str, Any]:
@@ -147,3 +158,11 @@ class BaseMSIReader(ABC):
             - Default implementation returns None (no automatic detection)
         """
         return None
+
+    def __enter__(self):
+        """Context manager entry."""
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Context manager exit with cleanup."""
+        self.close()

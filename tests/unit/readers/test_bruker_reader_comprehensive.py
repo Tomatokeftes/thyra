@@ -20,7 +20,7 @@ import numpy as np
 
 # Import the reader from the proper location
 from msiconvert.readers.bruker.bruker_reader import BrukerReader
-from msiconvert.readers.bruker.core.exceptions import (
+from msiconvert.utils.bruker_exceptions import (
     BrukerReaderError,
     DataError,
     SDKError,
