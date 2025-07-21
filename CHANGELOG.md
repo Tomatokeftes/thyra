@@ -2,6 +2,33 @@
 
 <!-- version list -->
 
+## v1.8.1 (2025-07-21)
+
+### Bug Fixes
+
+- Correct constructor calls in reader implementations
+  ([`6ac3b4b`](https://github.com/Tomatokeftes/MSIConverter/commit/6ac3b4b42624f8e4780c4d2e0bd5d4e7afd4f549))
+
+- Resolve batch processing and double progress bar issues
+  ([`3e06382`](https://github.com/Tomatokeftes/MSIConverter/commit/3e063826d5ffec99d0fc975967580c2e0047d504))
+
+- Resolve test failures from constructor changes
+  ([`c4f14cf`](https://github.com/Tomatokeftes/MSIConverter/commit/c4f14cfab24090392a5a28c217741e1241cf2e0f))
+
+- Update test base classes to provide required data_path parameter
+  ([`31b04b6`](https://github.com/Tomatokeftes/MSIConverter/commit/31b04b61748794dbf77c22da88123f7dac6edaeb))
+
+### Refactoring
+
+- Consolidate duplicate base readers and clean up architecture
+  ([`a2aaf74`](https://github.com/Tomatokeftes/MSIConverter/commit/a2aaf7466a742f088a6ba67fef42edfa7863d87f))
+
+### Testing
+
+- Add integration test for real Bruker dataset
+  ([`f9170d5`](https://github.com/Tomatokeftes/MSIConverter/commit/f9170d51cf9cbe00b453e63ac00261fca0b4b245))
+
+
 ## v1.8.0 (2025-07-20)
 
 ### Documentation
