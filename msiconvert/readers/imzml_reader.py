@@ -18,19 +18,22 @@ class ImzMLReader(BaseMSIReader):
 
     def __init__(
         self,
-        imzml_path: Optional[Union[str, Path]] = None,
+        data_path: Path,
         batch_size: int = 50,
         cache_coordinates: bool = True,
+        **kwargs,
     ) -> None:
         """
         Initialize an ImzML reader.
 
         Args:
-            imzml_path: Path to the imzML file. If not provided, can be set later.
+            data_path: Path to the imzML file
             batch_size: Default batch size for spectrum iteration
             cache_coordinates: Whether to cache coordinates upfront
+            **kwargs: Additional arguments
         """
-        self.filepath: Optional[Union[str, Path]] = imzml_path
+        super().__init__(data_path, **kwargs)
+        self.filepath: Optional[Union[str, Path]] = data_path
         self.batch_size: int = batch_size
         self.cache_coordinates: bool = cache_coordinates
         self.parser: Optional[ImzMLParser] = None

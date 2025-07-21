@@ -63,9 +63,7 @@ class BrukerReader(BaseMSIReader):
             progress_callback: Optional callback for progress updates
             **kwargs: Additional arguments
         """
-        super().__init__()
-
-        self.data_path = Path(data_path)
+        super().__init__(data_path, **kwargs)
         self.use_recalibrated_state = use_recalibrated_state
         self.progress_callback = progress_callback
 
