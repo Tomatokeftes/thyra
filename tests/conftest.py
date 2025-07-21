@@ -27,7 +27,8 @@ def mock_reader():
     from msiconvert.core.base_reader import BaseMSIReader
 
     class MockMSIReader(BaseMSIReader):
-        def __init__(self):
+        def __init__(self, data_path=None, **kwargs):
+            super().__init__(data_path or Path("/mock/path"), **kwargs)
             self.closed = False
 
         def get_metadata(self):

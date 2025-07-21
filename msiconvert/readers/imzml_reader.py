@@ -50,8 +50,8 @@ class ImzMLReader(BaseMSIReader):
         self._coordinates_cache: Dict[int, Tuple[int, int, int]] = {}
 
         # Initialize if path provided
-        if imzml_path is not None:
-            self._initialize_parser(imzml_path)
+        if data_path is not None:
+            self._initialize_parser(data_path)
 
     def _initialize_parser(self, imzml_path: Union[str, Path]) -> None:
         """

@@ -3,8 +3,12 @@ Integration tests using real Bruker dataset.
 
 These tests ensure that the BrukerReader works correctly with actual data,
 particularly for constructor calls and pixel size detection.
+
+NOTE: These tests are optional and will skip if the real dataset is not available.
+They are primarily for local development and validation.
 """
 
+import os
 import pytest
 from pathlib import Path
 
@@ -12,16 +16,28 @@ from msiconvert.readers.bruker import BrukerReader
 from msiconvert.core.registry import detect_format, get_reader_class
 
 
+@pytest.mark.skipif(
+    os.getenv("CI") == "true",
+    reason="Real Bruker dataset not available in CI environment"
+)
 class TestBrukerRealData:
-    """Test BrukerReader with real dataset."""
+    """Test BrukerReader with real dataset (optional, skipped in CI)."""
     
     @pytest.fixture
     def bruker_data_path(self):
         """Path to real Bruker test dataset."""
-        data_path = Path(__file__).parent.parent.parent / "data" / "20231109_PEA_NEDC.d"
-        if not data_path.exists():
-            pytest.skip(f"Bruker test dataset not found at {data_path}")
-        return data_path
+        # Try multiple possible locations for the dataset
+        possible_paths = [
+            Path(__file__).parent.parent.parent / "data" / "20231109_PEA_NEDC.d",  # Local data folder
+            Path("C:/Users/P70078823/Desktop/MSIConverter/data/20231109_PEA_NEDC.d"),  # Absolute path
+        ]
+        
+        for data_path in possible_paths:
+            if data_path.exists():
+                return data_path
+                
+        pytest.skip(f"Bruker test dataset not found. Tried: {[str(p) for p in possible_paths]}")
+        return None
     
     def test_bruker_reader_instantiation(self, bruker_data_path):
         """Test that BrukerReader can be instantiated with real data."""
