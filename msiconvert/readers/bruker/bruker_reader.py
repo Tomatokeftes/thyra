@@ -16,7 +16,7 @@ from tqdm import tqdm
 
 from ...core.base_reader import BaseMSIReader
 from ...core.registry import register_reader
-from .core.exceptions import BrukerReaderError, DataError, FileFormatError, SDKError
+from ...utils.bruker_exceptions import BrukerReaderError, DataError, FileFormatError, SDKError
 from .sdk.dll_manager import DLLManager
 from .sdk.sdk_functions import SDKFunctions
 from .utils.batch_processor import BatchProcessor

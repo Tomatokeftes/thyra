@@ -93,7 +93,7 @@ class MassAxisBuilder:
             return "streaming"  # Safe default for unknown size
 
         # Estimate memory requirements
-        estimated_peaks_per_spectrum = 1000  # Conservative estimate
+        estimated_peaks_per_spectrum = 1500  # Conservative estimate
         estimated_total_peaks = total_spectra * estimated_peaks_per_spectrum
         estimated_memory_mb = (
             estimated_total_peaks * 8 / 1024 / 1024
