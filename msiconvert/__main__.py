@@ -22,7 +22,7 @@ def prompt_for_pixel_size(detected_size=None):
     """
     if detected_size is not None:
         print(
-            f"\n✓ Automatically detected pixel size: {detected_size[0]:.1f} x {detected_size[1]:.1f} μm"
+            f"\nOK Automatically detected pixel size: {detected_size[0]:.1f} x {detected_size[1]:.1f} um"
         )
         while True:
             response = input("Use detected pixel size? [Y/n]: ").strip().lower()
@@ -36,9 +36,9 @@ def prompt_for_pixel_size(detected_size=None):
     # Manual input
     while True:
         try:
-            print("\n✗ Pixel size could not be automatically detected.")
+            print("\nPixel size could not be automatically detected.")
             pixel_size_input = input(
-                "Please enter pixel size in micrometers (μm): "
+                "Please enter pixel size in micrometers (um): "
             ).strip()
             pixel_size = float(pixel_size_input)
             if pixel_size <= 0:
@@ -52,27 +52,60 @@ def prompt_for_pixel_size(detected_size=None):
             sys.exit(1)
 
 
-def detect_pixel_size_interactive(reader):
+def detect_pixel_size_interactive(reader, input_format):
     """
     Try automatic detection and fall back to interactive prompt if needed.
 
     Args:
         reader: MSI reader instance
+        input_format: Format of the input file
 
     Returns:
-        float: Pixel size in micrometers
+        tuple: (pixel_size, detection_info_dict)
     """
     logging.info("Attempting automatic pixel size detection...")
     detected_pixel_size = reader.get_pixel_size()
 
     if detected_pixel_size is not None:
         logging.info(
-            f"✓ Automatically detected pixel size: {detected_pixel_size[0]:.1f} x {detected_pixel_size[1]:.1f} μm"
+            f"OK Automatically detected pixel size: {detected_pixel_size[0]:.1f} x {detected_pixel_size[1]:.1f} um"
         )
-        return prompt_for_pixel_size(detected_pixel_size)
+        selected_pixel_size = prompt_for_pixel_size(detected_pixel_size)
+        
+        # If user selected the detected size, create automatic detection info
+        if abs(selected_pixel_size - detected_pixel_size[0]) < 0.01:  # Used detected size
+            detection_info = {
+                "method": "automatic_interactive",
+                "detected_x_um": float(detected_pixel_size[0]),
+                "detected_y_um": float(detected_pixel_size[1]),
+                "source_format": input_format,
+                "detection_successful": True,
+                "note": "Pixel size automatically detected from source metadata and confirmed by user",
+            }
+        else:  # User entered different value
+            detection_info = {
+                "method": "manual_override",
+                "detected_x_um": float(detected_pixel_size[0]),
+                "detected_y_um": float(detected_pixel_size[1]),
+                "user_specified_um": float(selected_pixel_size),
+                "source_format": input_format,
+                "detection_successful": True,
+                "note": "Pixel size was auto-detected but user specified a different value",
+            }
+        
+        return selected_pixel_size, detection_info
     else:
-        logging.warning("✗ Could not automatically detect pixel size from metadata")
-        return prompt_for_pixel_size(None)
+        logging.warning("Could not automatically detect pixel size from metadata")
+        selected_pixel_size = prompt_for_pixel_size(None)
+        
+        detection_info = {
+            "method": "manual",
+            "source_format": input_format,
+            "detection_successful": False,
+            "note": "Pixel size could not be auto-detected, manually specified by user",
+        }
+        
+        return selected_pixel_size, detection_info
 
 
 def dry_run_conversion(
@@ -121,13 +154,13 @@ def dry_run_conversion(
                     0
                 ]  # Use X size (assuming square pixels)
                 logging.info(
-                    f"✓ Automatically detected pixel size: {detected_pixel_size[0]:.1f} x {detected_pixel_size[1]:.1f} μm"
+                    f"OK Automatically detected pixel size: {detected_pixel_size[0]:.1f} x {detected_pixel_size[1]:.1f} um"
                 )
             else:
-                logging.warning("✗ Could not automatically detect pixel size")
+                logging.warning("Could not automatically detect pixel size")
                 final_pixel_size = 1.0  # Default fallback for dry-run
                 logging.info(
-                    f"Using default pixel size: {final_pixel_size} μm (dry-run mode)"
+                    f"Using default pixel size: {final_pixel_size} um (dry-run mode)"
                 )
 
         # Get basic metadata
@@ -145,7 +178,7 @@ def dry_run_conversion(
         # Show conversion parameters
         logging.info(f"Output format: {format_type}")
         logging.info(f"Dataset ID: {dataset_id}")
-        logging.info(f"Pixel size: {final_pixel_size} μm")
+        logging.info(f"Pixel size: {final_pixel_size} um")
         logging.info(f"3D handling: {handle_3d}")
         logging.info(f"Output path: {output_path}")
 
@@ -227,10 +260,10 @@ def main():
             reader = reader_class(input_path)
 
             # Get pixel size interactively
-            final_pixel_size = detect_pixel_size_interactive(reader)
+            final_pixel_size, detection_info = detect_pixel_size_interactive(reader, input_format)
             reader.close()
 
-            logging.info(f"Using pixel size: {final_pixel_size} μm")
+            logging.info(f"Using pixel size: {final_pixel_size} um")
         except Exception as e:
             logging.error(f"Error during pixel size detection: {e}")
             logging.error("Conversion aborted.")
@@ -247,7 +280,8 @@ def main():
             handle_3d=args.handle_3d,
         )
     else:
-        # Convert MSI data
+        # Convert MSI data - pass detection_info if available
+        detection_info_override = detection_info if 'detection_info' in locals() else None
         success = convert_msi(
             args.input,
             args.output,
@@ -255,6 +289,7 @@ def main():
             dataset_id=args.dataset_id,
             pixel_size_um=final_pixel_size,
             handle_3d=args.handle_3d,
+            pixel_size_detection_info_override=detection_info_override,
         )
 
     if success and args.optimize_chunks and not args.dry_run:

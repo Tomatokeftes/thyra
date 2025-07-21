@@ -29,6 +29,7 @@ def convert_msi(
     dataset_id: str = "msi_dataset",
     pixel_size_um: float = None,
     handle_3d: bool = False,
+    pixel_size_detection_info_override: dict = None,
     **kwargs,
 ) -> bool:
     """Convert MSI data to the specified format with enhanced error handling and automatic pixel size detection."""
@@ -85,7 +86,7 @@ def convert_msi(
 
         # Handle automatic pixel size detection if not provided
         final_pixel_size = pixel_size_um
-        pixel_size_detection_info = None
+        pixel_size_detection_info = pixel_size_detection_info_override
 
         if pixel_size_um is None:
             logging.info("Attempting automatic pixel size detection...")
@@ -95,7 +96,7 @@ def convert_msi(
                     0
                 ]  # Use X size (assuming square pixels)
                 logging.info(
-                    f"✓ Automatically detected pixel size: {detected_pixel_size[0]:.1f} x {detected_pixel_size[1]:.1f} μm"
+                    f"OK Automatically detected pixel size: {detected_pixel_size[0]:.1f} x {detected_pixel_size[1]:.1f} um"
                 )
 
                 # Create pixel size detection provenance metadata
@@ -109,14 +110,14 @@ def convert_msi(
                 }
             else:
                 logging.error(
-                    "✗ Could not automatically detect pixel size from metadata"
+                    "ERROR Could not automatically detect pixel size from metadata"
                 )
                 logging.error(
                     "Please specify --pixel-size manually or ensure the input file contains pixel size metadata"
                 )
                 return False
-        else:
-            # Manual pixel size was provided
+        elif pixel_size_detection_info_override is None:
+            # Manual pixel size was provided and no override info provided
             pixel_size_detection_info = {
                 "method": "manual",
                 "source_format": input_format,
