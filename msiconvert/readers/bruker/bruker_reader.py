@@ -156,6 +156,8 @@ class BrukerReader(BaseMSIReader):
             max_batch_size=batch_size or 100,
             progress_callback=self.progress_callback,
         )
+        # Disable batch processor progress bars to avoid double progress display
+        self.batch_processor._quiet_mode = True
 
     def _initialize_sdk(self) -> None:
         """Initialize the Bruker SDK with error handling."""
@@ -476,7 +478,7 @@ class BrukerReader(BaseMSIReader):
             total=frame_count,
             desc="Reading spectra",
             unit="spectrum",
-            disable=getattr(self, "_quiet_mode", False),
+            disable=True,  # Disable to avoid double progress with converter
         ) as pbar:
             for frame_id in range(1, frame_count + 1):
                 try:
@@ -547,20 +549,15 @@ class BrukerReader(BaseMSIReader):
 
             return results
 
-        # Create frame ID batches
+        # Create frame ID iterator
         frame_ids = list(range(1, frame_count + 1))
 
         # Process in batches
         for batch_results in self.batch_processor.process_spectrum_batches(
-            iter(
-                [
-                    frame_ids[i : i + batch_size]
-                    for i in range(0, len(frame_ids), batch_size)
-                ]
-            ),
-            (frame_count + batch_size - 1) // batch_size,  # Number of batches
+            iter(frame_ids),  # Pass individual frame IDs
+            frame_count,  # Total number of frames
             batch_processor_func,
-            batch_size=1,  # Process one batch at a time
+            batch_size=batch_size,  # Use the requested batch size
         ):
             for spectrum_data in batch_results:
                 yield spectrum_data
