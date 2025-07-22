@@ -18,9 +18,6 @@ SPATIALDATA_AVAILABLE = False
 _import_error_msg = None
 try:
     import geopandas as gpd
-    import shapely
-    import spatialdata
-    import xarray
     from shapely.geometry import box
     from spatialdata import SpatialData
     from spatialdata.models import Image2DModel, ShapesModel, TableModel
@@ -642,34 +639,40 @@ class SpatialDataConverter(BaseMSIConverter):
 
         # Add explicit pixel size metadata to SpatialData object attributes
         # This follows SpatialData conventions and gets stored in root .zattrs
-        if not hasattr(metadata, 'attrs') or metadata.attrs is None:
+        if not hasattr(metadata, "attrs") or metadata.attrs is None:
             metadata.attrs = {}
-        
+
         logging.info(f"Adding explicit pixel size metadata to SpatialData.attrs")
-        
+
         # Add pixel size metadata to SpatialData attributes
         pixel_size_attrs = {
-            'pixel_size_x_um': float(self.pixel_size_um),
-            'pixel_size_y_um': float(self.pixel_size_um),
-            'pixel_size_units': 'micrometers',
-            'coordinate_system': 'physical_micrometers',
-            'msi_converter_version': '1.8.2',  # Could be made dynamic
-            'conversion_timestamp': pd.Timestamp.now().isoformat(),
+            "pixel_size_x_um": float(self.pixel_size_um),
+            "pixel_size_y_um": float(self.pixel_size_um),
+            "pixel_size_units": "micrometers",
+            "coordinate_system": "physical_micrometers",
+            "msi_converter_version": "1.8.2",  # Could be made dynamic
+            "conversion_timestamp": pd.Timestamp.now().isoformat(),
         }
-        
+
         # Add pixel size detection provenance if available
         if self._pixel_size_detection_info is not None:
-            pixel_size_attrs['pixel_size_detection_info'] = dict(self._pixel_size_detection_info)
-            logging.info(f"Added pixel size detection info: {self._pixel_size_detection_info}")
-        
+            pixel_size_attrs["pixel_size_detection_info"] = dict(
+                self._pixel_size_detection_info
+            )
+            logging.info(
+                f"Added pixel size detection info: {self._pixel_size_detection_info}"
+            )
+
         # Add conversion metadata
-        pixel_size_attrs['msi_dataset_info'] = {
+        pixel_size_attrs["msi_dataset_info"] = {
             "dataset_id": self.dataset_id,
-            "total_grid_pixels": self._dimensions[0] * self._dimensions[1] * self._dimensions[2],
+            "total_grid_pixels": self._dimensions[0]
+            * self._dimensions[1]
+            * self._dimensions[2],
             "non_empty_pixels": self._non_empty_pixel_count,
             "dimensions_xyz": list(self._dimensions),
         }
-        
+
         # Update SpatialData attributes
         metadata.attrs.update(pixel_size_attrs)
 

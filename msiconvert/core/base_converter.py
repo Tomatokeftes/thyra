@@ -40,7 +40,9 @@ class BaseMSIConverter(ABC):
         self._common_mass_axis: Optional[NDArray[np.float64]] = None
         self._dimensions: Optional[Tuple[int, int, int]] = None
         self._metadata: Optional[dict[str, Any]] = None
-        self._buffer_size = 100000  # Default buffer size for processing spectra
+        from ..config import DEFAULT_BUFFER_SIZE
+
+        self._buffer_size = DEFAULT_BUFFER_SIZE
 
     def convert(self) -> bool:
         """
