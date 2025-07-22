@@ -122,7 +122,6 @@ def dry_run_conversion(
     input_path = Path(input_path).resolve()
     output_path = Path(output_path).resolve()
 
-    # Check if input exists
     if not input_path.exists():
         logging.error(f"Input path does not exist: {input_path}")
         return False

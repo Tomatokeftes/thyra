@@ -6,7 +6,6 @@ from pathlib import Path
 
 from .core.registry import detect_format, get_converter_class, get_reader_class
 
-# from cryptography.utils import CryptographyDeprecationWarning
 
 
 warnings.filterwarnings(
@@ -34,7 +33,6 @@ def convert_msi(
 ) -> bool:
     """Convert MSI data to the specified format with enhanced error handling and automatic pixel size detection."""
 
-    # Input validation
     if not input_path or not isinstance(input_path, (str, Path)):
         logging.error("Input path must be a valid string or Path object")
         return False
@@ -75,11 +73,9 @@ def convert_msi(
         return False
 
     try:
-        # Detect input format
         input_format = detect_format(input_path)
         logging.info(f"Detected format: {input_format}")
 
-        # Create reader
         reader_class = get_reader_class(input_format)
         logging.info(f"Using reader: {reader_class.__name__}")
         reader = reader_class(input_path)

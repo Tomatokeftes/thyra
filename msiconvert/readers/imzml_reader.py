@@ -117,7 +117,6 @@ class ImzMLReader(BaseMSIReader):
         self._coordinates_cache = {}
 
         for idx, (x, y, z) in enumerate(self.parser.coordinates):  # type: ignore
-            # Adjust coordinates to 0-based
             self._coordinates_cache[idx] = (x - 1, y - 1, z - 1 if z > 0 else 0)
 
         logging.info(f"Cached {len(self._coordinates_cache)} coordinates")
@@ -299,7 +298,6 @@ class ImzMLReader(BaseMSIReader):
             parser = cast(ImzMLParser, self.parser)
 
             if self.is_continuous:
-                # For continuous data, all spectra share the same m/z values
                 logging.info("Using m/z values from first spectrum (continuous mode)")
                 spectrum_data = parser.getspectrum(0)  # type: ignore
                 if spectrum_data is None or len(spectrum_data) < 1:  # type: ignore
@@ -423,7 +421,6 @@ class ImzMLReader(BaseMSIReader):
                             coords = self._coordinates_cache[idx]
                         else:
                             x, y, z = parser.coordinates[idx]  # type: ignore
-                            # Adjust coordinates to 0-based for internal use
                             coords = cast(
                                 Tuple[int, int, int],
                                 (x - 1, y - 1, z - 1 if z > 0 else 0),
@@ -454,7 +451,6 @@ class ImzMLReader(BaseMSIReader):
                                 coords = self._coordinates_cache[idx]
                             else:
                                 x, y, z = parser.coordinates[idx]  # type: ignore
-                                # Adjust coordinates to 0-based for internal use
                                 coords = cast(
                                     Tuple[int, int, int],
                                     (x - 1, y - 1, z - 1 if z > 0 else 0),

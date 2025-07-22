@@ -84,7 +84,6 @@ class DLLManager:
         # Get potential library paths
         library_paths = get_dll_paths(data_directory)
 
-        # Try to load each library path
         for lib_path in library_paths:
             if not validate_library_path(lib_path):
                 continue
