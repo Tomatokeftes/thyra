@@ -6,11 +6,8 @@ from typing import Callable, Dict, Type
 from .base_converter import BaseMSIConverter
 from .base_reader import BaseMSIReader
 
-# Registries for readers and converters
 reader_registry: Dict[str, Type[BaseMSIReader]] = {}
 converter_registry: Dict[str, Type[BaseMSIConverter]] = {}
-
-# Registry for format detection
 format_detectors: Dict[str, Callable[[Path], bool]] = {}
 
 
@@ -99,7 +96,6 @@ def detect_format(input_path: Path) -> str:
         except Exception as e:
             logging.warning(f"Error in format detector for {format_name}: {e}")
 
-    # If we get here, no format was detected
     supported_formats = ", ".join(format_detectors.keys())
     raise ValueError(
         f"Unable to detect format for: {input_path}. "

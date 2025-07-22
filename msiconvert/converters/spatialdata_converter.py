@@ -336,7 +336,6 @@ class SpatialDataConverter(BaseMSIConverter):
         self._non_empty_pixel_count = data_structures["pixel_count"]
 
         if data_structures["mode"] == "2d_slices":
-            # Process each slice
             for slice_id, slice_data in data_structures["slices_data"].items():
                 try:
                     # Convert to CSR format for efficiency

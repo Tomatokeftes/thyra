@@ -36,9 +36,7 @@ def optimize_zarr_chunks(
         zarr_store = zarr.open_group(zarr_path, mode="r")
         array = zarr_store[array_path]
 
-        # Determine optimal chunks if not provided
         if chunks is None:
-            # Optimize chunks based on array shape
             # For MSI data, chunk along m/z dimension and larger spatial tiles
             shape = array.shape
             if len(shape) == 4:  # (c, z, y, x)

@@ -51,19 +51,10 @@ class BaseMSIConverter(ABC):
         bool: True if conversion was successful, False otherwise.
         """
         try:
-            # 1. Initialize and prepare data
             self._initialize_conversion()
-
-            # 2. Create output-specific data structures
             data_structures = self._create_data_structures()
-
-            # 3. Process spectra
             self._process_spectra(data_structures)
-
-            # 4. Post-process and finalize data
             self._finalize_data(data_structures)
-
-            # 5. Save to disk in format-specific way
             success = self._save_output(data_structures)
 
             return success
@@ -124,15 +115,11 @@ class BaseMSIConverter(ABC):
         if self._dimensions is None:
             raise ValueError("Dimensions are not initialized.")
 
-        # Get total number of spectra for progress tracking
-        # Since there's no standard n_spectra property, we'll calculate it on the fly
-        # For most readers, this comes from coordinate count or similar
         total_spectra = self._get_total_spectra_count()
         logging.info(
             f"Converting {total_spectra} spectra to {self.__class__.__name__.replace('Converter', '')} format..."
         )
 
-        # Enable quiet mode on reader to avoid duplicate progress bars
         setattr(self.reader, "_quiet_mode", True)
 
         # Process spectra with unified progress tracking
