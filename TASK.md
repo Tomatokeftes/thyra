@@ -102,6 +102,8 @@ This document outlines the comprehensive refactoring tasks needed to transform m
 
 - [x] **Gradually Tighten Flake8 Rules** *(Major Progress - Round 6 Complete)*
   - **Description:** ✅ **FURTHER COMPLETED VIOLATIONS:** F401 (unused imports: 54→39→~15, removed unused os, shapely, spatialdata, xarray, List, BrukerReaderError, numpy imports from key modules). **REMAINING:** F821 (undefined names), E713 (membership tests), F841 (unused variables), E501 (line length violations). Core F401 violations remaining are intentional API exports in __init__.py files.
+- [x] **Gradually Tighten Flake8 Rules** *(Major Progress - Round 6 Complete)*
+  - **Description:** ✅ **FURTHER COMPLETED VIOLATIONS:** F401 (unused imports: 54→39→~15, removed unused os, shapely, spatialdata, xarray, List, BrukerReaderError, numpy imports from key modules). **REMAINING:** F821 (undefined names), E713 (membership tests), F841 (unused variables), E501 (line length violations). Core F401 violations remaining are intentional API exports in __init__.py files.
   - **Rationale:** Gradual improvement of code quality without disrupting development workflow. Each category should be tackled separately to make progress manageable.
   - **Labels:** `priority:medium`, `area:code-quality`, `area:technical-debt`
 
@@ -178,6 +180,8 @@ This document outlines the comprehensive refactoring tasks needed to transform m
 
 ### Code Refactoring & Maintainability
 
+- [x] **Extract Configuration Management System** *(Foundation Complete)*
+  - **Description:** ✅ **COMPLETED:** Created centralized `msiconvert/config.py` with all core constants: DEFAULT_BUFFER_SIZE (100000), batch sizes, memory limits (MB_TO_BYTES, LOG_FILE_MAX_SIZE_MB), performance thresholds, pixel size tolerance, and SDK buffer settings. Updated key modules (base_converter.py, __main__.py, logging_config.py) to import from config. **REMAINING:** Full YAML/JSON loading system and validation (phase 2).
 - [x] **Extract Configuration Management System** *(Foundation Complete)*
   - **Description:** ✅ **COMPLETED:** Created centralized `msiconvert/config.py` with all core constants: DEFAULT_BUFFER_SIZE (100000), batch sizes, memory limits (MB_TO_BYTES, LOG_FILE_MAX_SIZE_MB), performance thresholds, pixel size tolerance, and SDK buffer settings. Updated key modules (base_converter.py, __main__.py, logging_config.py) to import from config. **REMAINING:** Full YAML/JSON loading system and validation (phase 2).
   - **Rationale:** Centralized configuration improves maintainability, allows easy tuning for different use cases, and makes the codebase more professional.
