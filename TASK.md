@@ -40,7 +40,7 @@ This document outlines the comprehensive refactoring tasks needed to transform m
 ### Round 6 - Code Quality and User Experience ✅
 - **Enhanced Input Validation** - Added early CLI validation with file existence checks, format-specific validation (ImzML+.ibd, Bruker .d+analysis files), and descriptive error messages with actionable suggestions
 - **Configuration Management Foundation** - Created centralized config.py with all core constants, updated key modules to use centralized configuration
-- **Code Quality Improvements** - Further F401 unused import cleanup (54→~15), better module docstrings, cleaner import structure, replaced print() with proper logging in data_processors.py
+- **Code Quality Improvements** - Further F401 unused import cleanup (54→~15), better module docstrings, cleaner import structure, replaced print() with proper logging in data_processors.py (with required import fix)
 - **Professional Error Handling** - Enhanced format detection with helpful suggestions, better CLI parameter validation with specific error context
 - **Documentation Fixes** - Fixed FIXME comment in PSI-MS ontology with proper research and accurate obsolete term documentation, recognized comprehensive package metadata already in place
 
