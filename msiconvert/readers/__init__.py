@@ -4,6 +4,9 @@ from pathlib import Path
 
 from ..core.registry import register_format_detector
 
+# Import readers to trigger registration
+from . import bruker, imzml_reader
+
 
 @register_format_detector("imzml")
 def detect_imzml(input_path: Path) -> bool:

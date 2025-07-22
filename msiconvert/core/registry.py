@@ -97,7 +97,33 @@ def detect_format(input_path: Path) -> str:
             logging.warning(f"Error in format detector for {format_name}: {e}")
 
     supported_formats = ", ".join(format_detectors.keys())
+
+    # Provide helpful suggestions based on file extension
+    suggestions = []
+    if input_path.is_file():
+        if input_path.suffix.lower() == ".imzml":
+            ibd_path = input_path.with_suffix(".ibd")
+            if not ibd_path.exists():
+                suggestions.append(
+                    f"ImzML files require a corresponding .ibd file: {ibd_path}"
+                )
+        elif input_path.suffix.lower() not in [".imzml"]:
+            suggestions.append(f"Unsupported file extension: {input_path.suffix}")
+    elif input_path.is_dir():
+        if input_path.suffix.lower() == ".d":
+            if (
+                not (input_path / "analysis.tsf").exists()
+                and not (input_path / "analysis.tdf").exists()
+            ):
+                suggestions.append(
+                    "Bruker .d directories require analysis.tsf or analysis.tdf files"
+                )
+        else:
+            suggestions.append("Only .d directories are supported for Bruker format")
+
+    suggestion_text = "\nSuggestion: " + "; ".join(suggestions) if suggestions else ""
+
     raise ValueError(
         f"Unable to detect format for: {input_path}. "
-        f"Supported formats are: {supported_formats}"
+        f"Supported formats: {supported_formats}.{suggestion_text}"
     )

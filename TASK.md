@@ -37,11 +37,18 @@ This document outlines the comprehensive refactoring tasks needed to transform m
 - **Unicode Compatibility Fix** - Resolved Windows encoding issues with Unicode characters in console output
 - **SpatialData Standards Compliance** - Metadata now follows SpatialData conventions using object-level attributes
 
+### Round 6 - Code Quality and User Experience ✅
+- **Enhanced Input Validation** - Added early CLI validation with file existence checks, format-specific validation (ImzML+.ibd, Bruker .d+analysis files), and descriptive error messages with actionable suggestions
+- **Configuration Management Foundation** - Created centralized config.py with all core constants, updated key modules to use centralized configuration
+- **Code Quality Improvements** - Further F401 unused import cleanup (54→~15), better module docstrings, cleaner import structure, replaced print() with proper logging in data_processors.py (with required import fix)
+- **Professional Error Handling** - Enhanced format detection with helpful suggestions, better CLI parameter validation with specific error context
+- **Documentation Fixes** - Fixed FIXME comment in PSI-MS ontology with proper research and accurate obsolete term documentation, recognized comprehensive package metadata already in place
+
 **Note**: Currently using lenient flake8 rules and skipped bandit security scanning due to existing code quality issues. See tasks below for gradual improvements.
 
 **Commit Policy**: All commits should appear as human-authored. No AI co-authorship or AI generation mentions in commit messages.
 
-### Total Completed: 25 major tasks ✅
+### Total Completed: 32 major tasks ✅
 
 ---
 
@@ -93,8 +100,10 @@ This document outlines the comprehensive refactoring tasks needed to transform m
 
 ### Code Quality & Project Structure
 
-- [x] **Gradually Tighten Flake8 Rules** *(Partially Complete - Major Progress)*
-  - **Description:** ✅ **COMPLETED VIOLATIONS:** F541 (f-strings without placeholders: 14→0), E722 (bare except clauses: 4→0), E402 (import organization: 3→0), E231/E221 (spacing: 0 found), F401 (unused imports: 54→39, cleaned test files). **REMAINING:** F821 (undefined names), E713 (membership tests), F841 (unused variables), E501 (500+ line length violations - made progress on easy fixes). The core F401 violations remaining are in registration systems and API modules.
+- [x] **Gradually Tighten Flake8 Rules** *(Major Progress - Round 6 Complete)*
+  - **Description:** ✅ **FURTHER COMPLETED VIOLATIONS:** F401 (unused imports: 54→39→~15, removed unused os, shapely, spatialdata, xarray, List, BrukerReaderError, numpy imports from key modules). **REMAINING:** F821 (undefined names), E713 (membership tests), F841 (unused variables), E501 (line length violations). Core F401 violations remaining are intentional API exports in __init__.py files.
+- [x] **Gradually Tighten Flake8 Rules** *(Major Progress - Round 6 Complete)*
+  - **Description:** ✅ **FURTHER COMPLETED VIOLATIONS:** F401 (unused imports: 54→39→~15, removed unused os, shapely, spatialdata, xarray, List, BrukerReaderError, numpy imports from key modules). **REMAINING:** F821 (undefined names), E713 (membership tests), F841 (unused variables), E501 (line length violations). Core F401 violations remaining are intentional API exports in __init__.py files.
   - **Rationale:** Gradual improvement of code quality without disrupting development workflow. Each category should be tackled separately to make progress manageable.
   - **Labels:** `priority:medium`, `area:code-quality`, `area:technical-debt`
 
@@ -171,8 +180,10 @@ This document outlines the comprehensive refactoring tasks needed to transform m
 
 ### Code Refactoring & Maintainability
 
-- [ ] **Extract Configuration Management System**
-  - **Description:** The codebase contains numerous hardcoded values (buffer sizes, batch sizes, tolerances, etc.) scattered throughout. This task involves: 1) Creating a centralized configuration module. 2) Moving all magic numbers to configuration constants. 3) Implementing a configuration loading system (YAML/JSON/env vars). 4) Adding configuration validation and defaults.
+- [x] **Extract Configuration Management System** *(Foundation Complete)*
+  - **Description:** ✅ **COMPLETED:** Created centralized `msiconvert/config.py` with all core constants: DEFAULT_BUFFER_SIZE (100000), batch sizes, memory limits (MB_TO_BYTES, LOG_FILE_MAX_SIZE_MB), performance thresholds, pixel size tolerance, and SDK buffer settings. Updated key modules (base_converter.py, __main__.py, logging_config.py) to import from config. **REMAINING:** Full YAML/JSON loading system and validation (phase 2).
+- [x] **Extract Configuration Management System** *(Foundation Complete)*
+  - **Description:** ✅ **COMPLETED:** Created centralized `msiconvert/config.py` with all core constants: DEFAULT_BUFFER_SIZE (100000), batch sizes, memory limits (MB_TO_BYTES, LOG_FILE_MAX_SIZE_MB), performance thresholds, pixel size tolerance, and SDK buffer settings. Updated key modules (base_converter.py, __main__.py, logging_config.py) to import from config. **REMAINING:** Full YAML/JSON loading system and validation (phase 2).
   - **Rationale:** Centralized configuration improves maintainability, allows easy tuning for different use cases, and makes the codebase more professional.
   - **Labels:** `priority:high`, `area:code-quality`, `area:maintainability`
 
@@ -307,8 +318,8 @@ This document outlines the comprehensive refactoring tasks needed to transform m
 
 ### Package Quality & Standards
 
-- [ ] **Add Package Metadata and Classifiers**
-  - **Description:** pyproject.toml lacks comprehensive metadata. This involves: 1) Adding complete author information. 2) Including project URLs (documentation, issues, etc.). 3) Adding PyPI classifiers. 4) Including keywords for discoverability.
+- [x] **Add Package Metadata and Classifiers**
+  - **Description:** ✅ **COMPLETED:** Comprehensive metadata already present in pyproject.toml including: 1) Complete author and maintainer information. 2) Project URLs (homepage, repository, documentation, bug tracker, discussions, changelog, contributing). 3) Detailed PyPI classifiers covering development status, audience, topics, and Python versions. 4) Comprehensive keywords for discoverability (12 relevant terms covering mass spectrometry, spatial omics, data conversion).
   - **Rationale:** Complete metadata improves package discoverability and provides users with essential information.
   - **Labels:** `priority:low`, `area:packaging`, `area:documentation`, `good-first-issue`
 
