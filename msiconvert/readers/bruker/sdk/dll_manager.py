@@ -6,7 +6,6 @@ with comprehensive error handling and fallback mechanisms.
 """
 
 import logging
-import os
 import platform
 from ctypes import CDLL, cdll
 from pathlib import Path

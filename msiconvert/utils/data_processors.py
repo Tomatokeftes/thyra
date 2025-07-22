@@ -86,5 +86,5 @@ def optimize_zarr_chunks(
 
         return True
     except Exception as e:
-        print(f"Error optimizing chunks: {e}")
+        logging.error(f"Error optimizing chunks: {e}")
         return False

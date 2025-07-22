@@ -6,7 +6,6 @@ Bruker SDK libraries across different operating systems and installation paths.
 """
 
 import logging
-import os
 import platform
 from pathlib import Path
 from typing import List, Optional

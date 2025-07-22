@@ -1005,7 +1005,10 @@ terms = {
     "MS:1001060": ("quality estimation method details", None),
     "MS:1001061": ("neutral loss", None),
     "MS:1001062": ("Mascot MGF format", None),
-    "MS:1001065": ("TODOscoring model", None),
+    "MS:1001065": (
+        "TODOscoring model",
+        None,
+    ),  # OBSOLETE term in PSI-MS ontology - originally incomplete, replaced by Phenyx:ScoringModel
     "MS:1001066": ("ions series considered in search", None),
     "MS:1001068": ("SEQUEST:sort by Sp", "xsd:boolean"),
     "MS:1001069": ("SEQUEST:sort by TIC", "xsd:boolean"),

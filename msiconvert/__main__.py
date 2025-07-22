@@ -71,9 +71,13 @@ def detect_pixel_size_interactive(reader, input_format):
             f"OK Automatically detected pixel size: {detected_pixel_size[0]:.1f} x {detected_pixel_size[1]:.1f} um"
         )
         selected_pixel_size = prompt_for_pixel_size(detected_pixel_size)
-        
+
         # If user selected the detected size, create automatic detection info
-        if abs(selected_pixel_size - detected_pixel_size[0]) < 0.01:  # Used detected size
+        from msiconvert.config import PIXEL_SIZE_TOLERANCE
+
+        if (
+            abs(selected_pixel_size - detected_pixel_size[0]) < PIXEL_SIZE_TOLERANCE
+        ):  # Used detected size
             detection_info = {
                 "method": "automatic_interactive",
                 "detected_x_um": float(detected_pixel_size[0]),
@@ -92,19 +96,19 @@ def detect_pixel_size_interactive(reader, input_format):
                 "detection_successful": True,
                 "note": "Pixel size was auto-detected but user specified a different value",
             }
-        
+
         return selected_pixel_size, detection_info
     else:
         logging.warning("Could not automatically detect pixel size from metadata")
         selected_pixel_size = prompt_for_pixel_size(None)
-        
+
         detection_info = {
             "method": "manual",
             "source_format": input_format,
             "detection_successful": False,
             "note": "Pixel size could not be auto-detected, manually specified by user",
         }
-        
+
         return selected_pixel_size, detection_info
 
 
@@ -169,9 +173,13 @@ def dry_run_conversion(
 
         # Estimate output size (very rough)
         common_mass_axis = reader.get_common_mass_axis()
-        estimated_size_mb = (reader.n_spectra * len(common_mass_axis) * 4) / (
-            1024 * 1024
-        )  # 4 bytes per float32
+        from msiconvert.config import ESTIMATED_BYTES_PER_SPECTRUM_POINT, MB_TO_BYTES
+
+        estimated_size_mb = (
+            reader.n_spectra
+            * len(common_mass_axis)
+            * ESTIMATED_BYTES_PER_SPECTRUM_POINT
+        ) / MB_TO_BYTES
         logging.info(f"Estimated output size: ~{estimated_size_mb:.1f} MB")
 
         # Show conversion parameters
@@ -237,12 +245,40 @@ def main():
 
     args = parser.parse_args()
 
-    # Input validation
+    # Input validation - check early to give better error messages
     if args.pixel_size is not None and args.pixel_size <= 0:
-        parser.error("Pixel size must be positive")
+        parser.error("Pixel size must be positive (got: {})".format(args.pixel_size))
 
     if not args.dataset_id.strip():
         parser.error("Dataset ID cannot be empty")
+
+    # Validate input path exists and is accessible
+    input_path = Path(args.input)
+    if not input_path.exists():
+        parser.error(f"Input path does not exist: {input_path}")
+
+    # Check for common input format issues
+    if input_path.is_file() and input_path.suffix.lower() == ".imzml":
+        ibd_path = input_path.with_suffix(".ibd")
+        if not ibd_path.exists():
+            parser.error(
+                f"ImzML file requires corresponding .ibd file, but not found: {ibd_path}"
+            )
+    elif input_path.is_dir() and input_path.suffix.lower() == ".d":
+        if (
+            not (input_path / "analysis.tsf").exists()
+            and not (input_path / "analysis.tdf").exists()
+        ):
+            parser.error(
+                f"Bruker .d directory requires analysis.tsf or analysis.tdf file: {input_path}"
+            )
+
+    # Warn about output path conflicts early (but allow dry-run)
+    output_path = Path(args.output)
+    if not args.dry_run and output_path.exists():
+        parser.error(
+            f"Output path already exists (use --dry-run to preview): {output_path}"
+        )
 
     # Configure logging
     setup_logging(log_level=getattr(logging, args.log_level), log_file=args.log_file)
@@ -259,7 +295,9 @@ def main():
             reader = reader_class(input_path)
 
             # Get pixel size interactively
-            final_pixel_size, detection_info = detect_pixel_size_interactive(reader, input_format)
+            final_pixel_size, detection_info = detect_pixel_size_interactive(
+                reader, input_format
+            )
             reader.close()
 
             logging.info(f"Using pixel size: {final_pixel_size} um")
@@ -280,7 +318,9 @@ def main():
         )
     else:
         # Convert MSI data - pass detection_info if available
-        detection_info_override = detection_info if 'detection_info' in locals() else None
+        detection_info_override = (
+            detection_info if "detection_info" in locals() else None
+        )
         success = convert_msi(
             args.input,
             args.output,

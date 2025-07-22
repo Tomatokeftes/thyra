@@ -9,14 +9,14 @@ import logging
 import sqlite3
 import time
 from pathlib import Path
-from typing import Any, Dict, Generator, List, Optional, Tuple
+from typing import Any, Dict, Generator, Optional, Tuple
 
 import numpy as np
 from tqdm import tqdm
 
 from ...core.base_reader import BaseMSIReader
 from ...core.registry import register_reader
-from ...utils.bruker_exceptions import BrukerReaderError, DataError, FileFormatError, SDKError
+from ...utils.bruker_exceptions import DataError, FileFormatError, SDKError
 from .sdk.dll_manager import DLLManager
 from .sdk.sdk_functions import SDKFunctions
 from .utils.batch_processor import BatchProcessor
