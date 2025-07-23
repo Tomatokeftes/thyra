@@ -41,11 +41,20 @@ class TestImzMLReader:
         imzml_path, _, _, _ = create_minimal_imzml
 
         reader = ImzMLReader(imzml_path)
-        metadata = reader.get_metadata()
 
-        assert "source" in metadata
-        assert str(imzml_path) == metadata["source"]
-        assert "file_mode" in metadata
+        # Test essential metadata
+        essential = reader.get_essential_metadata()
+        assert essential.source_path == str(imzml_path)
+        assert essential.dimensions == (2, 2, 1)
+        assert essential.n_spectra == 4
+
+        # Test comprehensive metadata
+        comprehensive = reader.get_comprehensive_metadata()
+        assert comprehensive.format_specific.get("file_mode") in [
+            "continuous",
+            "processed",
+        ]
+        assert str(imzml_path) in comprehensive.essential.source_path
 
         reader.close()
 
@@ -54,7 +63,8 @@ class TestImzMLReader:
         imzml_path, _, _, _ = create_minimal_imzml
 
         reader = ImzMLReader(imzml_path)
-        dimensions = reader.get_dimensions()
+        essential = reader.get_essential_metadata()
+        dimensions = essential.dimensions
 
         # Our test imzML has a 2x2 grid
         assert len(dimensions) == 3  # (x, y, z)
@@ -137,7 +147,8 @@ class TestImzMLReader:
         assert len(intensities) == 4
 
         # Get dimensions
-        dimensions = reader.get_dimensions()
+        essential = reader.get_essential_metadata()
+        dimensions = essential.dimensions
         assert dimensions[0] == 2  # width
         assert dimensions[1] == 2  # height
 
