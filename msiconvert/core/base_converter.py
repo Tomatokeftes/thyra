@@ -44,6 +44,11 @@ class BaseMSIConverter(ABC):
 
         self._buffer_size = DEFAULT_BUFFER_SIZE
 
+        # Essential metadata properties (loaded during initialization)
+        self._coordinate_bounds: Optional[Tuple[float, float, float, float]] = None
+        self._n_spectra: Optional[int] = None
+        self._estimated_memory_gb: Optional[float] = None
+
     def convert(self) -> bool:
         """
         Template method defining the conversion workflow.
@@ -70,26 +75,42 @@ class BaseMSIConverter(ABC):
             self.reader.close()
 
     def _initialize_conversion(self) -> None:
-        """Initialize conversion by loading dimensions, mass axis and metadata."""
-        logging.info("Initializing conversion...")
+        """Initialize conversion by loading essential metadata first, then other data."""
+        logging.info("Loading essential dataset information...")
         try:
-            self._dimensions = self.reader.get_essential_metadata().dimensions
+            # Load essential metadata first (fast, single query for Bruker)
+            essential = self.reader.get_essential_metadata()
+
+            self._dimensions = essential.dimensions
             if any(d <= 0 for d in self._dimensions):
                 raise ValueError(
                     f"Invalid dimensions: {self._dimensions}. All dimensions must be positive."
                 )
 
+            # Store essential metadata for use throughout conversion
+            self._coordinate_bounds = essential.coordinate_bounds
+            self._n_spectra = essential.n_spectra
+            self._estimated_memory_gb = essential.estimated_memory_gb
+
+            # Override pixel size if not provided and available in metadata
+            if self.pixel_size_um == 1.0 and essential.pixel_size:
+                self.pixel_size_um = essential.pixel_size[0]
+                logging.info(f"Using detected pixel size: {self.pixel_size_um} μm")
+
+            # Load mass axis separately (still expensive operation)
             self._common_mass_axis = self.reader.get_common_mass_axis()
             if len(self._common_mass_axis) == 0:
                 raise ValueError(
                     "Common mass axis is empty. Cannot proceed with conversion."
                 )
 
-            self._metadata = self.reader.get_comprehensive_metadata().raw_metadata
-            if self._metadata is None:  # type: ignore
-                self._metadata = {}  # Initialize with empty dict if None
+            # Only load comprehensive metadata if needed (lazy loading)
+            self._metadata = None  # Will be loaded on demand
 
             logging.info(f"Dataset dimensions: {self._dimensions}")
+            logging.info(f"Coordinate bounds: {self._coordinate_bounds}")
+            logging.info(f"Total spectra: {self._n_spectra}")
+            logging.info(f"Estimated memory: {self._estimated_memory_gb:.2f} GB")
             logging.info(f"Common mass axis length: {len(self._common_mass_axis)}")
         except Exception as e:
             logging.error(f"Error during initialization: {e}")
@@ -138,10 +159,13 @@ class BaseMSIConverter(ABC):
         """
         Get the total number of spectra for progress tracking.
 
-        This is a helper method to calculate the total spectra count since
-        different readers may store this information differently.
+        Uses cached essential metadata for efficient access.
         """
-        # Try common patterns for getting spectra count
+        # Use cached spectra count from essential metadata
+        if self._n_spectra is not None:
+            return self._n_spectra
+
+        # Fallback: try reader-specific methods
         if hasattr(self.reader, "n_spectra"):
             return self.reader.n_spectra
 
@@ -154,16 +178,20 @@ class BaseMSIConverter(ABC):
         if hasattr(self.reader, "_get_frame_count"):
             return self.reader._get_frame_count()
 
-        # Fallback: calculate dimensions and assume all pixels have data
-        # This is less accurate but provides a reasonable estimate
-        dimensions = self.reader.get_essential_metadata().dimensions
-        total_pixels = dimensions[0] * dimensions[1] * dimensions[2]
+        # Final fallback: calculate from dimensions
+        if self._dimensions is not None:
+            total_pixels = (
+                self._dimensions[0] * self._dimensions[1] * self._dimensions[2]
+            )
+            logging.warning(
+                f"Could not determine exact spectra count, estimating {total_pixels} from dimensions"
+            )
+            return total_pixels
 
-        # Log a warning since this is an estimate
-        logging.warning(
-            f"Could not determine exact spectra count, estimating {total_pixels} from dimensions"
+        # Should not reach here if initialization was successful
+        raise ValueError(
+            "Cannot determine spectra count - conversion not properly initialized"
         )
-        return total_pixels
 
     def _process_single_spectrum(
         self,
@@ -195,6 +223,16 @@ class BaseMSIConverter(ABC):
         """
         # Default implementation - to be overridden by subclasses if needed
         pass
+
+    def _get_comprehensive_metadata(self) -> dict[str, Any]:
+        """Lazy load comprehensive metadata when needed."""
+        if self._metadata is None:
+            logging.info("Loading comprehensive metadata...")
+            comprehensive = self.reader.get_comprehensive_metadata()
+            self._metadata = comprehensive.raw_metadata
+            if self._metadata is None:
+                self._metadata = {}
+        return self._metadata
 
     @abstractmethod
     def _save_output(self, data_structures: Any) -> bool:
