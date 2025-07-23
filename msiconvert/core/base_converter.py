@@ -251,14 +251,62 @@ class BaseMSIConverter(ABC):
 
     def add_metadata(self, metadata: Any) -> None:
         """
-        Add metadata to the output.
-        Base implementation to be extended by subclasses.
+        Add comprehensive metadata to the output.
+        Base implementation provides common metadata structure.
+        Subclasses should override to add format-specific metadata storage.
 
         Parameters:
         -----------
         metadata: Any object that can store metadata
         """
-        # This will be implemented by subclasses
+        # Get comprehensive metadata for complete information
+        comprehensive_metadata = self.reader.get_comprehensive_metadata()
+
+        # Create structured metadata dict that subclasses can use
+        self._structured_metadata = {
+            # Conversion metadata
+            "conversion_info": {
+                "dataset_id": self.dataset_id,
+                "pixel_size_um": self.pixel_size_um,
+                "handle_3d": self.handle_3d,
+                "compression_level": self.compression_level,
+                "converter_class": self.__class__.__name__,
+                "conversion_timestamp": pd.Timestamp.now().isoformat(),
+            },
+            # Essential metadata for quick access
+            "essential_metadata": {
+                "dimensions": comprehensive_metadata.essential.dimensions,
+                "coordinate_bounds": comprehensive_metadata.essential.coordinate_bounds,
+                "mass_range": comprehensive_metadata.essential.mass_range,
+                "pixel_size": comprehensive_metadata.essential.pixel_size,
+                "n_spectra": comprehensive_metadata.essential.n_spectra,
+                "estimated_memory_gb": comprehensive_metadata.essential.estimated_memory_gb,
+                "source_path": comprehensive_metadata.essential.source_path,
+                "is_3d": comprehensive_metadata.essential.is_3d,
+                "has_pixel_size": comprehensive_metadata.essential.has_pixel_size,
+                "spatial_extent": comprehensive_metadata.essential.spatial_extent,
+            },
+            # Format-specific metadata from source
+            "format_specific_metadata": comprehensive_metadata.format_specific,
+            "acquisition_parameters": comprehensive_metadata.acquisition_params,
+            "instrument_information": comprehensive_metadata.instrument_info,
+            "raw_metadata": comprehensive_metadata.raw_metadata,
+            # Processing statistics
+            "processing_stats": {
+                "total_grid_pixels": (
+                    self._dimensions[0] * self._dimensions[1] * self._dimensions[2]
+                    if self._dimensions
+                    else 0
+                ),
+                "coordinate_bounds": self._coordinate_bounds,
+                "estimated_memory_gb": self._estimated_memory_gb,
+            },
+        }
+
+        # Subclasses should override to add this structured metadata to their outputs
+        logging.info(f"Base metadata structure prepared for {self.__class__.__name__}")
+
+        # Default implementation does nothing - subclasses should override
         pass
 
     # --- Common Utility Methods ---

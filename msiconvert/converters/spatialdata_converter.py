@@ -627,7 +627,7 @@ class SpatialDataConverter(BaseMSIConverter):
 
     def add_metadata(self, metadata: "SpatialData") -> None:  # type: ignore
         """
-        Add metadata to the SpatialData object.
+        Add comprehensive metadata to the SpatialData object.
 
         Args:
             metadata: SpatialData object to add metadata to
@@ -635,15 +635,18 @@ class SpatialDataConverter(BaseMSIConverter):
         if self._dimensions is None:
             raise ValueError("Dimensions are not initialized")
 
-        # Get comprehensive metadata (lazy loaded)
-        comprehensive_metadata = self._get_comprehensive_metadata()
+        # Call parent to prepare structured metadata
+        super().add_metadata(metadata)
+
+        # Get comprehensive metadata object for detailed access
+        comprehensive_metadata_obj = self.reader.get_comprehensive_metadata()
 
         # Add explicit pixel size metadata to SpatialData object attributes
         # This follows SpatialData conventions and gets stored in root .zattrs
         if not hasattr(metadata, "attrs") or metadata.attrs is None:
             metadata.attrs = {}
 
-        logging.info(f"Adding explicit pixel size metadata to SpatialData.attrs")
+        logging.info(f"Adding comprehensive metadata to SpatialData.attrs")
 
         # Add pixel size metadata to SpatialData attributes
         pixel_size_attrs = {
@@ -674,24 +677,57 @@ class SpatialDataConverter(BaseMSIConverter):
             "dimensions_xyz": list(self._dimensions),
         }
 
+        # Add comprehensive metadata sections to SpatialData attributes
+        if comprehensive_metadata_obj.format_specific:
+            pixel_size_attrs[
+                "format_specific_metadata"
+            ] = comprehensive_metadata_obj.format_specific
+
+        if comprehensive_metadata_obj.acquisition_params:
+            pixel_size_attrs[
+                "acquisition_parameters"
+            ] = comprehensive_metadata_obj.acquisition_params
+
+        if comprehensive_metadata_obj.instrument_info:
+            pixel_size_attrs[
+                "instrument_information"
+            ] = comprehensive_metadata_obj.instrument_info
+
         # Update SpatialData attributes
         metadata.attrs.update(pixel_size_attrs)
 
-        # Add dataset metadata if SpatialData supports it
+        # Add comprehensive dataset metadata if SpatialData supports it
         if hasattr(metadata, "metadata"):
-            metadata_dict = {
-                "dataset_id": self.dataset_id,
-                "pixel_size_um": self.pixel_size_um,
-                "source": comprehensive_metadata.get("source", "unknown"),
-                "msi_metadata": comprehensive_metadata,
-                "total_grid_pixels": self._dimensions[0]
-                * self._dimensions[1]
-                * self._dimensions[2],
-                "non_empty_pixels": self._non_empty_pixel_count,
-            }
+            # Start with structured metadata from base class
+            metadata_dict = self._structured_metadata.copy()
+
+            # Add SpatialData-specific enhancements
+            metadata_dict.update(
+                {
+                    "non_empty_pixels": self._non_empty_pixel_count,
+                    "spatialdata_specific": {
+                        "zarr_compression_level": self.compression_level,
+                        "tables_count": len(getattr(metadata, "tables", {})),
+                        "shapes_count": len(getattr(metadata, "shapes", {})),
+                        "images_count": len(getattr(metadata, "images", {})),
+                    },
+                }
+            )
 
             # Add pixel size detection provenance if available
             if self._pixel_size_detection_info is not None:
                 metadata_dict["pixel_size_provenance"] = self._pixel_size_detection_info
 
+            # Add conversion options used
+            metadata_dict["conversion_options"] = {
+                "handle_3d": self.handle_3d,
+                "pixel_size_um": self.pixel_size_um,
+                "dataset_id": self.dataset_id,
+                **self.options,
+            }
+
             metadata.metadata = metadata_dict  # type: ignore
+
+            logging.info(
+                f"Comprehensive metadata persisted to SpatialData with {len(metadata_dict)} top-level sections"
+            )
