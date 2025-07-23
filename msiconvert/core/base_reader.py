@@ -6,6 +6,9 @@ from typing import Any, Dict, Generator, Optional, Tuple
 import numpy as np
 from numpy.typing import NDArray
 
+from ..metadata.core.base_extractor import MetadataExtractor
+from ..metadata.core.metadata_types import ComprehensiveMetadata, EssentialMetadata
+
 
 class BaseMSIReader(ABC):
     """Abstract base class for reading MSI data formats."""
@@ -19,6 +22,27 @@ class BaseMSIReader(ABC):
             **kwargs: Additional reader-specific parameters
         """
         self.data_path = Path(data_path)
+        self._metadata_extractor: Optional[MetadataExtractor] = None
+
+    @abstractmethod
+    def _create_metadata_extractor(self) -> MetadataExtractor:
+        """Create format-specific metadata extractor."""
+        pass
+
+    @property
+    def metadata_extractor(self) -> MetadataExtractor:
+        """Lazy-loaded metadata extractor."""
+        if self._metadata_extractor is None:
+            self._metadata_extractor = self._create_metadata_extractor()
+        return self._metadata_extractor
+
+    def get_essential_metadata(self) -> EssentialMetadata:
+        """Get essential metadata for processing."""
+        return self.metadata_extractor.get_essential()
+
+    def get_comprehensive_metadata(self) -> ComprehensiveMetadata:
+        """Get complete metadata."""
+        return self.metadata_extractor.get_comprehensive()
 
     @abstractmethod
     def get_common_mass_axis(self) -> NDArray[np.float64]:
