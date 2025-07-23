@@ -634,8 +634,9 @@ class SpatialDataConverter(BaseMSIConverter):
         """
         if self._dimensions is None:
             raise ValueError("Dimensions are not initialized")
-        if self._metadata is None:
-            raise ValueError("Metadata is not initialized")
+
+        # Get comprehensive metadata (lazy loaded)
+        comprehensive_metadata = self._get_comprehensive_metadata()
 
         # Add explicit pixel size metadata to SpatialData object attributes
         # This follows SpatialData conventions and gets stored in root .zattrs
@@ -681,8 +682,8 @@ class SpatialDataConverter(BaseMSIConverter):
             metadata_dict = {
                 "dataset_id": self.dataset_id,
                 "pixel_size_um": self.pixel_size_um,
-                "source": self._metadata.get("source", "unknown"),
-                "msi_metadata": self._metadata,
+                "source": comprehensive_metadata.get("source", "unknown"),
+                "msi_metadata": comprehensive_metadata,
                 "total_grid_pixels": self._dimensions[0]
                 * self._dimensions[1]
                 * self._dimensions[2],
