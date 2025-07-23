@@ -38,12 +38,6 @@ Example usage:
     >>> print(f"Instrument info: {comprehensive.instrument_info}")
 """
 
-# Base extractor class
-from .core.base_extractor import MetadataExtractor
-
-# Core data types
-from .core.metadata_types import ComprehensiveMetadata, EssentialMetadata
-
 # Format-specific extractors (re-export from extractors submodule)
 from .extractors import (
     BrukerMetadataExtractor,
@@ -52,13 +46,17 @@ from .extractors import (
     list_supported_formats,
 )
 
+# Core data types
+from .types import ComprehensiveMetadata, EssentialMetadata
+
+# Base classes - import delayed to avoid circular imports
+
+
 # Public API
 __all__ = [
     # Core data types
     "EssentialMetadata",
     "ComprehensiveMetadata",
-    # Base classes
-    "MetadataExtractor",
     # Format-specific extractors
     "ImzMLMetadataExtractor",
     "BrukerMetadataExtractor",
@@ -104,7 +102,7 @@ def create_extractor(format_name: str, *args, **kwargs):
     return extractor_class(*args, **kwargs)
 
 
-def get_metadata_summary(extractor: MetadataExtractor) -> dict:
+def get_metadata_summary(extractor) -> dict:
     """
     Get a summary of metadata information for quick inspection.
 

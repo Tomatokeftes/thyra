@@ -8,8 +8,8 @@ import numpy as np
 from numpy.typing import NDArray
 from pyimzml.ImzMLParser import ImzMLParser
 
-from ..core.base_extractor import MetadataExtractor
-from ..core.metadata_types import ComprehensiveMetadata, EssentialMetadata
+from ...core.base_extractor import MetadataExtractor
+from ..types import ComprehensiveMetadata, EssentialMetadata
 
 logger = logging.getLogger(__name__)
 

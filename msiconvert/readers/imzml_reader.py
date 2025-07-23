@@ -8,9 +8,9 @@ from numpy.typing import NDArray
 from pyimzml.ImzMLParser import ImzMLParser  # type: ignore
 from tqdm import tqdm
 
+from ..core.base_extractor import MetadataExtractor
 from ..core.base_reader import BaseMSIReader
 from ..core.registry import register_reader
-from ..metadata.core.base_extractor import MetadataExtractor
 from ..metadata.extractors.imzml_extractor import ImzMLMetadataExtractor
 
 

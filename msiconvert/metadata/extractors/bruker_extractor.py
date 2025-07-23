@@ -4,8 +4,8 @@ import sqlite3
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
-from ..core.base_extractor import MetadataExtractor
-from ..core.metadata_types import ComprehensiveMetadata, EssentialMetadata
+from ...core.base_extractor import MetadataExtractor
+from ..types import ComprehensiveMetadata, EssentialMetadata
 
 logger = logging.getLogger(__name__)
 

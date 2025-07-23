@@ -1,10 +1,7 @@
 # tests/unit/metadata/core/test_metadata_types.py
 import pytest
 
-from msiconvert.metadata.core.metadata_types import (
-    ComprehensiveMetadata,
-    EssentialMetadata,
-)
+from msiconvert.metadata.types import ComprehensiveMetadata, EssentialMetadata
 
 
 class TestEssentialMetadata:

@@ -1,13 +1,15 @@
 # msiconvert/core/base_reader.py
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Any, Dict, Generator, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, Generator, Optional, Tuple
 
 import numpy as np
 from numpy.typing import NDArray
 
-from ..metadata.core.base_extractor import MetadataExtractor
-from ..metadata.core.metadata_types import ComprehensiveMetadata, EssentialMetadata
+from ..metadata.types import ComprehensiveMetadata, EssentialMetadata
+
+if TYPE_CHECKING:
+    from .base_extractor import MetadataExtractor
 
 
 class BaseMSIReader(ABC):
@@ -22,15 +24,15 @@ class BaseMSIReader(ABC):
             **kwargs: Additional reader-specific parameters
         """
         self.data_path = Path(data_path)
-        self._metadata_extractor: Optional[MetadataExtractor] = None
+        self._metadata_extractor: Optional["MetadataExtractor"] = None
 
     @abstractmethod
-    def _create_metadata_extractor(self) -> MetadataExtractor:
+    def _create_metadata_extractor(self) -> "MetadataExtractor":
         """Create format-specific metadata extractor."""
         pass
 
     @property
-    def metadata_extractor(self) -> MetadataExtractor:
+    def metadata_extractor(self) -> "MetadataExtractor":
         """Lazy-loaded metadata extractor."""
         if self._metadata_extractor is None:
             self._metadata_extractor = self._create_metadata_extractor()

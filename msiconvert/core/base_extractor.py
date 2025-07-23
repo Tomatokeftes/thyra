@@ -3,7 +3,7 @@ import logging
 from abc import ABC, abstractmethod
 from typing import Any, Optional
 
-from .metadata_types import ComprehensiveMetadata, EssentialMetadata
+from ..metadata.types import ComprehensiveMetadata, EssentialMetadata
 
 
 class MetadataExtractor(ABC):

@@ -14,9 +14,9 @@ from typing import Any, Dict, Generator, Optional, Tuple
 import numpy as np
 from tqdm import tqdm
 
+from ...core.base_extractor import MetadataExtractor
 from ...core.base_reader import BaseMSIReader
 from ...core.registry import register_reader
-from ...metadata.core.base_extractor import MetadataExtractor
 from ...metadata.extractors.bruker_extractor import BrukerMetadataExtractor
 from ...utils.bruker_exceptions import DataError, FileFormatError, SDKError
 from .sdk.dll_manager import DLLManager
