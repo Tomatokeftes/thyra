@@ -6,8 +6,6 @@ from pathlib import Path
 
 from .core.registry import detect_format, get_converter_class, get_reader_class
 
-
-
 warnings.filterwarnings(
     "ignore",
     message=r"Accession IMS:1000046.*",  # or just "ignore" all UserWarning from that module
@@ -86,30 +84,39 @@ def convert_msi(
 
         if pixel_size_um is None:
             logging.info("Attempting automatic pixel size detection...")
-            detected_pixel_size = reader.get_pixel_size()
-            if detected_pixel_size is not None:
-                final_pixel_size = detected_pixel_size[
-                    0
-                ]  # Use X size (assuming square pixels)
-                logging.info(
-                    f"OK Automatically detected pixel size: {detected_pixel_size[0]:.1f} x {detected_pixel_size[1]:.1f} um"
-                )
+            try:
+                # Use new metadata system to get pixel size
+                essential_metadata = reader.get_essential_metadata()
+                detected_pixel_size = essential_metadata.pixel_size
+                if detected_pixel_size is not None:
+                    final_pixel_size = detected_pixel_size[
+                        0
+                    ]  # Use X size (assuming square pixels)
+                    logging.info(
+                        f"OK Automatically detected pixel size: {detected_pixel_size[0]:.1f} x {detected_pixel_size[1]:.1f} um"
+                    )
 
-                # Create pixel size detection provenance metadata
-                pixel_size_detection_info = {
-                    "method": "automatic",
-                    "detected_x_um": float(detected_pixel_size[0]),
-                    "detected_y_um": float(detected_pixel_size[1]),
-                    "source_format": input_format,
-                    "detection_successful": True,
-                    "note": "Pixel size automatically detected from source metadata and applied to coordinate systems",
-                }
-            else:
+                    # Create pixel size detection provenance metadata
+                    pixel_size_detection_info = {
+                        "method": "automatic",
+                        "detected_x_um": float(detected_pixel_size[0]),
+                        "detected_y_um": float(detected_pixel_size[1]),
+                        "source_format": input_format,
+                        "detection_successful": True,
+                        "note": "Pixel size automatically detected from source metadata and applied to coordinate systems",
+                    }
+                else:
+                    logging.error(
+                        "ERROR Could not automatically detect pixel size from metadata"
+                    )
+                    logging.error(
+                        "Please specify --pixel-size manually or ensure the input file contains pixel size metadata"
+                    )
+                    return False
+            except Exception as e:
+                logging.error(f"ERROR Failed to extract essential metadata: {e}")
                 logging.error(
-                    "ERROR Could not automatically detect pixel size from metadata"
-                )
-                logging.error(
-                    "Please specify --pixel-size manually or ensure the input file contains pixel size metadata"
+                    "Please specify --pixel-size manually or ensure the input file contains valid metadata"
                 )
                 return False
         elif pixel_size_detection_info_override is None:
