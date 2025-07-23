@@ -73,7 +73,7 @@ class BaseMSIConverter(ABC):
         """Initialize conversion by loading dimensions, mass axis and metadata."""
         logging.info("Initializing conversion...")
         try:
-            self._dimensions = self.reader.get_dimensions()
+            self._dimensions = self.reader.get_essential_metadata().dimensions
             if any(d <= 0 for d in self._dimensions):
                 raise ValueError(
                     f"Invalid dimensions: {self._dimensions}. All dimensions must be positive."
@@ -85,7 +85,7 @@ class BaseMSIConverter(ABC):
                     "Common mass axis is empty. Cannot proceed with conversion."
                 )
 
-            self._metadata = self.reader.get_metadata()
+            self._metadata = self.reader.get_comprehensive_metadata().raw_metadata
             if self._metadata is None:  # type: ignore
                 self._metadata = {}  # Initialize with empty dict if None
 
@@ -156,7 +156,7 @@ class BaseMSIConverter(ABC):
 
         # Fallback: calculate dimensions and assume all pixels have data
         # This is less accurate but provides a reasonable estimate
-        dimensions = self.reader.get_dimensions()
+        dimensions = self.reader.get_essential_metadata().dimensions
         total_pixels = dimensions[0] * dimensions[1] * dimensions[2]
 
         # Log a warning since this is an estimate

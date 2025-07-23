@@ -16,6 +16,8 @@ from tqdm import tqdm
 
 from ...core.base_reader import BaseMSIReader
 from ...core.registry import register_reader
+from ...metadata.core.base_extractor import MetadataExtractor
+from ...metadata.extractors.bruker_extractor import BrukerMetadataExtractor
 from ...utils.bruker_exceptions import DataError, FileFormatError, SDKError
 from .sdk.dll_manager import DLLManager
 from .sdk.sdk_functions import SDKFunctions
@@ -79,8 +81,6 @@ class BrukerReader(BaseMSIReader):
         self._initialize_database()
 
         # Cached properties (lazy loaded)
-        self._metadata: Optional[Dict[str, Any]] = None
-        self._dimensions: Optional[Tuple[int, int, int]] = None
         self._common_mass_axis: Optional[np.ndarray] = None
         self._frame_count: Optional[int] = None
 
@@ -198,220 +198,11 @@ class BrukerReader(BaseMSIReader):
             logger.error(f"Failed to initialize database: {e}")
             raise DataError(f"Failed to open database: {e}") from e
 
-    def get_metadata(self) -> Dict[str, Any]:
-        """
-        Return metadata about the Bruker dataset.
-
-        Returns:
-            Dictionary containing comprehensive metadata
-        """
-        if self._metadata is None:
-            self._metadata = self._load_metadata()
-
-        return self._metadata
-
-    def _load_metadata(self) -> Dict[str, Any]:
-        """Load metadata from the database and SDK."""
-        metadata = {
-            "source": str(self.data_path),
-            "file_type": self.file_type,
-            "is_maldi": self.coordinate_cache.is_maldi_dataset(),
-            "frame_count": self._get_frame_count(),
-            "use_recalibrated": self.use_recalibrated_state,
-        }
-
-        # Add global metadata from database
-        try:
-            cursor = self.conn.cursor()
-            cursor.execute("SELECT Key, Value FROM GlobalMetadata")
-
-            for key, value in cursor.fetchall():
-                metadata[f"global_{key}"] = value
-
-        except sqlite3.OperationalError:
-            # GlobalMetadata table may not exist
-            logger.debug("GlobalMetadata table not found")
-
-        # Add performance and memory information
-        metadata.update(
-            {
-                "memory_stats": self.memory_manager.get_stats(),
-                "coordinate_stats": self.coordinate_cache.get_coverage_stats(),
-                "performance_stats": self._performance_stats.copy(),
-            }
-        )
-
-        logger.debug(f"Loaded metadata with {len(metadata)} keys")
-        return metadata
-
-    def get_pixel_size(self) -> Optional[Tuple[float, float]]:
-        """
-        Extract pixel size from Bruker database metadata.
-
-        Queries the MaldiFrameLaserInfo table for:
-        - Primary: BeamScanSizeX/Y (actual scanning step size)
-        - Validation: SpotSize (physical laser spot diameter)
-        - Fallback: Calculate from MotorPositionX/Y differences
-
-        Returns:
-            Optional[Tuple[float, float]]: Pixel size as (x_size, y_size) in micrometers,
-                                         or None if not available in metadata.
-        """
+    def _create_metadata_extractor(self) -> MetadataExtractor:
+        """Create Bruker metadata extractor."""
         if not hasattr(self, "conn") or self.conn is None:
-            logger.warning("Database connection not available for pixel size detection")
-            return None
-
-        cursor = self.conn.cursor()
-        x_size = None
-        y_size = None
-        spot_size = None
-
-        # Method 1: Query MaldiFrameLaserInfo table for BeamScanSizeX/Y
-        try:
-            logger.info("Attempting to query MaldiFrameLaserInfo table...")
-            # Directly query for beam scan size data (if table doesn't exist, this will fail gracefully)
-            cursor.execute(
-                """
-                SELECT BeamScanSizeX, BeamScanSizeY, SpotSize
-                FROM MaldiFrameLaserInfo
-                LIMIT 1
-            """
-            )
-
-            result = cursor.fetchone()
-            logger.info(f"Query result: {result}")
-            if result:
-                beam_x, beam_y, spot = result
-                logger.info(
-                    f"Parsed values: beam_x={beam_x}, beam_y={beam_y}, spot={spot}"
-                )
-                if beam_x is not None and beam_y is not None:
-                    x_size = float(beam_x)
-                    y_size = float(beam_y)
-                    if spot is not None:
-                        spot_size = float(spot)
-
-                    logger.info(
-                        f"Detected pixel size from Bruker MaldiFrameLaserInfo: "
-                        f"BeamScanSizeX={x_size} μm, BeamScanSizeY={y_size} μm"
-                    )
-                    if spot_size:
-                        efficiency_x = (
-                            (x_size / spot_size) * 100 if spot_size > 0 else 100
-                        )
-                        efficiency_y = (
-                            (y_size / spot_size) * 100 if spot_size > 0 else 100
-                        )
-                        logger.info(
-                            f"SpotSize={spot_size} μm, "
-                            f"Scanning efficiency: X={efficiency_x:.1f}%, Y={efficiency_y:.1f}%"
-                        )
-
-                    return (x_size, y_size)
-                else:
-                    logger.info(
-                        "beam_x or beam_y is None, continuing to fallback methods"
-                    )
-            else:
-                logger.info("No result from query, continuing to fallback methods")
-
-        except sqlite3.OperationalError as e:
-            logger.info(f"Could not query MaldiFrameLaserInfo table: {e}")
-            # Table doesn't exist or other SQL error - continue to fallback methods
-
-        # Method 2: Fallback to calculate from MotorPositionX/Y differences
-        try:
-            # Check if we have frame position data
-            cursor.execute(
-                """
-                SELECT name FROM sqlite_master
-                WHERE type='table' AND name='MaldiFrameInfo'
-            """
-            )
-
-            if cursor.fetchone():
-                # Get distinct motor positions and calculate step size
-                cursor.execute(
-                    """
-                    SELECT DISTINCT MotorPositionX, MotorPositionY
-                    FROM MaldiFrameInfo
-                    ORDER BY MotorPositionX, MotorPositionY
-                    LIMIT 10
-                """
-                )
-
-                positions = cursor.fetchall()
-                if len(positions) >= 2:
-                    # Calculate step sizes from position differences
-                    x_positions = sorted(
-                        set(pos[0] for pos in positions if pos[0] is not None)
-                    )
-                    y_positions = sorted(
-                        set(pos[1] for pos in positions if pos[1] is not None)
-                    )
-
-                    x_step = None
-                    y_step = None
-
-                    if len(x_positions) >= 2:
-                        x_diffs = [
-                            x_positions[i + 1] - x_positions[i]
-                            for i in range(len(x_positions) - 1)
-                        ]
-                        x_step = min(
-                            diff for diff in x_diffs if diff > 0
-                        )  # Smallest positive difference
-
-                    if len(y_positions) >= 2:
-                        y_diffs = [
-                            y_positions[i + 1] - y_positions[i]
-                            for i in range(len(y_positions) - 1)
-                        ]
-                        y_step = min(
-                            diff for diff in y_diffs if diff > 0
-                        )  # Smallest positive difference
-
-                    if x_step and y_step:
-                        logger.info(
-                            f"Calculated pixel size from Bruker motor positions: "
-                            f"X={x_step} μm, Y={y_step} μm"
-                        )
-                        return (float(x_step), float(y_step))
-
-        except sqlite3.OperationalError as e:
-            logger.debug(f"Could not calculate pixel size from motor positions: {e}")
-
-        # Method 3: Check GlobalMetadata for pixel size information
-        try:
-            cursor.execute(
-                """
-                SELECT Key, Value FROM GlobalMetadata
-                WHERE Key LIKE '%pixel%' OR Key LIKE '%PixelSize%' OR Key LIKE '%stepsize%'
-            """
-            )
-
-            metadata_pixels = cursor.fetchall()
-            if metadata_pixels:
-                logger.debug(f"Found pixel-related metadata: {metadata_pixels}")
-                # This would need specific implementation based on actual metadata keys
-
-        except sqlite3.OperationalError as e:
-            logger.debug(f"Could not query GlobalMetadata for pixel size: {e}")
-
-        logger.warning("Could not detect pixel size from Bruker metadata")
-        return None
-
-    def get_dimensions(self) -> Tuple[int, int, int]:
-        """
-        Return the dimensions of the dataset using 0-based indexing.
-
-        Returns:
-            Tuple of (x, y, z) dimensions
-        """
-        if self._dimensions is None:
-            self._dimensions = self.coordinate_cache.get_dimensions()
-
-        return self._dimensions
+            raise ValueError("Database connection not available")
+        return BrukerMetadataExtractor(self.conn, self.data_path)
 
     def get_common_mass_axis(self) -> np.ndarray:
         """
