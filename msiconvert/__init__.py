@@ -5,7 +5,7 @@ This package provides tools for converting MSI data from various formats (ImzML,
 into the modern SpatialData/Zarr format with automatic pixel size detection.
 """
 
-__version__ = "1.8.2"
+__version__ = "1.8.3"
 
 # Import readers to trigger format detector registration
 from . import readers  # This triggers the format detector registrations

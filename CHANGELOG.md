@@ -2,6 +2,30 @@
 
 <!-- version list -->
 
+## v1.8.3 (2025-07-24)
+
+### Bug Fixes
+
+- Remove dry-run mode and fix failing unit tests
+  ([`00f5821`](https://github.com/Tomatokeftes/MSIConverter/commit/00f5821babe23865324631545a86eea69d0ac5ba))
+
+- Resolve failing metadata extractor tests
+  ([`b929cff`](https://github.com/Tomatokeftes/MSIConverter/commit/b929cff296b01c63357d1888cc1716674189a7e0))
+
+### Documentation
+
+- Update TASK.md to reflect completed pixel size metadata work
+  ([`5837f3a`](https://github.com/Tomatokeftes/MSIConverter/commit/5837f3a8f9e5db7c837585f552037ed22b45e419))
+
+### Refactoring
+
+- Move BaseExtractor to core module for better architecture
+  ([`c30c407`](https://github.com/Tomatokeftes/MSIConverter/commit/c30c40709ebe3ec283680e90fdc8543ec62b9bb0))
+
+- Remove redundant and unnecessary comments
+  ([`cf86d24`](https://github.com/Tomatokeftes/MSIConverter/commit/cf86d248445f1979608a19238a6874d3621508c6))
+
+
 ## v1.8.2 (2025-07-21)
 
 ### Bug Fixes
