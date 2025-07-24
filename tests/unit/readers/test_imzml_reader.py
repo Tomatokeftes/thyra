@@ -33,8 +33,10 @@ class TestImzMLReader:
         with open(imzml_path, "w") as f:
             f.write("dummy content")
 
+        reader = ImzMLReader(imzml_path)
         with pytest.raises(ValueError):
-            ImzMLReader(imzml_path)
+            # Error should be raised when parser is accessed due to lazy initialization
+            reader.get_essential_metadata()
 
     def test_get_metadata(self, create_minimal_imzml):
         """Test getting metadata from imzML file."""

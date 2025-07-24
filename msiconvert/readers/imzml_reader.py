@@ -121,7 +121,7 @@ class ImzMLReader(BaseMSIReader):
 
         Converts 1-based coordinates from imzML to 0-based coordinates for internal use.
         """
-        self._ensure_parser_initialized()
+        # Parser should already be initialized when this is called from _initialize_parser
 
         logging.info("Caching all coordinates for faster access")
         self._coordinates_cache = {}
