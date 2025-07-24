@@ -191,10 +191,14 @@ def main():
     # Configure logging
     setup_logging(log_level=getattr(logging, args.log_level), log_file=args.log_file)
 
-    # Determine pixel size (auto-detect or use provided value)
+    # Determine pixel size (auto-detect or use provided value) and prepare reader
     final_pixel_size = args.pixel_size
+    reader = None
+    detection_info_override = None
+    essential_metadata_override = None
+
     if args.pixel_size is None:
-        # For actual conversion, use interactive detection
+        # For actual conversion, use interactive detection with reader reuse
         try:
             # Detect format and create reader for pixel size detection
             input_path = Path(args.input).resolve()
@@ -208,29 +212,36 @@ def main():
                 detection_info,
                 essential_metadata,
             ) = detect_pixel_size_interactive(reader, input_format)
-            reader.close()
+            # Keep reader alive for conversion - don't close here!
 
             logging.info(f"Using pixel size: {final_pixel_size} um")
+            detection_info_override = detection_info
+            essential_metadata_override = essential_metadata
         except Exception as e:
             logging.error(f"Error during pixel size detection: {e}")
             logging.error("Conversion aborted.")
+            # Clean up reader on error
+            if reader and hasattr(reader, "close"):
+                reader.close()
             return
 
-    # Convert MSI data - pass detection_info and essential_metadata if available
-    detection_info_override = detection_info if "detection_info" in locals() else None
-    essential_metadata_override = (
-        essential_metadata if "essential_metadata" in locals() else None
-    )
-    success = convert_msi(
-        args.input,
-        args.output,
-        format_type=args.format,
-        dataset_id=args.dataset_id,
-        pixel_size_um=final_pixel_size,
-        handle_3d=args.handle_3d,
-        pixel_size_detection_info_override=detection_info_override,
-        essential_metadata=essential_metadata_override,
-    )
+    # Convert MSI data - pass reader for optimization and metadata if available
+    try:
+        success = convert_msi(
+            args.input,
+            args.output,
+            format_type=args.format,
+            dataset_id=args.dataset_id,
+            pixel_size_um=final_pixel_size,
+            handle_3d=args.handle_3d,
+            pixel_size_detection_info_override=detection_info_override,
+            essential_metadata=essential_metadata_override,
+            reader=reader,  # Pass existing reader for optimization
+        )
+    finally:
+        # Ensure reader is closed after conversion
+        if reader and hasattr(reader, "close"):
+            reader.close()
 
     if success and args.optimize_chunks:
         # Optimize chunks for better performance

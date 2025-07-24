@@ -4,6 +4,7 @@ import traceback
 import warnings
 from pathlib import Path
 
+from .core.base_reader import BaseMSIReader
 from .core.registry import detect_format, get_converter_class, get_reader_class
 from .metadata.types import EssentialMetadata
 
@@ -29,6 +30,7 @@ def convert_msi(
     handle_3d: bool = False,
     pixel_size_detection_info_override: dict = None,
     essential_metadata: EssentialMetadata = None,
+    reader=None,  # NEW: Accept pre-initialized reader
     **kwargs,
 ) -> bool:
     """Convert MSI data to the specified format with enhanced error handling and automatic pixel size detection."""
@@ -73,12 +75,21 @@ def convert_msi(
         return False
 
     try:
-        input_format = detect_format(input_path)
-        logging.info(f"Detected format: {input_format}")
-
-        reader_class = get_reader_class(input_format)
-        logging.info(f"Using reader: {reader_class.__name__}")
-        reader = reader_class(input_path)
+        # Handle conditional reader creation
+        should_close_reader = False
+        if reader is None:
+            # Legacy path: create new reader
+            input_format = detect_format(input_path)
+            logging.info(f"Detected format: {input_format}")
+            reader_class = get_reader_class(input_format)
+            logging.info(f"Using reader: {reader_class.__name__}")
+            reader = reader_class(input_path)
+            should_close_reader = True
+        else:
+            # Optimized path: reuse provided reader
+            input_format = detect_format(input_path)  # Still need format for metadata
+            logging.info(f"Detected format: {input_format}")
+            logging.info(f"Using pre-initialized reader: {reader.__class__.__name__}")
 
         # Handle automatic pixel size detection if not provided
         final_pixel_size = pixel_size_um
@@ -148,9 +159,24 @@ def convert_msi(
         logging.info("Starting conversion...")
         result = converter.convert()
         logging.info(f"Conversion {'completed successfully' if result else 'failed'}")
+
+        # Only close reader if we created it
+        if should_close_reader and hasattr(reader, "close"):
+            reader.close()
+
         return result
     except Exception as e:
         logging.error(f"Error during conversion: {e}")
         # Log detailed traceback for debugging
         logging.error(f"Detailed traceback:\n{traceback.format_exc()}")
+
+        # Ensure cleanup on exception if we created the reader
+        if (
+            "should_close_reader" in locals()
+            and should_close_reader
+            and "reader" in locals()
+            and hasattr(reader, "close")
+        ):
+            reader.close()
+
         return False
