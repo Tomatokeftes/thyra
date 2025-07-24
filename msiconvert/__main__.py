@@ -112,92 +112,6 @@ def detect_pixel_size_interactive(reader, input_format):
         return selected_pixel_size, detection_info
 
 
-def dry_run_conversion(
-    input_path,
-    output_path,
-    format_type="spatialdata",
-    dataset_id="msi_dataset",
-    pixel_size_um=None,
-    handle_3d=False,
-):
-    """Simulate conversion process without writing files."""
-    logging.info("=== DRY RUN MODE ===")
-
-    input_path = Path(input_path).resolve()
-    output_path = Path(output_path).resolve()
-
-    if not input_path.exists():
-        logging.error(f"Input path does not exist: {input_path}")
-        return False
-
-    # Check if output would overwrite
-    if output_path.exists():
-        logging.warning(
-            f"Output path already exists and would be overwritten: " f"{output_path}"
-        )
-
-    try:
-        # Detect format
-        input_format = detect_format(input_path)
-        logging.info(f"Detected input format: {input_format}")
-
-        # Create reader to get metadata
-        reader_class = get_reader_class(input_format)
-        logging.info(f"Would use reader: {reader_class.__name__}")
-
-        reader = reader_class(input_path)
-
-        # Try automatic pixel size detection if not provided
-        final_pixel_size = pixel_size_um
-        if pixel_size_um is None:
-            logging.info("Attempting automatic pixel size detection...")
-            detected_pixel_size = reader.get_pixel_size()
-            if detected_pixel_size is not None:
-                final_pixel_size = detected_pixel_size[
-                    0
-                ]  # Use X size (assuming square pixels)
-                logging.info(
-                    f"OK Automatically detected pixel size: {detected_pixel_size[0]:.1f} x {detected_pixel_size[1]:.1f} um"
-                )
-            else:
-                logging.warning("Could not automatically detect pixel size")
-                final_pixel_size = 1.0  # Default fallback for dry-run
-                logging.info(
-                    f"Using default pixel size: {final_pixel_size} um (dry-run mode)"
-                )
-
-        # Get basic metadata
-        logging.info(f"Dataset dimensions: {reader.shape}")
-        logging.info(f"Number of spectra: {reader.n_spectra}")
-        logging.info(f"Mass range: {reader.mass_range}")
-
-        # Estimate output size (very rough)
-        common_mass_axis = reader.get_common_mass_axis()
-        from msiconvert.config import ESTIMATED_BYTES_PER_SPECTRUM_POINT, MB_TO_BYTES
-
-        estimated_size_mb = (
-            reader.n_spectra
-            * len(common_mass_axis)
-            * ESTIMATED_BYTES_PER_SPECTRUM_POINT
-        ) / MB_TO_BYTES
-        logging.info(f"Estimated output size: ~{estimated_size_mb:.1f} MB")
-
-        # Show conversion parameters
-        logging.info(f"Output format: {format_type}")
-        logging.info(f"Dataset ID: {dataset_id}")
-        logging.info(f"Pixel size: {final_pixel_size} um")
-        logging.info(f"3D handling: {handle_3d}")
-        logging.info(f"Output path: {output_path}")
-
-        reader.close()
-        logging.info("=== DRY RUN COMPLETED SUCCESSFULLY ===")
-        return True
-
-    except Exception as e:
-        logging.error(f"Dry run failed: {e}")
-        return False
-
-
 def main():
     parser = argparse.ArgumentParser(
         description="Convert MSI data to SpatialData format"
@@ -237,11 +151,6 @@ def main():
         help="Set the logging level",
     )
     parser.add_argument("--log-file", default=None, help="Path to the log file")
-    parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Simulate conversion process without writing output files",
-    )
 
     args = parser.parse_args()
 
@@ -273,19 +182,17 @@ def main():
                 f"Bruker .d directory requires analysis.tsf or analysis.tdf file: {input_path}"
             )
 
-    # Warn about output path conflicts early (but allow dry-run)
+    # Check output path conflicts
     output_path = Path(args.output)
-    if not args.dry_run and output_path.exists():
-        parser.error(
-            f"Output path already exists (use --dry-run to preview): {output_path}"
-        )
+    if output_path.exists():
+        parser.error(f"Output path already exists: {output_path}")
 
     # Configure logging
     setup_logging(log_level=getattr(logging, args.log_level), log_file=args.log_file)
 
     # Determine pixel size (auto-detect or use provided value)
     final_pixel_size = args.pixel_size
-    if args.pixel_size is None and not args.dry_run:
+    if args.pixel_size is None:
         # For actual conversion, use interactive detection
         try:
             # Detect format and create reader for pixel size detection
@@ -306,49 +213,30 @@ def main():
             logging.error("Conversion aborted.")
             return
 
-    # Handle dry-run mode
-    if args.dry_run:
-        success = dry_run_conversion(
-            args.input,
-            args.output,
-            format_type=args.format,
-            dataset_id=args.dataset_id,
-            pixel_size_um=final_pixel_size,
-            handle_3d=args.handle_3d,
-        )
-    else:
-        # Convert MSI data - pass detection_info if available
-        detection_info_override = (
-            detection_info if "detection_info" in locals() else None
-        )
-        success = convert_msi(
-            args.input,
-            args.output,
-            format_type=args.format,
-            dataset_id=args.dataset_id,
-            pixel_size_um=final_pixel_size,
-            handle_3d=args.handle_3d,
-            pixel_size_detection_info_override=detection_info_override,
-        )
+    # Convert MSI data - pass detection_info if available
+    detection_info_override = detection_info if "detection_info" in locals() else None
+    success = convert_msi(
+        args.input,
+        args.output,
+        format_type=args.format,
+        dataset_id=args.dataset_id,
+        pixel_size_um=final_pixel_size,
+        handle_3d=args.handle_3d,
+        pixel_size_detection_info_override=detection_info_override,
+    )
 
-    if success and args.optimize_chunks and not args.dry_run:
+    if success and args.optimize_chunks:
         # Optimize chunks for better performance
         if args.format == "spatialdata":
             # For SpatialData format, optimize the table's X array
             optimize_zarr_chunks(args.output, f"tables/{args.dataset_id}/X")
 
     if success:
-        if args.dry_run:
-            logging.info("Dry run completed successfully. No files were written.")
-        else:
-            logging.info(
-                f"Conversion completed successfully. Output stored at {args.output}"
-            )
+        logging.info(
+            f"Conversion completed successfully. Output stored at {args.output}"
+        )
     else:
-        if args.dry_run:
-            logging.error("Dry run failed.")
-        else:
-            logging.error("Conversion failed.")
+        logging.error("Conversion failed.")
 
 
 if __name__ == "__main__":

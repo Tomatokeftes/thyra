@@ -28,11 +28,35 @@ class TestBaseMSIReader:
 
         # Define a minimal implementation
         class MinimalReader(BaseMSIReader):
-            def get_metadata(self):
-                return {"test": "metadata"}
+            def _create_metadata_extractor(self):
+                from msiconvert.core.base_extractor import MetadataExtractor
+                from msiconvert.metadata.types import (
+                    ComprehensiveMetadata,
+                    EssentialMetadata,
+                )
 
-            def get_dimensions(self):
-                return (1, 1, 1)
+                class TestExtractor(MetadataExtractor):
+                    def _extract_essential_impl(self):
+                        return EssentialMetadata(
+                            dimensions=(1, 1, 1),
+                            coordinate_bounds=(0.0, 0.0, 0.0, 0.0),
+                            mass_range=(100.0, 200.0),
+                            pixel_size=None,
+                            n_spectra=1,
+                            estimated_memory_gb=0.001,
+                            source_path="/test/path",
+                        )
+
+                    def _extract_comprehensive_impl(self):
+                        return ComprehensiveMetadata(
+                            essential=self._extract_essential_impl(),
+                            format_specific={},
+                            acquisition_params={},
+                            instrument_info={},
+                            raw_metadata={"test": "metadata"},
+                        )
+
+                return TestExtractor(None)
 
             def get_common_mass_axis(self):
                 return np.array([100.0, 200.0])
@@ -47,8 +71,10 @@ class TestBaseMSIReader:
         reader = MinimalReader(Path("/test/path"))
 
         # Check method functionality
-        assert reader.get_metadata() == {"test": "metadata"}
-        assert reader.get_dimensions() == (1, 1, 1)
+        essential = reader.get_essential_metadata()
+        assert essential.dimensions == (1, 1, 1)
+        assert essential.mass_range == (100.0, 200.0)
+        assert essential.source_path == "/test/path"
         np.testing.assert_array_equal(
             reader.get_common_mass_axis(), np.array([100.0, 200.0])
         )
@@ -68,11 +94,35 @@ class TestBaseMSIConverter:
 
         # Mock reader for testing
         class MockReader(BaseMSIReader):
-            def get_metadata(self):
-                return {}
+            def _create_metadata_extractor(self):
+                from msiconvert.core.base_extractor import MetadataExtractor
+                from msiconvert.metadata.types import (
+                    ComprehensiveMetadata,
+                    EssentialMetadata,
+                )
 
-            def get_dimensions(self):
-                return (1, 1, 1)
+                class TestExtractor(MetadataExtractor):
+                    def _extract_essential_impl(self):
+                        return EssentialMetadata(
+                            dimensions=(1, 1, 1),
+                            coordinate_bounds=(0.0, 0.0, 0.0, 0.0),
+                            mass_range=(0.0, 0.0),
+                            pixel_size=None,
+                            n_spectra=1,
+                            estimated_memory_gb=0.001,
+                            source_path="/test/path",
+                        )
+
+                    def _extract_comprehensive_impl(self):
+                        return ComprehensiveMetadata(
+                            essential=self._extract_essential_impl(),
+                            format_specific={},
+                            acquisition_params={},
+                            instrument_info={},
+                            raw_metadata={},
+                        )
+
+                return TestExtractor(None)
 
             def get_common_mass_axis(self):
                 return np.array([])
@@ -104,11 +154,35 @@ class TestBaseMSIConverter:
 
         # Create a mock reader
         class MockReader(BaseMSIReader):
-            def get_metadata(self):
-                return {"source": "test"}
+            def _create_metadata_extractor(self):
+                from msiconvert.core.base_extractor import MetadataExtractor
+                from msiconvert.metadata.types import (
+                    ComprehensiveMetadata,
+                    EssentialMetadata,
+                )
 
-            def get_dimensions(self):
-                return (2, 2, 1)
+                class TestExtractor(MetadataExtractor):
+                    def _extract_essential_impl(self):
+                        return EssentialMetadata(
+                            dimensions=(2, 2, 1),
+                            coordinate_bounds=(0.0, 1.0, 0.0, 1.0),
+                            mass_range=(100.0, 300.0),
+                            pixel_size=None,
+                            n_spectra=4,
+                            estimated_memory_gb=0.001,
+                            source_path="/test/path",
+                        )
+
+                    def _extract_comprehensive_impl(self):
+                        return ComprehensiveMetadata(
+                            essential=self._extract_essential_impl(),
+                            format_specific={},
+                            acquisition_params={},
+                            instrument_info={},
+                            raw_metadata={"source": "test"},
+                        )
+
+                return TestExtractor(None)
 
             def get_common_mass_axis(self):
                 return np.array([100.0, 200.0, 300.0])

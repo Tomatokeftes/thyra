@@ -8,8 +8,10 @@ from numpy.typing import NDArray
 from pyimzml.ImzMLParser import ImzMLParser  # type: ignore
 from tqdm import tqdm
 
+from ..core.base_extractor import MetadataExtractor
 from ..core.base_reader import BaseMSIReader
 from ..core.registry import register_reader
+from ..metadata.extractors.imzml_extractor import ImzMLMetadataExtractor
 
 
 @register_reader("imzml")
@@ -45,8 +47,6 @@ class ImzMLReader(BaseMSIReader):
 
         # Cached properties
         self._common_mass_axis: Optional[NDArray[np.float64]] = None
-        self._dimensions: Optional[Tuple[int, int, int]] = None
-        self._metadata: Optional[Dict[str, Any]] = None
         self._coordinates_cache: Dict[int, Tuple[int, int, int]] = {}
 
         # Initialize if path provided
@@ -121,158 +121,18 @@ class ImzMLReader(BaseMSIReader):
 
         logging.info(f"Cached {len(self._coordinates_cache)} coordinates")
 
-    def get_metadata(self) -> Dict[str, Any]:
-        """
-        Return metadata about the imzML dataset.
-
-        Returns:
-            Dict[str, Any]: Dictionary containing metadata from the imzML file
-
-        Raises:
-            ValueError: If parser is not initialized and no filepath is available
-        """
-        if not hasattr(self, "parser") or self.parser is None:
+    def _create_metadata_extractor(self) -> MetadataExtractor:
+        """Create ImzML metadata extractor."""
+        if not self.parser:
             if self.filepath:
                 self._initialize_parser(self.filepath)
             else:
                 raise ValueError("Parser not initialized and no filepath available")
 
-        if self._metadata is None:
-            # We know parser is not None at this point
-            parser = cast(ImzMLParser, self.parser)
-            imzml_path = cast(Path, self.imzml_path)
+        if not self.imzml_path:
+            raise ValueError("ImzML path not available")
 
-            self._metadata = {
-                "source": str(imzml_path),
-                "uuid": parser.metadata.file_description.cv_params[0][2],  # type: ignore
-                "file_mode": "continuous" if self.is_continuous else "processed",
-            }
-
-            # Add additional metadata if available
-            if hasattr(parser, "imzmldict"):
-                for key, value in parser.imzmldict.items():  # type: ignore
-                    self._metadata[key] = value
-
-        return self._metadata
-
-    def get_pixel_size(self) -> Optional[Tuple[float, float]]:
-        """
-        Extract pixel size from ImzML metadata.
-
-        Searches for cvParam elements with accessions:
-        - IMS:1000046: pixel size x
-        - IMS:1000047: pixel size y
-
-        Returns:
-            Optional[Tuple[float, float]]: Pixel size as (x_size, y_size) in micrometers,
-                                         or None if not found in metadata.
-        """
-        if not hasattr(self, "parser") or self.parser is None:
-            if self.filepath:
-                self._initialize_parser(self.filepath)
-            else:
-                return None
-
-        parser = cast(ImzMLParser, self.parser)
-
-        # Look for pixel size in imzmldict first (parsed cvParams)
-        x_size = None
-        y_size = None
-
-        if hasattr(parser, "imzmldict") and parser.imzmldict:
-            # Check for pixel size parameters in the parsed dictionary
-            x_size = parser.imzmldict.get("pixel size x")
-            y_size = parser.imzmldict.get("pixel size y")
-
-        # If not found in imzmldict, try accessing the raw XML metadata
-        if x_size is None or y_size is None:
-            try:
-                import xml.etree.ElementTree as ET
-
-                # Access the XML root if available
-                if hasattr(parser, "metadata") and hasattr(parser.metadata, "root"):
-                    root = parser.metadata.root
-
-                    # Define namespaces for XML parsing
-                    namespaces = {
-                        "mzml": "http://psi.hupo.org/ms/mzml",
-                        "ims": "http://www.maldi-msi.org/download/imzml/imagingMS.obo",
-                    }
-
-                    # Search for cvParam elements with the pixel size accessions
-                    for cvparam in root.findall(".//mzml:cvParam", namespaces):
-                        accession = cvparam.get("accession")
-                        if accession == "IMS:1000046":  # pixel size x
-                            x_size = float(cvparam.get("value", 0))
-                        elif accession == "IMS:1000047":  # pixel size y
-                            y_size = float(cvparam.get("value", 0))
-
-            except Exception as e:
-                logging.warning(f"Failed to parse XML metadata for pixel size: {e}")
-
-        # Convert to float if found as strings
-        try:
-            if x_size is not None:
-                x_size = float(x_size)
-            if y_size is not None:
-                y_size = float(y_size)
-        except (ValueError, TypeError):
-            logging.warning("Invalid pixel size values found in metadata")
-            return None
-
-        # Return pixel sizes if both found
-        if x_size is not None and y_size is not None:
-            logging.info(
-                f"Detected pixel size from ImzML metadata: x={x_size} μm, y={y_size} μm"
-            )
-            return (x_size, y_size)
-
-        # Log if only partial information found
-        if x_size is not None or y_size is not None:
-            logging.warning(
-                f"Partial pixel size information found: x={x_size}, y={y_size}"
-            )
-
-        return None
-
-    def get_dimensions(self) -> Tuple[int, int, int]:
-        """
-        Return the dimensions of the imzML dataset (x, y, z).
-
-        Returns:
-            Tuple[int, int, int]: The x, y, z dimensions of the dataset
-
-        Raises:
-            ValueError: If parser is not initialized and no filepath is available
-        """
-        if not hasattr(self, "parser") or self.parser is None:
-            if self.filepath:
-                self._initialize_parser(self.filepath)
-            else:
-                raise ValueError("Parser not initialized and no filepath available")
-
-        if self._dimensions is None:
-            # We know parser is not None at this point
-            parser = cast(ImzMLParser, self.parser)
-
-            # Get dimensions from metadata if available
-            if hasattr(parser, "imzmldict"):
-                x_max = int(parser.imzmldict.get("max count of pixels x", 1))  # type: ignore
-                y_max = int(parser.imzmldict.get("max count of pixels y", 1))  # type: ignore
-                z_max = int(parser.imzmldict.get("max count of pixels z", 1))  # type: ignore
-            else:
-                # Calculate from coordinates
-                x_coordinates: List[int] = [x for x, _, _ in parser.coordinates]  # type: ignore
-                y_coordinates: List[int] = [y for _, y, _ in parser.coordinates]  # type: ignore
-                z_coordinates: List[int] = [z for _, _, z in parser.coordinates]  # type: ignore
-
-                x_max = max(x_coordinates) if x_coordinates else 1
-                y_max = max(y_coordinates) if y_coordinates else 1
-                z_max = max(z_coordinates) if z_coordinates else 1
-
-            self._dimensions = (x_max, y_max, z_max)
-
-        return self._dimensions
+        return ImzMLMetadataExtractor(self.parser, self.imzml_path)
 
     def get_common_mass_axis(self) -> NDArray[np.float64]:
         """
@@ -397,7 +257,7 @@ class ImzMLReader(BaseMSIReader):
         parser = cast(ImzMLParser, self.parser)
 
         total_spectra = len(parser.coordinates)  # type: ignore
-        dimensions = self.get_dimensions()
+        dimensions = self.get_essential_metadata().dimensions
         total_pixels = dimensions[0] * dimensions[1] * dimensions[2]
 
         # Log information about spectra vs pixels
@@ -493,7 +353,7 @@ class ImzMLReader(BaseMSIReader):
         mzs = self.get_common_mass_axis()
 
         # Get dimensions
-        width, height, depth = self.get_dimensions()
+        width, height, depth = self.get_essential_metadata().dimensions
 
         # Collect all spectra
         coordinates: List[Tuple[int, int, int]] = []

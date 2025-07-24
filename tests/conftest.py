@@ -31,11 +31,36 @@ def mock_reader():
             super().__init__(data_path or Path("/mock/path"), **kwargs)
             self.closed = False
 
-        def get_metadata(self):
-            return {"source": "mock", "instrument": "test_instrument"}
+        def _create_metadata_extractor(self):
+            # Create a mock metadata extractor
+            from msiconvert.core.base_extractor import MetadataExtractor
+            from msiconvert.metadata.types import (
+                ComprehensiveMetadata,
+                EssentialMetadata,
+            )
 
-        def get_dimensions(self):
-            return (3, 3, 1)  # 3x3 grid, single z-plane
+            class MockExtractor(MetadataExtractor):
+                def _extract_essential_impl(self):
+                    return EssentialMetadata(
+                        dimensions=(3, 3, 1),
+                        coordinate_bounds=(0.0, 2.0, 0.0, 2.0),
+                        mass_range=(100.0, 1000.0),
+                        pixel_size=None,
+                        n_spectra=9,
+                        estimated_memory_gb=0.001,
+                        source_path="/mock/path",
+                    )
+
+                def _extract_comprehensive_impl(self):
+                    return ComprehensiveMetadata(
+                        essential=self._extract_essential_impl(),
+                        format_specific={"format": "mock"},
+                        acquisition_params={},
+                        instrument_info={"instrument": "test_instrument"},
+                        raw_metadata={"source": "mock"},
+                    )
+
+            return MockExtractor(None)
 
         def get_common_mass_axis(self):
             return np.linspace(100, 1000, 100)  # 100 mass values

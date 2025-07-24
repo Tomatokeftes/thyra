@@ -14,7 +14,6 @@ A modern Python library for converting Mass Spectrometry Imaging (MSI) data into
 - **Memory Efficient**: Handles large datasets (100+ GB) through streaming processing
 - **Metadata Preservation**: Extracts and maintains all acquisition parameters
 - **3D Support**: Process volume data or treat as 2D slices
-- **Dry-Run Mode**: Preview conversions before processing
 - **Cross-Platform**: Windows, macOS, and Linux support
 
 ## 📦 Installation
@@ -46,9 +45,6 @@ msiconvert input.imzML output.zarr
 
 # With custom parameters
 msiconvert data.d output.zarr --pixel-size 50 --dataset-id "experiment_001"
-
-# Dry run to preview conversion
-msiconvert input.imzML output.zarr --dry-run
 
 # 3D volume processing
 msiconvert volume.imzML output.zarr --handle-3d

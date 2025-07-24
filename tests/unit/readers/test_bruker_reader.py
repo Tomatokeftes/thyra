@@ -43,11 +43,12 @@ class TestBrukerReaderStructure:
 
         # Check that it implements all required methods
         required_methods = [
-            "get_metadata",
-            "get_dimensions",
+            "get_essential_metadata",
+            "get_comprehensive_metadata",
             "get_common_mass_axis",
             "iter_spectra",
             "close",
+            "_create_metadata_extractor",
         ]
 
         for method in required_methods:
@@ -149,6 +150,20 @@ class TestBrukerReaderWithMocks:
             elif "SELECT COUNT" in query:
                 # Return frame count
                 mock_cursor.fetchone.return_value = (4,)
+            elif "MaldiFrameLaserInfo" in query:
+                # Return essential metadata query result
+                mock_cursor.fetchone.return_value = (
+                    25.0,
+                    25.0,
+                    1.0,  # BeamScanSizeX, BeamScanSizeY, SpotSize
+                    0.0,
+                    1.0,  # MIN/MAX X
+                    0.0,
+                    1.0,  # MIN/MAX Y
+                    4,  # frame count
+                    100.0,
+                    1000.0,  # MIN/MAX mass
+                )
             elif "GlobalMetadata" in query:
                 # Return some metadata
                 mock_cursor.fetchall.return_value = [
@@ -166,15 +181,16 @@ class TestBrukerReaderWithMocks:
         # Create reader
         reader = BrukerReader(mock_bruker_data)
 
-        # Get metadata
-        metadata = reader.get_metadata()
+        # Get essential metadata
+        essential = reader.get_essential_metadata()
+        assert essential.source_path == str(mock_bruker_data)
+        assert essential.n_spectra == 4
+        assert essential.pixel_size == (25.0, 25.0)
 
-        # Check metadata - use normalized paths for comparison
-        assert "source" in metadata
-        assert normalize_path(mock_bruker_data) == normalize_path(metadata["source"])
-        assert metadata["frame_count"] == 4
-        assert metadata["key1"] == "value1"
-        assert metadata["key2"] == "value2"
+        # Get comprehensive metadata
+        comprehensive = reader.get_comprehensive_metadata()
+        assert comprehensive.raw_metadata.get("key1") == "value1"
+        assert comprehensive.raw_metadata.get("key2") == "value2"
 
         # Clean up
         reader.close()
@@ -232,11 +248,31 @@ class TestBrukerReaderWithMocks:
             # Also set frame positions for backward compatibility
             reader._frame_positions = np.array([[0, 0], [0, 1], [1, 0], [1, 1]])
 
-            # Reset dimensions so it will be recalculated
-            reader._dimensions = None
+            # Need to mock the metadata extractor query
+            def execute_side_effect_with_metadata(query, *args, **kwargs):
+                if "MaldiFrameLaserInfo" in query:
+                    # Return essential metadata query result
+                    mock_cursor.fetchone.return_value = (
+                        25.0,
+                        25.0,
+                        1.0,  # BeamScanSizeX, BeamScanSizeY, SpotSize
+                        0.0,
+                        1.0,  # MIN/MAX X
+                        0.0,
+                        1.0,  # MIN/MAX Y
+                        4,  # frame count
+                        100.0,
+                        1000.0,  # MIN/MAX mass
+                    )
+                else:
+                    return execute_side_effect(query, *args, **kwargs)
+                return mock_cursor
 
-            # Get dimensions
-            dimensions = reader.get_dimensions()
+            mock_cursor.execute.side_effect = execute_side_effect_with_metadata
+
+            # Get dimensions through metadata
+            essential = reader.get_essential_metadata()
+            dimensions = essential.dimensions
 
             # Check dimensions (should be 2x2x1 from our mock data)
             assert len(dimensions) == 3

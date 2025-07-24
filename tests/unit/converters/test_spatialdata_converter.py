@@ -77,7 +77,20 @@ class TestSpatialDataConverter:
         output_path = temp_dir / "test_output.zarr"
 
         # Mock 3D dimensions but handle as 2D slices
-        monkeypatch.setattr(mock_reader, "get_dimensions", lambda: (3, 3, 2))
+        from msiconvert.metadata.types import EssentialMetadata
+
+        mock_essential = EssentialMetadata(
+            dimensions=(3, 3, 2),
+            coordinate_bounds=(0.0, 2.0, 0.0, 2.0),
+            mass_range=(100.0, 1000.0),
+            pixel_size=None,
+            n_spectra=18,
+            estimated_memory_gb=0.001,
+            source_path="/mock/path",
+        )
+        monkeypatch.setattr(
+            mock_reader.metadata_extractor, "get_essential", lambda: mock_essential
+        )
 
         # Initialize converter without 3D handling
         converter = SpatialDataConverter(
@@ -197,7 +210,20 @@ class TestSpatialDataConverter:
         output_path = temp_dir / "test_output.zarr"
 
         # Mock 3D dimensions but handle as 2D slices
-        monkeypatch.setattr(mock_reader, "get_dimensions", lambda: (3, 3, 2))
+        from msiconvert.metadata.types import EssentialMetadata
+
+        mock_essential = EssentialMetadata(
+            dimensions=(3, 3, 2),
+            coordinate_bounds=(0.0, 2.0, 0.0, 2.0),
+            mass_range=(100.0, 1000.0),
+            pixel_size=None,
+            n_spectra=18,
+            estimated_memory_gb=0.001,
+            source_path="/mock/path",
+        )
+        monkeypatch.setattr(
+            mock_reader.metadata_extractor, "get_essential", lambda: mock_essential
+        )
 
         # Set up mocks
         mock_adata = MagicMock()
@@ -389,9 +415,9 @@ class TestSpatialDataConverter:
         converter.add_metadata(mock_sdata)
 
         # Check metadata
-        assert mock_sdata.metadata["dataset_id"] == "test_dataset"
-        assert mock_sdata.metadata["pixel_size_um"] == 2.0
-        assert "msi_metadata" in mock_sdata.metadata
+        assert mock_sdata.metadata["conversion_info"]["dataset_id"] == "test_dataset"
+        assert mock_sdata.metadata["conversion_info"]["pixel_size_um"] == 2.0
+        assert "conversion_info" in mock_sdata.metadata
 
     @patch("msiconvert.converters.spatialdata_converter.SpatialData")
     def test_convert_end_to_end(self, mock_spatial_data, mock_reader, temp_dir):
@@ -424,7 +450,20 @@ class TestSpatialDataConverter:
         output_path = temp_dir / "test_output.zarr"
 
         # Mock 3D dimensions but handle as 2D slices
-        monkeypatch.setattr(mock_reader, "get_dimensions", lambda: (3, 3, 2))
+        from msiconvert.metadata.types import EssentialMetadata
+
+        mock_essential = EssentialMetadata(
+            dimensions=(3, 3, 2),
+            coordinate_bounds=(0.0, 2.0, 0.0, 2.0),
+            mass_range=(100.0, 1000.0),
+            pixel_size=None,
+            n_spectra=18,
+            estimated_memory_gb=0.001,
+            source_path="/mock/path",
+        )
+        monkeypatch.setattr(
+            mock_reader.metadata_extractor, "get_essential", lambda: mock_essential
+        )
 
         # Initialize converter without 3D handling - make sure to set the dataset_id
         converter = SpatialDataConverter(

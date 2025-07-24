@@ -1,10 +1,15 @@
 # msiconvert/core/base_reader.py
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Any, Dict, Generator, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, Generator, Optional, Tuple
 
 import numpy as np
 from numpy.typing import NDArray
+
+from ..metadata.types import ComprehensiveMetadata, EssentialMetadata
+
+if TYPE_CHECKING:
+    from .base_extractor import MetadataExtractor
 
 
 class BaseMSIReader(ABC):
@@ -19,16 +24,27 @@ class BaseMSIReader(ABC):
             **kwargs: Additional reader-specific parameters
         """
         self.data_path = Path(data_path)
+        self._metadata_extractor: Optional["MetadataExtractor"] = None
 
     @abstractmethod
-    def get_metadata(self) -> Dict[str, Any]:
-        """Return metadata about the MSI dataset."""
+    def _create_metadata_extractor(self) -> "MetadataExtractor":
+        """Create format-specific metadata extractor."""
         pass
 
-    @abstractmethod
-    def get_dimensions(self) -> Tuple[int, int, int]:
-        """Return the dimensions of the MSI dataset (x, y, z)."""
-        pass
+    @property
+    def metadata_extractor(self) -> "MetadataExtractor":
+        """Lazy-loaded metadata extractor."""
+        if self._metadata_extractor is None:
+            self._metadata_extractor = self._create_metadata_extractor()
+        return self._metadata_extractor
+
+    def get_essential_metadata(self) -> EssentialMetadata:
+        """Get essential metadata for processing."""
+        return self.metadata_extractor.get_essential()
+
+    def get_comprehensive_metadata(self) -> ComprehensiveMetadata:
+        """Get complete metadata."""
+        return self.metadata_extractor.get_comprehensive()
 
     @abstractmethod
     def get_common_mass_axis(self) -> NDArray[np.float64]:
@@ -106,58 +122,6 @@ class BaseMSIReader(ABC):
     def close(self) -> None:
         """Close all open file handles."""
         pass
-
-    @property
-    def shape(self) -> Tuple[int, int, int]:
-        """
-        Return the shape of the dataset (x, y, z dimensions).
-
-        Returns:
-            Tuple of (x, y, z) dimensions
-        """
-        return self.get_dimensions()
-
-    @property
-    def n_spectra(self) -> int:
-        """
-        Return the total number of spectra in the dataset.
-
-        Returns:
-            Total number of spectra
-        """
-        # Default implementation counts actual spectra
-        count = 0
-        for _ in self.iter_spectra():
-            count += 1
-        return count
-
-    @property
-    def mass_range(self) -> Tuple[float, float]:
-        """
-        Return the mass range (min_mass, max_mass) of the dataset.
-
-        Returns:
-            Tuple of (min_mass, max_mass) values
-        """
-        mass_axis = self.get_common_mass_axis()
-        if len(mass_axis) == 0:
-            return (0.0, 0.0)
-        return (float(np.min(mass_axis)), float(np.max(mass_axis)))
-
-    def get_pixel_size(self) -> Optional[Tuple[float, float]]:
-        """
-        Extract pixel size from format-specific metadata.
-
-        Returns:
-            Optional[Tuple[float, float]]: Pixel size as (x_size, y_size) in micrometers,
-                                         or None if not available in metadata.
-
-        Notes:
-            - For ImzML: Extracts from cvParam IMS:1000046 and IMS:1000047
-            - For Bruker: Extracts from MaldiFrameLaserInfo table (BeamScanSizeX/Y)
-            - Default implementation returns None (no automatic detection)
-        """
-        return None
 
     def __enter__(self):
         """Context manager entry."""
