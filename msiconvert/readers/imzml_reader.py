@@ -45,13 +45,24 @@ class ImzMLReader(BaseMSIReader):
         self.is_continuous: bool = False
         self.is_processed: bool = False
 
+        # Parser initialization flag for lazy loading
+        self._parser_initialized: bool = False
+
         # Cached properties
         self._common_mass_axis: Optional[NDArray[np.float64]] = None
         self._coordinates_cache: Dict[int, Tuple[int, int, int]] = {}
 
-        # Initialize if path provided
+        # Store path but don't initialize parser yet - wait for first use
         if data_path is not None:
-            self._initialize_parser(data_path)
+            self.filepath = data_path
+
+    def _ensure_parser_initialized(self) -> None:
+        """Guarantee parser is initialized exactly once."""
+        if not self._parser_initialized:
+            if self.filepath is None:
+                raise ValueError("No file path provided for parser initialization")
+            self._initialize_parser(self.filepath)
+            self._parser_initialized = True
 
     def _initialize_parser(self, imzml_path: Union[str, Path]) -> None:
         """
@@ -110,8 +121,7 @@ class ImzMLReader(BaseMSIReader):
 
         Converts 1-based coordinates from imzML to 0-based coordinates for internal use.
         """
-        if not hasattr(self, "parser") or self.parser is None:
-            return
+        self._ensure_parser_initialized()
 
         logging.info("Caching all coordinates for faster access")
         self._coordinates_cache = {}
@@ -123,11 +133,7 @@ class ImzMLReader(BaseMSIReader):
 
     def _create_metadata_extractor(self) -> MetadataExtractor:
         """Create ImzML metadata extractor."""
-        if not self.parser:
-            if self.filepath:
-                self._initialize_parser(self.filepath)
-            else:
-                raise ValueError("Parser not initialized and no filepath available")
+        self._ensure_parser_initialized()
 
         if not self.imzml_path:
             raise ValueError("ImzML path not available")
@@ -147,11 +153,7 @@ class ImzMLReader(BaseMSIReader):
         Raises:
             ValueError: If the common mass axis cannot be created
         """
-        if not hasattr(self, "parser") or self.parser is None:
-            if self.filepath:
-                self._initialize_parser(self.filepath)
-            else:
-                raise ValueError("Parser not initialized and no filepath available")
+        self._ensure_parser_initialized()
 
         if self._common_mass_axis is None:
             # We know parser is not None at this point
@@ -243,11 +245,7 @@ class ImzMLReader(BaseMSIReader):
         Raises:
             ValueError: If parser is not initialized and no filepath is available
         """
-        if not hasattr(self, "parser") or self.parser is None:
-            if self.filepath:
-                self._initialize_parser(self.filepath)
-            else:
-                raise ValueError("Parser not initialized and no filepath available")
+        self._ensure_parser_initialized()
 
         # Use default batch size if not specified
         if batch_size is None:
@@ -343,11 +341,7 @@ class ImzMLReader(BaseMSIReader):
         Raises:
             ValueError: If parser is not initialized and no filepath is available
         """
-        if not hasattr(self, "parser") or self.parser is None:
-            if self.filepath:
-                self._initialize_parser(self.filepath)
-            else:
-                raise ValueError("Parser not initialized and no filepath available")
+        self._ensure_parser_initialized()
 
         # Get common mass axis
         mzs = self.get_common_mass_axis()
@@ -406,11 +400,7 @@ class ImzMLReader(BaseMSIReader):
         Returns:
             Total number of spectra (efficient implementation using parser)
         """
-        if not hasattr(self, "parser") or self.parser is None:
-            if self.filepath:
-                self._initialize_parser(self.filepath)
-            else:
-                raise ValueError("Parser not initialized and no filepath available")
+        self._ensure_parser_initialized()
 
         # Use parser coordinates which is efficient
         parser = cast(ImzMLParser, self.parser)

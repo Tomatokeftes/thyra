@@ -1,5 +1,6 @@
 # msiconvert/core/registry.py
 import logging
+from functools import lru_cache
 from pathlib import Path
 from typing import Callable, Dict, Type
 
@@ -65,7 +66,13 @@ def get_converter_class(format_name: str) -> Type[BaseMSIConverter]:
         raise ValueError(f"No converter registered for format '{format_name}'")
 
 
-def detect_format(input_path: Path) -> str:
+@lru_cache(maxsize=32)
+def _detect_format_cached(input_path_str: str) -> str:
+    """Cached format detection to avoid repeated file I/O."""
+    return _detect_format_uncached(Path(input_path_str))
+
+
+def _detect_format_uncached(input_path: Path) -> str:
     """
     Detect the format of the input data.
 
@@ -86,15 +93,16 @@ def detect_format(input_path: Path) -> str:
     logging.debug(f"Is file: {input_path.is_file()}")
     logging.debug(f"Suffix: {input_path.suffix.lower()}")
 
+    # Optimized: exit immediately on first successful detection
     for format_name, detector in format_detectors.items():
         logging.debug(f"Checking detector for format: {format_name}")
         try:
-            result = detector(input_path)
-            logging.debug(f"  Result: {result}")
-            if result:
+            if detector(input_path):
+                logging.debug(f"Successfully detected format: {format_name}")
                 return format_name
         except Exception as e:
             logging.warning(f"Error in format detector for {format_name}: {e}")
+            continue  # Try next detector
 
     supported_formats = ", ".join(format_detectors.keys())
 
@@ -127,3 +135,8 @@ def detect_format(input_path: Path) -> str:
         f"Unable to detect format for: {input_path}. "
         f"Supported formats: {supported_formats}.{suggestion_text}"
     )
+
+
+def detect_format(input_path: Path) -> str:
+    """Public interface with caching for format detection."""
+    return _detect_format_cached(str(input_path))
