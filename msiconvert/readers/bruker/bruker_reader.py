@@ -387,6 +387,44 @@ class BrukerReader(BaseMSIReader):
         except Exception as e:
             logger.error(f"Error during cleanup: {e}")
 
+    def get_pixel_size(self) -> Optional[Tuple[float, float]]:
+        """
+        Get pixel size from metadata extractor.
+
+        Returns:
+            Tuple of (x_pixel_size, y_pixel_size) in micrometers or None if not available
+        """
+        essential_metadata = self.get_essential_metadata()
+        return essential_metadata.pixel_size
+
+    @property
+    def shape(self) -> Tuple[int, int, int]:
+        """
+        Get spatial dimensions (pixel grid) from metadata extractor.
+
+        Note: This is the spatial pixel grid, not the mass axis dimensions.
+        Mass axis interpolation to common m/z values is handled during conversion.
+
+        Returns:
+            Tuple of (x_pixels, y_pixels, z_pixels) spatial dimensions
+        """
+        essential_metadata = self.get_essential_metadata()
+        return essential_metadata.dimensions
+
+    @property
+    def mass_range(self) -> Tuple[float, float]:
+        """
+        Get mass range from metadata extractor.
+
+        Note: This is the acquisition mass range, not the final interpolated axis.
+        The actual common mass axis for interpolation is built from all unique m/z values.
+
+        Returns:
+            Tuple of (min_mass, max_mass) in m/z units
+        """
+        essential_metadata = self.get_essential_metadata()
+        return essential_metadata.mass_range
+
     def get_performance_stats(self) -> Dict[str, Any]:
         """Get comprehensive performance statistics."""
         stats = {

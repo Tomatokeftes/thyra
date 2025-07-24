@@ -44,6 +44,9 @@ class TestImzMLMetadataExtractor:
         mock_parser.metadata = Mock()
         mock_parser.metadata.find.return_value = []
 
+        # Mock imzmldict as an empty dictionary by default
+        mock_parser.imzmldict = {}
+
         return mock_parser
 
     @patch("msiconvert.metadata.extractors.imzml_extractor.ImzMLParser")
@@ -77,7 +80,13 @@ class TestImzMLMetadataExtractor:
         """Test essential metadata extraction with pixel size detection."""
         mock_parser = self.create_mock_parser()
 
-        # Mock pixel size metadata
+        # Set pixel size in imzmldict (primary detection method)
+        mock_parser.imzmldict = {
+            "pixel size x": 25.0,
+            "pixel size y": 25.0,
+        }
+
+        # Also mock XML-based pixel size metadata as fallback
         mock_x_param = Mock()
         mock_x_param.get.return_value = 25.0
         mock_y_param = Mock()
@@ -243,6 +252,7 @@ class TestImzMLMetadataExtractor:
     @patch("msiconvert.metadata.extractors.imzml_extractor.ImzMLParser")
     def test_error_handling_parser_failure(self, mock_imzml_parser_class):
         """Test error handling when parser initialization fails."""
+        mock_parser = self.create_mock_parser()
         mock_imzml_parser_class.side_effect = Exception("Parser initialization failed")
 
         extractor = ImzMLMetadataExtractor(mock_parser, Path("/test/path.imzML"))

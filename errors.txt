@@ -1,0 +1,99 @@
+=================================== FAILURES ===================================
+________ TestSpatialDataConverter.test_create_data_structures_2d_slices ________
+tests/unit/converters/test_spatialdata_converter.py:80: in test_create_data_structures_2d_slices
+    monkeypatch.setattr(mock_reader, "get_dimensions", lambda: (3, 3, 2))
+E   AttributeError: <conftest.mock_reader.<locals>.MockMSIReader object at 0x7faf675c6110> has no attribute 'get_dimensions'
+____________ TestSpatialDataConverter.test_finalize_data_2d_slices _____________
+tests/unit/converters/test_spatialdata_converter.py:200: in test_finalize_data_2d_slices
+    monkeypatch.setattr(mock_reader, "get_dimensions", lambda: (3, 3, 2))
+E   AttributeError: <conftest.mock_reader.<locals>.MockMSIReader object at 0x7faf54f76110> has no attribute 'get_dimensions'
+__________________ TestSpatialDataConverter.test_add_metadata __________________
+tests/unit/converters/test_spatialdata_converter.py:392: in test_add_metadata
+    assert mock_sdata.metadata["dataset_id"] == "test_dataset"
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'dataset_id'
+_______ TestSpatialDataConverter.test_process_single_spectrum_2d_slices ________
+tests/unit/converters/test_spatialdata_converter.py:427: in test_process_single_spectrum_2d_slices
+    monkeypatch.setattr(mock_reader, "get_dimensions", lambda: (3, 3, 2))
+E   AttributeError: <conftest.mock_reader.<locals>.MockMSIReader object at 0x7faf675bad50> has no attribute 'get_dimensions'
+__________ TestBrukerMetadataExtractor.test_extract_essential_3d_data __________
+tests/unit/metadata/extractors/test_bruker_extractor.py:120: in test_extract_essential_3d_data
+    assert essential.dimensions == (3, 5, 5)  # x, y, z
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   assert (101, 201, 1) == (3, 5, 5)
+E
+E     At index 0 diff: 101 != 3
+E
+E     Full diff:
+E       (
+E     +     101,
+E     +     201,
+E     -     3,
+E     ?     ^
+E     +     1,
+E     ?     ^
+E     -     5,
+E     -     5,
+E       )
+____________ TestBrukerMetadataExtractor.test_extract_comprehensive ____________
+tests/unit/metadata/extractors/test_bruker_extractor.py:129: in test_extract_comprehensive
+    comprehensive = extractor.get_comprehensive()
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+msiconvert/core/base_extractor.py:76: in get_comprehensive
+    self._comprehensive_cache = self._extract_comprehensive_impl()
+                                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+msiconvert/metadata/extractors/bruker_extractor.py:117: in _extract_comprehensive_impl
+    acquisition_params=self._extract_acquisition_params(),
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+msiconvert/metadata/extractors/bruker_extractor.py:188: in _extract_acquisition_params
+    laser_power, laser_freq, beam_x, beam_y, spot_size = result
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   ValueError: too many values to unpack (expected 5)
+______ TestBrukerMetadataExtractor.test_comprehensive_metadata_structure _______
+tests/unit/metadata/extractors/test_bruker_extractor.py:292: in test_comprehensive_metadata_structure
+    comprehensive = extractor.get_comprehensive()
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+msiconvert/core/base_extractor.py:76: in get_comprehensive
+    self._comprehensive_cache = self._extract_comprehensive_impl()
+                                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+msiconvert/metadata/extractors/bruker_extractor.py:117: in _extract_comprehensive_impl
+    acquisition_params=self._extract_acquisition_params(),
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+msiconvert/metadata/extractors/bruker_extractor.py:188: in _extract_acquisition_params
+    laser_power, laser_freq, beam_x, beam_y, spot_size = result
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   ValueError: too many values to unpack (expected 5)
+__________ TestBrukerMetadataExtractor.test_logging_during_extraction __________
+tests/unit/metadata/extractors/test_bruker_extractor.py:356: in test_logging_during_extraction
+    mock_logging.debug.assert_called()
+/opt/hostedtoolcache/Python/3.11.13/x64/lib/python3.11/unittest/mock.py:908: in assert_called
+    raise AssertionError(msg)
+E   AssertionError: Expected 'debug' to have been called.
+______ TestImzMLMetadataExtractor.test_extract_essential_with_pixel_size _______
+tests/unit/metadata/extractors/test_imzml_extractor.py:99: in test_extract_essential_with_pixel_size
+    assert essential.pixel_size == (25.0, 25.0)
+E   AssertionError: assert None == (25.0, 25.0)
+E    +  where None = EssentialMetadata(dimensions=(2, 2, 1), coordinate_bounds=(1.0, 2.0, 1.0, 2.0), mass_range=(100.0, 300.0), pixel_size=None, n_spectra=4, estimated_memory_gb=5.9604644775390625e-05, source_path='/test/path.imzML').pixel_size
+____________ TestImzMLMetadataExtractor.test_extract_comprehensive _____________
+tests/unit/metadata/extractors/test_imzml_extractor.py:153: in test_extract_comprehensive
+    comprehensive = extractor.get_comprehensive()
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+msiconvert/core/base_extractor.py:76: in get_comprehensive
+    self._comprehensive_cache = self._extract_comprehensive_impl()
+                                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+msiconvert/metadata/extractors/imzml_extractor.py:64: in _extract_comprehensive_impl
+    acquisition_params=self._extract_acquisition_params(),
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+msiconvert/metadata/extractors/imzml_extractor.py:207: in _extract_acquisition_params
+    if key in self.parser.imzmldict:
+       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   TypeError: argument of type 'Mock' is not iterable
+----------------------------- Captured stdout call -----------------------------
+2025-07-23 19:43:27,523 - msiconvert.metadata.extractors.imzml_extractor - WARNING - Failed to parse XML metadata for pixel size: 'Mock' object is not iterable
+------------------------------ Captured log call -------------------------------
+WARNING  msiconvert.metadata.extractors.imzml_extractor:imzml_extractor.py:272 Failed to parse XML metadata for pixel size: 'Mock' object is not iterable
+________ TestImzMLMetadataExtractor.test_error_handling_parser_failure _________
+tests/unit/metadata/extractors/test_imzml_extractor.py:248: in test_error_handling_parser_failure
+    extractor = ImzMLMetadataExtractor(mock_parser, Path("/test/path.imzML"))
+                                       ^^^^^^^^^^^
+E   NameError: name 'mock_parser' is not defined

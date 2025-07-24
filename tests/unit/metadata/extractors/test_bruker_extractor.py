@@ -37,13 +37,56 @@ class TestBrukerMetadataExtractor:
             elif "Id, SpotXPos, SpotYPos" in query:
                 # Comprehensive metadata query
                 return mock_cursor
+            elif "MaldiFrameLaserInfo" in query:
+                # Acquisition parameters query
+                return mock_cursor
             else:
                 return mock_cursor
 
         def fetchone_side_effect():
+            # Check which query was executed by looking at the last call
+            last_call = mock_cursor.execute.call_args
+            if last_call and len(last_call) > 0:
+                query = last_call[0][0] if last_call[0] else ""
+                if "LaserPower, LaserFrequency" in query:
+                    # Acquisition parameters query - return laser_power, laser_freq, beam_x, beam_y, spot_size
+                    return (100.0, 10.0, 25.0, 25.0, 50.0)
+                elif "BeamScanSizeX, BeamScanSizeY, SpotSize" in query:
+                    # Laser info query - return beam_x, beam_y, spot_size
+                    laser_result = sample_data.get("laser_info", (25.0, 25.0, 1.0))
+                    return laser_result
+                elif "MIN(XIndexPos)" in query and "COUNT(*)" in query:
+                    # Frame info query - return min_x, max_x, min_y, max_y, frame_count
+                    return (0, 2, 0, 4, 400)
             return sample_data["essential"]
 
         def fetchall_side_effect():
+            # Check which query was executed by looking at the last call
+            last_call = mock_cursor.execute.call_args
+            if last_call and len(last_call) > 0:
+                query = last_call[0][0] if last_call[0] else ""
+                if "GlobalMetadata" in query and "ImagingArea" in query:
+                    # Imaging bounds query - return key-value pairs
+                    return [
+                        ("ImagingAreaMinXIndexPos", "0"),
+                        ("ImagingAreaMaxXIndexPos", "2"),
+                        ("ImagingAreaMinYIndexPos", "0"),
+                        ("ImagingAreaMaxYIndexPos", "4"),
+                        ("MzAcqRangeLower", "100.0"),
+                        ("MzAcqRangeUpper", "1000.0"),
+                    ]
+                elif "Id, SpotXPos, SpotYPos" in query:
+                    # Comprehensive metadata query
+                    return sample_data["comprehensive"]
+                elif "SELECT Key, Value FROM GlobalMetadata" in query:
+                    # Global metadata query - return key-value pairs
+                    return [
+                        ("AcquisitionSoftware", "flexControl"),
+                        ("AcquisitionSoftwareVersion", "3.4"),
+                        ("InstrumentModel", "timsTOF fleX"),
+                        ("LaserRepetitionRate", "2000"),
+                        ("SampleName", "Test Sample"),
+                    ]
             return sample_data["comprehensive"]
 
         mock_cursor.execute.side_effect = execute_side_effect
@@ -84,6 +127,7 @@ class TestBrukerMetadataExtractor:
         sample_data = {
             "essential": (None, None, 1.0, 0, 100, 0, 200, 400, 100.0, 1000.0),
             "comprehensive": [],
+            "laser_info": (None, None, 1.0),  # No pixel size in laser info
         }
         mock_conn = self.create_mock_connection(sample_data)
         data_path = Path("/test/data.d")
@@ -133,12 +177,17 @@ class TestBrukerMetadataExtractor:
         assert comprehensive.essential.n_spectra == 400
 
         # Check format-specific metadata
-        assert "bruker_format" in comprehensive.format_specific
-        assert comprehensive.format_specific["data_path"] == str(data_path)
+        assert "data_format" in comprehensive.format_specific
+        assert comprehensive.format_specific["data_format"] in [
+            "bruker_tsf",
+            "bruker_tdf",
+        ]
+        assert "database_path" in comprehensive.format_specific
 
         # Check acquisition parameters
-        assert "BeamScanSizeX" in comprehensive.acquisition_params
-        assert "BeamScanSizeY" in comprehensive.acquisition_params
+        assert "laser_power" in comprehensive.acquisition_params
+        assert "beam_scan_size_x" in comprehensive.acquisition_params
+        assert "beam_scan_size_y" in comprehensive.acquisition_params
 
         # Check raw metadata
         assert "frame_info" in comprehensive.raw_metadata
