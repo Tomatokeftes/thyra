@@ -1,0 +1,11 @@
+FAILED tests/unit/metadata/extractors/test_bruker_extractor.py::TestBrukerMetadataExtractor::test_extract_essential_3d_data - AssertionError: assert (3, 5, 1) == (3, 5, 5)
+FAILED tests/unit/metadata/extractors/test_bruker_extractor.py::TestBrukerMetadataExtractor::test_extract_comprehensive - AssertionError: assert 'frame_info' in {'AcquisitionSoftware': 'flexControl', 'AcquisitionSoftwareVersion': '3.4', 'InstrumentModel': 'timsTOF fleX', 'L...
+FAILED tests/unit/metadata/extractors/test_bruker_extractor.py::TestBrukerMetadataExtractor::test_dimensions_calculation - AssertionError: assert (3, 5, 1) == (31, 21, 1)
+FAILED tests/unit/metadata/extractors/test_bruker_extractor.py::TestBrukerMetadataExtractor::test_single_spectrum_dataset - AssertionError: assert (3, 5, 1) == (1, 1, 1)
+FAILED tests/unit/metadata/extractors/test_bruker_extractor.py::TestBrukerMetadataExtractor::test_inconsistent_pixel_sizes - AssertionError: assert (25.0, 25.0) == (20.0, 30.0)
+FAILED tests/unit/metadata/extractors/test_bruker_extractor.py::TestBrukerMetadataExtractor::test_comprehensive_metadata_structure - AssertionError: assert 'bruker_format' in {'data_format': 'bruker_tsf', 'database_path': '\\test\\data.d\\analysis.tsf', 'is_maldi': True}
+FAILED tests/unit/metadata/extractors/test_bruker_extractor.py::TestBrukerMetadataExtractor::test_large_coordinate_range - assert 3 > 1000
+FAILED tests/unit/metadata/extractors/test_bruker_extractor.py::TestBrukerMetadataExtractor::test_logging_during_extraction - AssertionError: Expected 'debug' to have been called.
+FAILED tests/unit/metadata/extractors/test_imzml_extractor.py::TestImzMLMetadataExtractor::test_extract_essential_basic - AssertionError: assert '\\test\\path.imzML' == '/test/path.imzML'
+FAILED tests/unit/metadata/extractors/test_imzml_extractor.py::TestImzMLMetadataExtractor::test_extract_comprehensive - AssertionError: assert 'imzml_version' in {'file_mode': 'continuous', 'ibd_file': '\\test\\path.ibd', 'spectrum_count': 4, 'uuid': None}
+FAILED tests/unit/metadata/extractors/test_imzml_extractor.py::TestImzMLMetadataExtractor::test_error_handling_parser_failure - Failed: DID NOT RAISE <class 'Exception'>

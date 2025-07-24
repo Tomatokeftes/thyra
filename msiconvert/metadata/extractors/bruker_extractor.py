@@ -26,39 +26,80 @@ class BrukerMetadataExtractor(MetadataExtractor):
         self.data_path = data_path
 
     def _extract_essential_impl(self) -> EssentialMetadata:
-        """Extract essential metadata with single optimized query."""
+        """Extract essential metadata with proper coordinate normalization."""
         cursor = self.conn.cursor()
 
-        # Single comprehensive query for all essential data
-        essential_query = """
-        SELECT
-            BeamScanSizeX, BeamScanSizeY, SpotSize,
-            MIN(SpotXPos), MAX(SpotXPos),
-            MIN(SpotYPos), MAX(SpotYPos),
-            COUNT(*) as frame_count,
-            MIN(MzAcqRangeLower), MAX(MzAcqRangeUpper)
-        FROM MaldiFrameLaserInfo
+        # Get imaging area bounds from GlobalMetadata for coordinate normalization
+        imaging_bounds_query = """
+        SELECT Key, Value FROM GlobalMetadata
+        WHERE Key IN ('ImagingAreaMinXIndexPos', 'ImagingAreaMaxXIndexPos',
+                      'ImagingAreaMinYIndexPos', 'ImagingAreaMaxYIndexPos',
+                      'MzAcqRangeLower', 'MzAcqRangeUpper')
         """
 
+        cursor.execute(imaging_bounds_query)
+        bounds_data = {row[0]: float(row[1]) for row in cursor.fetchall()}
+
+        # Get beam scan sizes from laser info
+        laser_query = """
+        SELECT BeamScanSizeX, BeamScanSizeY, SpotSize
+        FROM MaldiFrameLaserInfo
+        LIMIT 1
+        """
+
+        cursor.execute(laser_query)
+        laser_result = cursor.fetchone()
+
+        # Get coordinate bounds and frame count from frame info
+        frame_query = """
+        SELECT
+            MIN(XIndexPos), MAX(XIndexPos),
+            MIN(YIndexPos), MAX(YIndexPos),
+            COUNT(*) as frame_count
+        FROM MaldiFrameInfo
+        """
+
+        cursor.execute(frame_query)
+        frame_result = cursor.fetchone()
+
         try:
-            cursor.execute(essential_query)
-            result = cursor.fetchone()
+            if not frame_result:
+                raise ValueError("No data found in MaldiFrameInfo table")
 
-            if not result:
-                raise ValueError("No data found in MaldiFrameLaserInfo table")
+            min_x_raw, max_x_raw, min_y_raw, max_y_raw, frame_count = frame_result
 
-            (
-                beam_x,
-                beam_y,
-                spot_size,
-                min_x,
-                max_x,
-                min_y,
-                max_y,
-                frame_count,
-                min_mass,
-                max_mass,
-            ) = result
+            # Extract imaging area bounds for normalization
+            imaging_min_x = bounds_data.get("ImagingAreaMinXIndexPos", min_x_raw or 0)
+            imaging_max_x = bounds_data.get("ImagingAreaMaxXIndexPos", max_x_raw or 0)
+            imaging_min_y = bounds_data.get("ImagingAreaMinYIndexPos", min_y_raw or 0)
+            imaging_max_y = bounds_data.get("ImagingAreaMaxYIndexPos", max_y_raw or 0)
+
+            # Normalize coordinates to start from 0
+            min_x = 0.0  # Normalized coordinates always start from 0
+            max_x = float(imaging_max_x - imaging_min_x)
+            min_y = 0.0
+            max_y = float(imaging_max_y - imaging_min_y)
+
+            # Extract beam sizes for pixel size
+            beam_x, beam_y, spot_size = (
+                laser_result if laser_result else (None, None, None)
+            )
+
+            # Mass range from GlobalMetadata
+            min_mass = bounds_data.get("MzAcqRangeLower")
+            max_mass = bounds_data.get("MzAcqRangeUpper")
+
+            # --- Error Tracing for Mass Range ---
+            missing_mass_keys = []
+            if min_mass is None:
+                missing_mass_keys.append("MzAcqRangeLower")
+            if max_mass is None:
+                missing_mass_keys.append("MzAcqRangeUpper")
+
+            if missing_mass_keys:
+                error_msg = f"Missing critical mass range bounds in GlobalMetadata: {', '.join(missing_mass_keys)}. Cannot establish mass range."
+                logger.error(error_msg)
+                raise ValueError(error_msg)
 
             # Calculate dimensions and bounds
             dimensions = self._calculate_dimensions_from_coords(
@@ -155,7 +196,9 @@ class BrukerMetadataExtractor(MetadataExtractor):
     def _extract_bruker_specific(self) -> Dict[str, Any]:
         """Extract Bruker format-specific metadata."""
         format_specific = {
+            "bruker_format": "bruker_tdf" if self._is_tdf_format() else "bruker_tsf",
             "data_format": "bruker_tdf" if self._is_tdf_format() else "bruker_tsf",
+            "data_path": str(self.data_path),
             "database_path": str(self.data_path / "analysis.tsf"),
             "is_maldi": self._is_maldi_dataset(),
         }
@@ -192,8 +235,14 @@ class BrukerMetadataExtractor(MetadataExtractor):
                     params["laser_frequency"] = laser_freq
                 if beam_x is not None:
                     params["beam_scan_size_x"] = beam_x
+                    params[
+                        "BeamScanSizeX"
+                    ] = beam_x  # Add both formats for compatibility
                 if beam_y is not None:
                     params["beam_scan_size_y"] = beam_y
+                    params[
+                        "BeamScanSizeY"
+                    ] = beam_y  # Add both formats for compatibility
                 if spot_size is not None:
                     params["laser_spot_size"] = spot_size
 
@@ -247,8 +296,27 @@ class BrukerMetadataExtractor(MetadataExtractor):
 
         try:
             cursor.execute("SELECT Key, Value FROM GlobalMetadata")
+            global_metadata = {}
             for key, value in cursor.fetchall():
-                raw_metadata[key] = value
+                global_metadata[key] = value
+            raw_metadata["global_metadata"] = global_metadata
+
+            # Extract frame info for tests that expect it
+            cursor.execute(
+                "SELECT Id, SpotXPos, SpotYPos, BeamScanSizeX, BeamScanSizeY FROM MaldiFrameLaserInfo"
+            )
+            frame_info = []
+            for row in cursor.fetchall():
+                frame_info.append(
+                    {
+                        "id": row[0],
+                        "x_pos": row[1],
+                        "y_pos": row[2],
+                        "beam_x": row[3],
+                        "beam_y": row[4],
+                    }
+                )
+            raw_metadata["frame_info"] = frame_info
 
         except sqlite3.OperationalError:
             logger.debug("GlobalMetadata table not found or accessible")
