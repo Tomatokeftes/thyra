@@ -387,16 +387,6 @@ class BrukerReader(BaseMSIReader):
         except Exception as e:
             logger.error(f"Error during cleanup: {e}")
 
-    def get_pixel_size(self) -> Optional[Tuple[float, float]]:
-        """
-        Get pixel size from metadata extractor.
-
-        Returns:
-            Tuple of (x_pixel_size, y_pixel_size) in micrometers or None if not available
-        """
-        essential_metadata = self.get_essential_metadata()
-        return essential_metadata.pixel_size
-
     @property
     def shape(self) -> Tuple[int, int, int]:
         """

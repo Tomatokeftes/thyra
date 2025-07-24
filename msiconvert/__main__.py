@@ -61,10 +61,11 @@ def detect_pixel_size_interactive(reader, input_format):
         input_format: Format of the input file
 
     Returns:
-        tuple: (pixel_size, detection_info_dict)
+        tuple: (pixel_size, detection_info_dict, essential_metadata)
     """
     logging.info("Attempting automatic pixel size detection...")
-    detected_pixel_size = reader.get_pixel_size()
+    essential_metadata = reader.get_essential_metadata()
+    detected_pixel_size = essential_metadata.pixel_size
 
     if detected_pixel_size is not None:
         logging.info(
@@ -97,7 +98,7 @@ def detect_pixel_size_interactive(reader, input_format):
                 "note": "Pixel size was auto-detected but user specified a different value",
             }
 
-        return selected_pixel_size, detection_info
+        return selected_pixel_size, detection_info, essential_metadata
     else:
         logging.warning("Could not automatically detect pixel size from metadata")
         selected_pixel_size = prompt_for_pixel_size(None)
@@ -109,7 +110,7 @@ def detect_pixel_size_interactive(reader, input_format):
             "note": "Pixel size could not be auto-detected, manually specified by user",
         }
 
-        return selected_pixel_size, detection_info
+        return selected_pixel_size, detection_info, essential_metadata
 
 
 def main():
@@ -202,9 +203,11 @@ def main():
             reader = reader_class(input_path)
 
             # Get pixel size interactively
-            final_pixel_size, detection_info = detect_pixel_size_interactive(
-                reader, input_format
-            )
+            (
+                final_pixel_size,
+                detection_info,
+                essential_metadata,
+            ) = detect_pixel_size_interactive(reader, input_format)
             reader.close()
 
             logging.info(f"Using pixel size: {final_pixel_size} um")
@@ -213,8 +216,11 @@ def main():
             logging.error("Conversion aborted.")
             return
 
-    # Convert MSI data - pass detection_info if available
+    # Convert MSI data - pass detection_info and essential_metadata if available
     detection_info_override = detection_info if "detection_info" in locals() else None
+    essential_metadata_override = (
+        essential_metadata if "essential_metadata" in locals() else None
+    )
     success = convert_msi(
         args.input,
         args.output,
@@ -223,6 +229,7 @@ def main():
         pixel_size_um=final_pixel_size,
         handle_3d=args.handle_3d,
         pixel_size_detection_info_override=detection_info_override,
+        essential_metadata=essential_metadata_override,
     )
 
     if success and args.optimize_chunks:

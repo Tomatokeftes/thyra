@@ -5,6 +5,7 @@ import warnings
 from pathlib import Path
 
 from .core.registry import detect_format, get_converter_class, get_reader_class
+from .metadata.types import EssentialMetadata
 
 warnings.filterwarnings(
     "ignore",
@@ -27,6 +28,7 @@ def convert_msi(
     pixel_size_um: float = None,
     handle_3d: bool = False,
     pixel_size_detection_info_override: dict = None,
+    essential_metadata: EssentialMetadata = None,
     **kwargs,
 ) -> bool:
     """Convert MSI data to the specified format with enhanced error handling and automatic pixel size detection."""
@@ -85,8 +87,9 @@ def convert_msi(
         if pixel_size_um is None:
             logging.info("Attempting automatic pixel size detection...")
             try:
-                # Use new metadata system to get pixel size
-                essential_metadata = reader.get_essential_metadata()
+                # Use provided metadata if available, otherwise extract it
+                if essential_metadata is None:
+                    essential_metadata = reader.get_essential_metadata()
                 detected_pixel_size = essential_metadata.pixel_size
                 if detected_pixel_size is not None:
                     final_pixel_size = detected_pixel_size[
