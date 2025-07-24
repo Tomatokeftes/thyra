@@ -87,7 +87,7 @@ __main__.py:main()
 __main__.py:main()
 └── if args.pixel_size is None:
     └── detect_pixel_size_interactive(reader, input_format)
-        ├── reader.get_essential_metadata()  # Already cached
+        ├── reader.get_essential_metadata()  # Unified metadata extraction
         ├── essential_metadata.pixel_size  # Check if auto-detected
         ├── if pixel_size is None:
         │   ├── print("Could not automatically detect pixel size")
@@ -96,7 +96,7 @@ __main__.py:main()
         │   ├── float(user_input)
         │   └── if pixel_size <= 0: raise ValueError
         ├── print(f"Using pixel size: {pixel_size} μm")
-        └── return pixel_size, detection_info
+        └── return pixel_size, detection_info, essential_metadata  # Returns metadata for reuse
 ```
 
 ## 🔄 Converter Setup & Initialization
@@ -105,6 +105,10 @@ __main__.py:main()
 convert.py:convert_msi()
 ├── registry.py:get_converter_class("spatialdata")
 │   └── return converters["spatialdata"]  # SpatialDataConverter class
+│
+├── # Metadata reuse optimization - skips re-extraction if provided
+├── if essential_metadata is None:
+│   └── essential_metadata = reader.get_essential_metadata()
 │
 └── SpatialDataConverter(reader, output_path, **kwargs)
     ├── __init__(self, reader, output_path, dataset_id, pixel_size_um, handle_3d)

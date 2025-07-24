@@ -161,21 +161,21 @@ Each phase can be implemented and tested independently, allowing for rollback if
 ## 📝 Implementation Checklist
 
 ### Phase 1: Preparation
-- [ ] Create feature branch `optimize-pixel-detection-flow`
-- [ ] Run `pytest` to establish baseline
-- [ ] Search codebase for all `get_pixel_size()` usage
+- [x] Create feature branch `optimize-pixel-detection-flow`
+- [x] Run `pytest` to establish baseline
+- [x] Search codebase for all `get_pixel_size()` usage
 - [ ] Document current behavior in test cases
 
 ### Phase 2: API Unification
-- [ ] Update `__main__.py:67` to use metadata system
-- [ ] Remove `get_pixel_size()` from `BrukerReader`
-- [ ] Check other readers for similar deprecated methods
-- [ ] Run tests after each change
+- [x] Update `__main__.py:67` to use metadata system
+- [x] Remove `get_pixel_size()` from `BrukerReader`
+- [x] Check other readers for similar deprecated methods
+- [x] Run tests after each change
 
 ### Phase 3: Performance Optimization
-- [ ] Add `essential_metadata` parameter to `convert_msi()`
-- [ ] Update `__main__.py` to pass metadata
-- [ ] Optimize `convert.py` to reuse provided metadata
+- [x] Add `essential_metadata` parameter to `convert_msi()`
+- [x] Update `__main__.py` to pass metadata
+- [x] Optimize `convert.py` to reuse provided metadata
 - [ ] Verify performance improvements
 
 ### Phase 4: Code Cleanup
