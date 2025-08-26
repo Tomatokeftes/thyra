@@ -7,8 +7,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from msiconvert.core.base_converter import BaseMSIConverter
-from msiconvert.core.base_reader import BaseMSIReader
+from thyra.core.base_converter import BaseMSIConverter
+from thyra.core.base_reader import BaseMSIReader
 
 
 class TestBaseMSIReader:
@@ -30,8 +30,8 @@ class TestBaseMSIReader:
         # Define a minimal implementation
         class MinimalReader(BaseMSIReader):
             def _create_metadata_extractor(self):
-                from msiconvert.core.base_extractor import MetadataExtractor
-                from msiconvert.metadata.types import (
+                from thyra.core.base_extractor import MetadataExtractor
+                from thyra.metadata.types import (
                     ComprehensiveMetadata,
                     EssentialMetadata,
                 )
@@ -96,8 +96,8 @@ class TestBaseMSIConverter:
         # Mock reader for testing
         class MockReader(BaseMSIReader):
             def _create_metadata_extractor(self):
-                from msiconvert.core.base_extractor import MetadataExtractor
-                from msiconvert.metadata.types import (
+                from thyra.core.base_extractor import MetadataExtractor
+                from thyra.metadata.types import (
                     ComprehensiveMetadata,
                     EssentialMetadata,
                 )
@@ -177,8 +177,8 @@ class TestBaseMSIConverter:
 
         class MockReader(BaseMSIReader):
             def _create_metadata_extractor(self):
-                from msiconvert.core.base_extractor import MetadataExtractor
-                from msiconvert.metadata.types import (
+                from thyra.core.base_extractor import MetadataExtractor
+                from thyra.metadata.types import (
                     ComprehensiveMetadata,
                     EssentialMetadata,
                 )

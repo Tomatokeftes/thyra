@@ -1,8 +1,8 @@
-# MSIConverter Architecture & Conversion Workflow
+# Thyra Architecture & Conversion Workflow
 
 ## Quick Overview
 
-MSIConverter transforms Mass Spectrometry Imaging data through a **4-phase pipeline**:
+Thyra transforms Mass Spectrometry Imaging data through a **4-phase pipeline**:
 1. **Detection** → Identify input format (ImzML/Bruker)
 2. **Reading** → Extract spectra and metadata
 3. **Processing** → Map to common mass axis and create sparse matrices
@@ -12,7 +12,7 @@ MSIConverter transforms Mass Spectrometry Imaging data through a **4-phase pipel
 
 ### 🏗️ Core Framework
 ```
-msiconvert/core/
+thyra/core/
 ├── registry.py          # Plugin registration system
 ├── base_reader.py       # Abstract reader interface
 ├── base_converter.py    # Abstract converter interface
@@ -21,7 +21,7 @@ msiconvert/core/
 
 ### 📖 Format Readers
 ```
-msiconvert/readers/
+thyra/readers/
 ├── imzml_reader.py      # ImzML format support
 └── bruker/
     ├── bruker_reader.py # Bruker format support
@@ -31,7 +31,7 @@ msiconvert/readers/
 
 ### 📊 Metadata System
 ```
-msiconvert/metadata/
+thyra/metadata/
 ├── extractors/
 │   ├── imzml_extractor.py   # ImzML metadata extraction
 │   └── bruker_extractor.py  # Bruker metadata extraction
@@ -41,7 +41,7 @@ msiconvert/metadata/
 
 ### 🔄 Converters
 ```
-msiconvert/converters/
+thyra/converters/
 └── spatialdata_converter.py # SpatialData/Zarr output
 ```
 
@@ -202,7 +202,7 @@ class MetadataExtractor(ABC):
 ### 🔄 **Phase 4: Conversion Processing** (`converters/spatialdata_converter.py`)
 
 ```python
-class SpatialDataConverter(BaseMSIConverter):
+class SpatialDataConverter(BaseThyra):
     def convert(self) -> bool:
         """Template method defining conversion workflow."""
         try:
@@ -436,7 +436,7 @@ class ComprehensiveMetadata:
     raw_metadata: Dict[str, Any]                         # Original metadata
 ```
 
-This architecture enables MSIConverter to:
+This architecture enables Thyra to:
 - ✅ Handle datasets from MBs to 100+ GBs efficiently
 - ✅ Support multiple input formats with consistent interface
 - ✅ Provide rich metadata preservation and validation

@@ -5,7 +5,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from msiconvert.metadata.extractors.bruker_extractor import BrukerMetadataExtractor
+from thyra.metadata.extractors.bruker_extractor import BrukerMetadataExtractor
 
 
 class TestBrukerMetadataExtractor:
@@ -500,7 +500,7 @@ class TestBrukerMetadataExtractor:
         assert essential.dimensions[1] > 1000  # Large Y dimension
         assert essential.coordinate_bounds == (0.0, 10000.0, 0.0, 10000.0)
 
-    @patch("msiconvert.metadata.extractors.bruker_extractor.logger")
+    @patch("thyra.metadata.extractors.bruker_extractor.logger")
     def test_logging_during_extraction(self, mock_logger):
         """Test that appropriate logging occurs during extraction."""
         # Use basic working connection but create a scenario that triggers debug logging

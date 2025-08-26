@@ -12,8 +12,8 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 import pytest
 
-from msiconvert.convert import convert_msi
-from msiconvert.readers.bruker.bruker_reader import BrukerReader
+from thyra.convert import convert_msi
+from thyra.readers.bruker.bruker_reader import BrukerReader
 
 # Determine if Bruker DLL/shared library is available
 # For now, assume it's not available to skip these tests
@@ -33,7 +33,7 @@ class TestBrukerConversion:
         return mock_bruker_data
 
     @patch(
-        "msiconvert.readers.bruker_reader.BrukerReader._find_dll_path",
+        "thyra.readers.bruker_reader.BrukerReader._find_dll_path",
         return_value=Path("mock_timsdata.dll"),
     )
     @(
@@ -46,7 +46,7 @@ class TestBrukerConversion:
         self, mock_sqlite3, mock_dll, mock_find_dll_path, mock_bruker_data_dir
     ):
         """Test that the Bruker format is correctly detected."""
-        from msiconvert.core.registry import detect_format
+        from thyra.core.registry import detect_format
 
         # Expected to be detected as 'bruker'
         detected_format = detect_format(mock_bruker_data_dir)
@@ -118,7 +118,7 @@ class TestBrukerConversion:
         mock_cursor.execute.side_effect = execute_side_effect
 
         # Patch both the BrukerReader initialization and the iter_spectra method
-        with patch("msiconvert.readers.bruker_reader.BrukerReader._preload_metadata"):
+        with patch("thyra.readers.bruker_reader.BrukerReader._preload_metadata"):
             # Create a mock for the BrukerReader class that will be instantiated
             mock_reader = MagicMock()
             mock_reader.get_common_mass_axis.return_value = np.array(
@@ -157,7 +157,7 @@ class TestBrukerConversion:
 
             # Patch the BrukerReader class to return our mock
             with patch(
-                "msiconvert.readers.bruker_reader.BrukerReader",
+                "thyra.readers.bruker_reader.BrukerReader",
                 return_value=mock_reader,
             ):
                 # Set output path
@@ -165,7 +165,7 @@ class TestBrukerConversion:
 
                 # Mock the actual conversion logic to ensure success
                 with patch(
-                    "msiconvert.converters.spatialdata_converter.SpatialDataConverter.convert",
+                    "thyra.converters.spatialdata_converter.SpatialDataConverter.convert",
                     return_value=True,
                 ):
                     # Run conversion
@@ -181,11 +181,11 @@ class TestBrukerConversion:
                     assert result is True
 
     @patch(
-        "msiconvert.readers.bruker_reader.BrukerReader._find_dll_path",
+        "thyra.readers.bruker_reader.BrukerReader._find_dll_path",
         return_value=None,
     )
     @patch(
-        "msiconvert.readers.bruker_reader.BrukerReader.__init__",
+        "thyra.readers.bruker_reader.BrukerReader.__init__",
         return_value=None,
     )
     def test_bruker_reader_dll_not_found(

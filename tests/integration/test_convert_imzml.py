@@ -4,7 +4,7 @@ Integration tests for converting imzML files to various formats.
 
 import pytest
 
-from msiconvert.convert import convert_msi
+from thyra.convert import convert_msi
 
 
 class TestImzMLConversion:

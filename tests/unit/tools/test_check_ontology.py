@@ -2,14 +2,14 @@ import json
 import sys
 from unittest.mock import patch
 
-from msiconvert.tools.check_ontology import main
+from thyra.tools.check_ontology import main
 
 
 class TestCheckOntology:
     """Tests for the ontology checking tool."""
 
-    @patch("msiconvert.tools.check_ontology.ONTOLOGY", autospec=True)
-    @patch("msiconvert.metadata.validator.ImzMLOntologyValidator", autospec=True)
+    @patch("thyra.tools.check_ontology.ONTOLOGY", autospec=True)
+    @patch("thyra.metadata.validator.ImzMLOntologyValidator", autospec=True)
     @patch("sys.argv")
     def test_main_file_check(
         self, mock_argv, mock_validator_class, mock_ontology, capsys, tmp_path
@@ -53,8 +53,8 @@ class TestCheckOntology:
         finally:
             sys.argv = original_argv
 
-    @patch("msiconvert.tools.check_ontology.ONTOLOGY", autospec=True)
-    @patch("msiconvert.metadata.validator.ImzMLOntologyValidator", autospec=True)
+    @patch("thyra.tools.check_ontology.ONTOLOGY", autospec=True)
+    @patch("thyra.metadata.validator.ImzMLOntologyValidator", autospec=True)
     @patch("sys.argv")
     def test_main_directory_check(
         self, mock_argv, mock_validator_class, mock_ontology, capsys, tmp_path
@@ -105,8 +105,8 @@ class TestCheckOntology:
         finally:
             sys.argv = original_argv
 
-    @patch("msiconvert.tools.check_ontology.ONTOLOGY", autospec=True)
-    @patch("msiconvert.metadata.validator.ImzMLOntologyValidator", autospec=True)
+    @patch("thyra.tools.check_ontology.ONTOLOGY", autospec=True)
+    @patch("thyra.metadata.validator.ImzMLOntologyValidator", autospec=True)
     @patch("sys.argv")
     def test_main_output_to_json(
         self, mock_argv, mock_validator_class, mock_ontology, capsys, tmp_path
@@ -155,8 +155,8 @@ class TestCheckOntology:
         finally:
             sys.argv = original_argv
 
-    @patch("msiconvert.tools.check_ontology.ONTOLOGY", autospec=True)
-    @patch("msiconvert.metadata.validator.ImzMLOntologyValidator", autospec=True)
+    @patch("thyra.tools.check_ontology.ONTOLOGY", autospec=True)
+    @patch("thyra.metadata.validator.ImzMLOntologyValidator", autospec=True)
     @patch("sys.argv")
     def test_main_verbose_output(
         self, mock_argv, mock_validator_class, mock_ontology, capsys, tmp_path

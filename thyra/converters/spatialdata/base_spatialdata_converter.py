@@ -302,10 +302,22 @@ class BaseSpatialDataConverter(BaseMSIConverter, ABC):
             self._n_spectra = essential.n_spectra
             self._estimated_memory_gb = essential.estimated_memory_gb
 
-            # Override pixel size if not provided and available in metadata
-            if self.pixel_size_um == 1.0 and essential.pixel_size:
+            # Override pixel size only if using default and metadata is available
+            if (
+                self.pixel_size_source == PixelSizeSource.DEFAULT
+                and essential.pixel_size
+            ):
+                old_size = self.pixel_size_um
                 self.pixel_size_um = essential.pixel_size[0]
-                logging.info(f"Using detected pixel size: {self.pixel_size_um} μm")
+                self.pixel_size_source = PixelSizeSource.AUTO_DETECTED
+                logging.info(
+                    f"Auto-detected pixel size: {self.pixel_size_um} um "
+                    f"(was default: {old_size} um)"
+                )
+            elif self.pixel_size_source == PixelSizeSource.USER_PROVIDED:
+                logging.info(
+                    f"Using user-specified pixel size: {self.pixel_size_um} um"
+                )
 
             # IMPORTANT: Don't overwrite _common_mass_axis if resampling
             # is enabled

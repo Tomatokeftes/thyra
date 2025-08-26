@@ -5,7 +5,7 @@ Tests for basic resampling module structure - Phase 1.
 import numpy as np
 import pytest
 
-from msiconvert.resampling import (
+from thyra.resampling import (
     AxisType,
     CommonAxisBuilder,
     MassAxis,
@@ -13,8 +13,8 @@ from msiconvert.resampling import (
     ResamplingDecisionTree,
     ResamplingMethod,
 )
-from msiconvert.resampling.mass_axis.base_generator import BaseAxisGenerator
-from msiconvert.resampling.strategies.base import ResamplingStrategy, Spectrum
+from thyra.resampling.mass_axis.base_generator import BaseAxisGenerator
+from thyra.resampling.strategies.base import ResamplingStrategy, Spectrum
 
 
 class TestBasicImports:

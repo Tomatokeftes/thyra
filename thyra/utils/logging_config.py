@@ -14,7 +14,7 @@ def setup_logging(log_level=logging.INFO, log_file=None):
         log_file (str): Path to the log file. If None, logs are not saved to a file.
     """
     # Get the root logger
-    logger = logging.getLogger("msiconvert")
+    logger = logging.getLogger("thyra")
     logger.setLevel(log_level)
 
     # Remove all existing handlers to avoid duplicates

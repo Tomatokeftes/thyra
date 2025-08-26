@@ -16,4 +16,4 @@ exclude =
     env.bak,
     venv.bak,
     # Ignore auto-generated ontology files
-    msiconvert/metadata/ontology/_*.py,
+    thyra/metadata/ontology/_*.py,

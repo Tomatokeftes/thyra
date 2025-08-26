@@ -1,4 +1,4 @@
-# msiconvert/metadata/validator.py
+# thyra/metadata/validator.py
 """Validate ontology terms in imzML files."""
 
 import logging

@@ -1,4 +1,4 @@
-# msiconvert/converters/spatialdata/converter.py
+# thyra/converters/spatialdata/converter.py
 
 import logging
 from pathlib import Path

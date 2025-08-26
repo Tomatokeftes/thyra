@@ -4,9 +4,9 @@ Tests for the simplified format registry system.
 
 import pytest
 
-from msiconvert.core.base_converter import BaseMSIConverter
-from msiconvert.core.base_reader import BaseMSIReader
-from msiconvert.core.registry import (
+from thyra.core.base_converter import BaseMSIConverter
+from thyra.core.base_reader import BaseMSIReader
+from thyra.core.registry import (
     _registry,
     detect_format,
     get_converter_class,

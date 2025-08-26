@@ -1,10 +1,10 @@
-# MSIConverter Function Call Flow
+# Thyra Function Call Flow
 
 ## Complete Function-Level Call Tree
 
 This document shows the exact function call sequence when running:
 ```bash
-msiconvert data.imzML output.zarr --pixel-size 25
+thyra data.imzML output.zarr --pixel-size 25
 ```
 
 ## 🚀 Entry Point: CLI Parsing
@@ -364,7 +364,7 @@ SpatialDataConverter.convert()
     │   │   'dataset_id': self.dataset_id,
     │   │   'pixel_size_um': self.pixel_size,
     │   │   'conversion_timestamp': datetime.now().isoformat(),
-    │   │   'msiconvert_version': msiconvert.__version__,
+    │   │   'thyra_version': thyra.__version__,
     │   │   'input_format': 'imzml',
     │   │   'output_format': 'spatialdata'
     │   │   }

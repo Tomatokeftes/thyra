@@ -1,4 +1,4 @@
-# msiconvert/converters/spatialdata/__init__.py
+# thyra/converters/spatialdata/__init__.py
 
 from .converter import SpatialDataConverter
 from .spatialdata_2d_converter import SpatialData2DConverter

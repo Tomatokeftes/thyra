@@ -3,13 +3,13 @@ from pathlib import Path
 
 import pytest
 
-from msiconvert.utils.logging_config import setup_logging
+from thyra.utils.logging_config import setup_logging
 
 
 @pytest.fixture
 def logger():
     # Ensure the logger is clean for each test
-    logger = logging.getLogger("msiconvert")
+    logger = logging.getLogger("thyra")
     logger.handlers.clear()
     return logger
 

@@ -22,9 +22,9 @@ Core Components:
 - Format-specific extractors: ImzMLMetadataExtractor, BrukerMetadataExtractor
 
 Example usage:
-    >>> from msiconvert.metadata import EssentialMetadata, \
+    >>> from thyra.metadata import EssentialMetadata, \
     ...     ComprehensiveMetadata
-    >>> from msiconvert.metadata.extractors import ImzMLMetadataExtractor
+    >>> from thyra.metadata.extractors import ImzMLMetadataExtractor
     >>> from pyimzml.ImzMLParser import ImzMLParser
     >>>
     >>> # Create extractor and get essential metadata (fast)

@@ -1,4 +1,4 @@
-# msiconvert/readers/imzml_reader.py
+# thyra/readers/imzml_reader.py
 import logging
 from pathlib import Path
 from typing import Any, Dict, Generator, List, Optional, Tuple, Union, cast

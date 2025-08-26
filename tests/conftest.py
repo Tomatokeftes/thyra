@@ -1,5 +1,5 @@
 """
-Common test fixtures for msiconvert tests.
+Common test fixtures for thyra tests.
 """
 
 import tempfile
@@ -25,7 +25,7 @@ def temp_dir():
 @pytest.fixture
 def mock_reader():
     """Create a mock MSI reader for testing converters."""
-    from msiconvert.core.base_reader import BaseMSIReader
+    from thyra.core.base_reader import BaseMSIReader
 
     class MockMSIReader(BaseMSIReader):
         def __init__(self, data_path=None, **kwargs):
@@ -34,11 +34,8 @@ def mock_reader():
 
         def _create_metadata_extractor(self):
             # Create a mock metadata extractor
-            from msiconvert.core.base_extractor import MetadataExtractor
-            from msiconvert.metadata.types import (
-                ComprehensiveMetadata,
-                EssentialMetadata,
-            )
+            from thyra.core.base_extractor import MetadataExtractor
+            from thyra.metadata.types import ComprehensiveMetadata, EssentialMetadata
 
             class MockExtractor(MetadataExtractor):
                 def _extract_essential_impl(self):
