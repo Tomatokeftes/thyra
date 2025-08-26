@@ -166,6 +166,14 @@ class BaseSpatialDataConverter(BaseMSIConverter, ABC):
         self._width_at_mz = self._resampling_config.get("width_at_mz")
         self._reference_mz = self._resampling_config.get("reference_mz", 1000.0)
 
+    def _get_cached_metadata_for_resampling(self) -> Dict[str, Any]:
+        """Get cached metadata for resampling decision tree to avoid multiple reader calls."""
+        if hasattr(self, '_resampling_metadata_cached'):
+            return self._resampling_metadata_cached
+            
+        # If not cached yet, extract and cache it
+        return self._get_reader_metadata_for_resampling()
+
     def _get_reader_metadata_for_resampling(self) -> Dict[str, Any]:
         """Extract metadata from reader for resampling decision tree."""
         metadata = {}
@@ -175,12 +183,20 @@ class BaseSpatialDataConverter(BaseMSIConverter, ABC):
         self._extract_comprehensive_metadata(metadata)
         self._extract_spectrum_metadata(metadata)
 
+        # Cache for later reuse
+        self._resampling_metadata_cached = metadata
         return metadata
 
     def _extract_essential_metadata(self, metadata: Dict[str, Any]) -> None:
         """Extract essential metadata for resampling decisions."""
         try:
-            essential = self.reader.get_essential_metadata()
+            # Use cached essential metadata if available
+            if hasattr(self, '_essential_metadata_cached'):
+                essential = self._essential_metadata_cached
+            else:
+                essential = self.reader.get_essential_metadata()
+                self._essential_metadata_cached = essential
+                
             if hasattr(essential, "source_path"):
                 metadata["source_path"] = str(essential.source_path)
 
@@ -197,7 +213,13 @@ class BaseSpatialDataConverter(BaseMSIConverter, ABC):
     def _extract_comprehensive_metadata(self, metadata: Dict[str, Any]) -> None:
         """Extract comprehensive metadata including Bruker GlobalMetadata."""
         try:
-            comp_meta = self.reader.get_comprehensive_metadata()
+            # Use cached comprehensive metadata if available
+            if hasattr(self, '_comprehensive_metadata_cached'):
+                comp_meta = self._comprehensive_metadata_cached
+            else:
+                comp_meta = self.reader.get_comprehensive_metadata()
+                self._comprehensive_metadata_cached = comp_meta
+                
             self._extract_bruker_metadata(metadata, comp_meta)
             self._extract_instrument_info(metadata, comp_meta)
         except Exception as e:
@@ -225,7 +247,13 @@ class BaseSpatialDataConverter(BaseMSIConverter, ABC):
         """Extract ImzML-specific spectrum metadata."""
         try:
             if hasattr(self.reader, "get_spectrum_metadata"):
-                spec_meta = self.reader.get_spectrum_metadata()
+                # Use cached spectrum metadata if available
+                if hasattr(self, '_spectrum_metadata_cached'):
+                    spec_meta = self._spectrum_metadata_cached
+                else:
+                    spec_meta = self.reader.get_spectrum_metadata()
+                    self._spectrum_metadata_cached = spec_meta
+                    
                 if spec_meta:
                     metadata.update(spec_meta)
         except Exception as e:
@@ -298,21 +326,18 @@ class BaseSpatialDataConverter(BaseMSIConverter, ABC):
         """Build resampled mass axis using physics-based generators."""
         from ...resampling.common_axis import CommonAxisBuilder
 
-        # Use already loaded essential metadata to avoid multiple reader calls
-        if hasattr(self, '_coordinate_bounds') and self._coordinate_bounds is not None:
-            # Mass range is available from essential metadata already loaded
-            essential_metadata = self.reader.get_essential_metadata()
-            mass_range = essential_metadata.mass_range
-        else:
-            # Fallback - shouldn't happen in normal flow
-            essential_metadata = self.reader.get_essential_metadata()
-            mass_range = essential_metadata.mass_range
-            
+        # Use cached essential metadata to avoid reader calls
+        # This should be called after _initialize_conversion() has loaded metadata
+        if not hasattr(self, '_essential_metadata_cached'):
+            # Cache essential metadata for reuse
+            self._essential_metadata_cached = self.reader.get_essential_metadata()
+        
+        mass_range = self._essential_metadata_cached.mass_range
         min_mz = mass_range[0] if self._min_mz is None else self._min_mz
         max_mz = mass_range[1] if self._max_mz is None else self._max_mz
 
-        # Get metadata for axis type selection (use cached metadata if possible)
-        metadata = self._get_reader_metadata_for_resampling()
+        # Get metadata for axis type selection (minimize reader calls)
+        metadata = self._get_cached_metadata_for_resampling()
         tree = ResamplingDecisionTree()
         axis_type = tree.select_axis_type(metadata)
 
@@ -381,6 +406,8 @@ class BaseSpatialDataConverter(BaseMSIConverter, ABC):
         try:
             # Load essential metadata first (fast, single query for Bruker)
             essential = self.reader.get_essential_metadata()
+            # Cache for reuse during resampling setup
+            self._essential_metadata_cached = essential
 
             self._dimensions = essential.dimensions
             if any(d <= 0 for d in self._dimensions):
