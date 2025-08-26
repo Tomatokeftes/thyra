@@ -151,7 +151,9 @@ def _validate_arguments(parser: argparse.ArgumentParser, args) -> None:
 
     if args.resample_reference_mz <= 0:
         parser.error(
-            "Reference m/z must be positive (got: {})".format(args.resample_reference_mz)
+            "Reference m/z must be positive (got: {})".format(
+                args.resample_reference_mz
+            )
         )
 
 

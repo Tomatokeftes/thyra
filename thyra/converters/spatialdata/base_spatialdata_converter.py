@@ -235,12 +235,12 @@ class BaseSpatialDataConverter(BaseMSIConverter, ABC):
         self, min_mz: float, max_mz: float, axis_type
     ) -> int:
         """Calculate optimal number of bins from desired width at reference m/z.
-        
+
         Args:
             min_mz: Minimum m/z of the mass range
-            max_mz: Maximum m/z of the mass range  
+            max_mz: Maximum m/z of the mass range
             axis_type: The axis type (determines physics-based spacing)
-            
+
         Returns:
             Calculated number of bins
         """
@@ -251,44 +251,46 @@ class BaseSpatialDataConverter(BaseMSIConverter, ABC):
         else:
             width_at_mz = self._width_at_mz
             reference_mz = self._reference_mz
-            
+
         logging.info(
             f"Calculating bins for {width_at_mz*1000:.1f} mDa width at m/z {reference_mz:.1f}"
         )
-        
+
         # Calculate bins based on axis type physics
         if hasattr(axis_type, "value"):
             axis_name = axis_type.value
         else:
             axis_name = str(axis_type).split(".")[-1].lower()
-            
+
         if axis_name == "reflector_tof":
             # REFLECTOR_TOF: constant relative resolution (width ∝ m/z)
             # relative_resolution = reference_mz / width_at_mz
             # For logarithmic spacing: bins ≈ ln(max_mz/min_mz) * (reference_mz / width_at_mz)
             relative_resolution = reference_mz / width_at_mz
             bins = int(np.log(max_mz / min_mz) * relative_resolution)
-            
+
         elif axis_name == "linear_tof":
             # LINEAR_TOF: width ∝ sqrt(m/z)
-            # For sqrt spacing: bins ≈ (sqrt(max_mz) - sqrt(min_mz)) / sqrt(width_at_mz / reference_mz)
+            # For sqrt spacing: bins ≈ (sqrt(max_mz) - sqrt(min_mz)) / 
+            # sqrt(width_at_mz / reference_mz)
             scaling_factor = width_at_mz / np.sqrt(reference_mz)
             bins = int((np.sqrt(max_mz) - np.sqrt(min_mz)) / np.sqrt(scaling_factor))
-            
+
         elif axis_name == "orbitrap":
-            # ORBITRAP: width ∝ m/z^1.5  
-            # For 1/sqrt spacing: bins ≈ (1/sqrt(min_mz) - 1/sqrt(max_mz)) * (reference_mz^1.5 / width_at_mz)
-            scaling_factor = (reference_mz ** 1.5) / width_at_mz
-            bins = int((1/np.sqrt(min_mz) - 1/np.sqrt(max_mz)) * scaling_factor)
-            
+            # ORBITRAP: width ∝ m/z^1.5
+            # For 1/sqrt spacing: bins ≈ (1/sqrt(min_mz) - 1/sqrt(max_mz)) * 
+            # (reference_mz^1.5 / width_at_mz)
+            scaling_factor = (reference_mz**1.5) / width_at_mz
+            bins = int((1 / np.sqrt(min_mz) - 1 / np.sqrt(max_mz)) * scaling_factor)
+
         else:
             # LINEAR/CONSTANT: uniform spacing
             # bins = (max_mz - min_mz) / width_at_mz
             bins = int((max_mz - min_mz) / width_at_mz)
-            
+
         # Ensure reasonable bounds
         bins = max(100, min(bins, 100000))  # Between 100 and 100k bins
-        
+
         logging.info(f"Calculated {bins} bins for {axis_name} axis type")
         return bins
 
@@ -297,7 +299,8 @@ class BaseSpatialDataConverter(BaseMSIConverter, ABC):
         from ...resampling.common_axis import CommonAxisBuilder
 
         # Get the original mass range from the raw data
-        mass_range = self.reader.mass_range
+        essential_metadata = self.reader.get_essential_metadata()
+        mass_range = essential_metadata.mass_range
         min_mz = mass_range[0] if self._min_mz is None else self._min_mz
         max_mz = mass_range[1] if self._max_mz is None else self._max_mz
 
@@ -307,7 +310,9 @@ class BaseSpatialDataConverter(BaseMSIConverter, ABC):
         axis_type = tree.select_axis_type(metadata)
 
         # Calculate bins based on width if specified
-        if self._width_at_mz is not None or (self._width_at_mz is None and self._target_bins == 5000):
+        if self._width_at_mz is not None or (
+            self._width_at_mz is None and self._target_bins == 5000
+        ):
             # Either user specified width OR using default (calculate from 5mDa@1000)
             target_bins = self._calculate_bins_from_width(min_mz, max_mz, axis_type)
         else:
