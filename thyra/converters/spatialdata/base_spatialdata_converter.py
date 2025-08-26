@@ -394,10 +394,15 @@ class BaseSpatialDataConverter(BaseMSIConverter, ABC):
         # Override the parent's common mass axis
         self._common_mass_axis = mass_axis.mz_values
 
+        # Calculate bin sizes for informative logging
+        bin_widths = np.diff(self._common_mass_axis)
+        min_bin_size = np.min(bin_widths) * 1000  # Convert to mDa
+        max_bin_size = np.max(bin_widths) * 1000  # Convert to mDa
+        
         logging.info(
-            f"Resampled mass axis: {len(self._common_mass_axis)} bins, "
-            f"range {self._common_mass_axis[0]:.2f} - "
-            f"{self._common_mass_axis[-1]:.2f}"
+            f"Resampled mass axis created: {len(self._common_mass_axis)} bins, "
+            f"range {self._common_mass_axis[0]:.2f}-{self._common_mass_axis[-1]:.2f} m/z, "
+            f"bin sizes {min_bin_size:.2f}-{max_bin_size:.2f} mDa ({axis_type})"
         )
 
     def _initialize_conversion(self) -> None:
