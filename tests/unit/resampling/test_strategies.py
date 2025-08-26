@@ -4,11 +4,8 @@ Tests for resampling strategies - Phase 2.
 
 import numpy as np
 
-from msiconvert.resampling.strategies import (
-    NearestNeighborStrategy,
-    TICPreservingStrategy,
-)
-from msiconvert.resampling.strategies.base import Spectrum
+from thyra.resampling.strategies import NearestNeighborStrategy, TICPreservingStrategy
+from thyra.resampling.strategies.base import Spectrum
 
 
 class TestNearestNeighborStrategy:

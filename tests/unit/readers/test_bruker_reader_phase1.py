@@ -14,14 +14,14 @@ from unittest.mock import MagicMock, patch
 
 import numpy as np
 
-from msiconvert.readers.bruker.bruker_reader import BrukerReader
+from thyra.readers.bruker.bruker_reader import BrukerReader
 
 
 class TestBrukerReader:
     """Test the Bruker reader core functionality."""
 
-    @patch("msiconvert.readers.bruker.bruker_reader.DLLManager")
-    @patch("msiconvert.readers.bruker.bruker_reader.SDKFunctions")
+    @patch("thyra.readers.bruker.bruker_reader.DLLManager")
+    @patch("thyra.readers.bruker.bruker_reader.SDKFunctions")
     def test_initialization(self, mock_sdk_functions, mock_dll_manager):
         """Test that reader initialization doesn't create BatchProcessor or MemoryManager."""
         mock_data_path = Path("/fake/bruker.d")
@@ -53,7 +53,7 @@ class TestBrukerReader:
 
     def test_build_raw_mass_axis_function_exists(self):
         """Test that build_raw_mass_axis function is available and works."""
-        from msiconvert.readers.bruker.bruker_reader import build_raw_mass_axis
+        from thyra.readers.bruker.bruker_reader import build_raw_mass_axis
 
         # Test with mock data
         def mock_spectra_iterator():
@@ -64,8 +64,8 @@ class TestBrukerReader:
         expected = np.array([100.0, 150.0, 200.0, 250.0])
         np.testing.assert_array_equal(mass_axis, expected)
 
-    @patch("msiconvert.readers.bruker.bruker_reader.DLLManager")
-    @patch("msiconvert.readers.bruker.bruker_reader.SDKFunctions")
+    @patch("thyra.readers.bruker.bruker_reader.DLLManager")
+    @patch("thyra.readers.bruker.bruker_reader.SDKFunctions")
     def test_get_common_mass_axis(self, mock_sdk_functions, mock_dll_manager):
         """Test that get_common_mass_axis works without complex mass axis builder."""
         mock_data_path = Path("/fake/bruker.d")
@@ -124,7 +124,7 @@ class TestRawMassAxisBuilder:
             )
             yield (0, 0, 2), np.array([100.0, 250.0]), np.array([10.0, 25.0])
 
-        from msiconvert.readers.bruker.bruker_reader import build_raw_mass_axis
+        from thyra.readers.bruker.bruker_reader import build_raw_mass_axis
 
         mass_axis = build_raw_mass_axis(mock_spectra_iterator())
 
@@ -138,7 +138,7 @@ class TestRawMassAxisBuilder:
             return
             yield  # Never reached
 
-        from msiconvert.readers.bruker.bruker_reader import build_raw_mass_axis
+        from thyra.readers.bruker.bruker_reader import build_raw_mass_axis
 
         mass_axis = build_raw_mass_axis(empty_iterator())
 
@@ -155,7 +155,7 @@ class TestRawMassAxisBuilder:
             for i in range(250):  # Should trigger progress callback
                 yield (0, 0, i), np.array([100.0 + i]), np.array([10.0])
 
-        from msiconvert.readers.bruker.bruker_reader import build_raw_mass_axis
+        from thyra.readers.bruker.bruker_reader import build_raw_mass_axis
 
         build_raw_mass_axis(mock_spectra_iterator(), progress_callback)
 
@@ -170,7 +170,7 @@ class TestDirectCoordinateExtraction:
 
     def test_get_frame_coordinates_maldi_with_offsets(self):
         """Test direct coordinate extraction for MALDI data with normalization."""
-        from msiconvert.readers.bruker.bruker_reader import _get_frame_coordinates
+        from thyra.readers.bruker.bruker_reader import _get_frame_coordinates
 
         # Mock database with MALDI data
         with patch("sqlite3.connect") as mock_connect:
@@ -194,7 +194,7 @@ class TestDirectCoordinateExtraction:
 
     def test_get_frame_coordinates_maldi_without_offsets(self):
         """Test direct coordinate extraction for MALDI data without normalization."""
-        from msiconvert.readers.bruker.bruker_reader import _get_frame_coordinates
+        from thyra.readers.bruker.bruker_reader import _get_frame_coordinates
 
         # Mock database with MALDI data
         with patch("sqlite3.connect") as mock_connect:
@@ -217,7 +217,7 @@ class TestDirectCoordinateExtraction:
 
     def test_get_frame_coordinates_non_maldi(self):
         """Test direct coordinate extraction for non-MALDI data."""
-        from msiconvert.readers.bruker.bruker_reader import _get_frame_coordinates
+        from thyra.readers.bruker.bruker_reader import _get_frame_coordinates
 
         # Mock database without MALDI data
         with patch("sqlite3.connect") as mock_connect:
@@ -239,7 +239,7 @@ class TestDirectCoordinateExtraction:
 
     def test_get_frame_count_direct(self):
         """Test direct frame count extraction."""
-        from msiconvert.readers.bruker.bruker_reader import _get_frame_count
+        from thyra.readers.bruker.bruker_reader import _get_frame_count
 
         with patch("sqlite3.connect") as mock_connect:
             mock_conn = MagicMock()
@@ -262,13 +262,13 @@ class TestReaderInterface:
 
     def test_registration_works(self):
         """Test that the reader is properly registered."""
-        from msiconvert.core.registry import get_reader_class
+        from thyra.core.registry import get_reader_class
 
         reader_class = get_reader_class("bruker")
         assert reader_class == BrukerReader
 
-    @patch("msiconvert.readers.bruker.bruker_reader.DLLManager")
-    @patch("msiconvert.readers.bruker.bruker_reader.SDKFunctions")
+    @patch("thyra.readers.bruker.bruker_reader.DLLManager")
+    @patch("thyra.readers.bruker.bruker_reader.SDKFunctions")
     def test_required_methods_exist(self, mock_sdk_functions, mock_dll_manager):
         """Test that all required interface methods exist."""
         mock_data_path = Path("/fake/bruker.d")

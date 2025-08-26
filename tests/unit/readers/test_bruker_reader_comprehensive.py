@@ -17,8 +17,8 @@ from typing import Any, Dict
 import numpy as np
 
 # Import the reader from the proper location
-from msiconvert.readers.bruker.bruker_reader import BrukerReader
-from msiconvert.utils.bruker_exceptions import BrukerReaderError
+from thyra.readers.bruker.bruker_reader import BrukerReader
+from thyra.utils.bruker_exceptions import BrukerReaderError
 
 logger = logging.getLogger(__name__)
 

@@ -4,7 +4,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from msiconvert.metadata.extractors.imzml_extractor import ImzMLMetadataExtractor
+from thyra.metadata.extractors.imzml_extractor import ImzMLMetadataExtractor
 
 
 class TestImzMLMetadataExtractor:
@@ -49,7 +49,7 @@ class TestImzMLMetadataExtractor:
 
         return mock_parser
 
-    @patch("msiconvert.metadata.extractors.imzml_extractor.ImzMLParser")
+    @patch("thyra.metadata.extractors.imzml_extractor.ImzMLParser")
     def test_creation(self, mock_imzml_parser_class):
         """Test ImzMLMetadataExtractor creation."""
         mock_parser = self.create_mock_parser()
@@ -59,7 +59,7 @@ class TestImzMLMetadataExtractor:
         assert extractor.data_source is mock_parser
         assert extractor.imzml_path == Path("/test/path.imzML")
 
-    @patch("msiconvert.metadata.extractors.imzml_extractor.ImzMLParser")
+    @patch("thyra.metadata.extractors.imzml_extractor.ImzMLParser")
     def test_extract_essential_basic(self, mock_imzml_parser_class):
         """Test basic essential metadata extraction."""
         mock_parser = self.create_mock_parser()
@@ -80,7 +80,7 @@ class TestImzMLMetadataExtractor:
         assert essential.source_path == str(Path("/test/path.imzML"))
         assert essential.estimated_memory_gb > 0
 
-    @patch("msiconvert.metadata.extractors.imzml_extractor.ImzMLParser")
+    @patch("thyra.metadata.extractors.imzml_extractor.ImzMLParser")
     def test_extract_essential_with_pixel_size(self, mock_imzml_parser_class):
         """Test essential metadata extraction with pixel size detection."""
         mock_parser = self.create_mock_parser()
@@ -110,7 +110,7 @@ class TestImzMLMetadataExtractor:
 
         assert essential.pixel_size == (25.0, 25.0)
 
-    @patch("msiconvert.metadata.extractors.imzml_extractor.ImzMLParser")
+    @patch("thyra.metadata.extractors.imzml_extractor.ImzMLParser")
     def test_extract_essential_no_pixel_size(self, mock_imzml_parser_class):
         """Test essential metadata extraction without pixel size."""
         mock_parser = self.create_mock_parser()
@@ -122,7 +122,7 @@ class TestImzMLMetadataExtractor:
 
         assert essential.pixel_size is None
 
-    @patch("msiconvert.metadata.extractors.imzml_extractor.ImzMLParser")
+    @patch("thyra.metadata.extractors.imzml_extractor.ImzMLParser")
     def test_extract_essential_3d_data(self, mock_imzml_parser_class):
         """Test essential metadata extraction with 3D data."""
         coordinates_3d = [
@@ -145,7 +145,7 @@ class TestImzMLMetadataExtractor:
         assert essential.n_spectra == 8
         assert essential.is_3d is True
 
-    @patch("msiconvert.metadata.extractors.imzml_extractor.ImzMLParser")
+    @patch("thyra.metadata.extractors.imzml_extractor.ImzMLParser")
     def test_extract_comprehensive(self, mock_imzml_parser_class):
         """Test comprehensive metadata extraction."""
         mock_parser = self.create_mock_parser()
@@ -175,7 +175,7 @@ class TestImzMLMetadataExtractor:
         # Check that raw metadata includes instrument info
         assert comprehensive.raw_metadata is not None
 
-    @patch("msiconvert.metadata.extractors.imzml_extractor.ImzMLParser")
+    @patch("thyra.metadata.extractors.imzml_extractor.ImzMLParser")
     def test_mass_range_calculation(self, mock_imzml_parser_class):
         """Test mass range calculation from spectra sampling."""
         # Create test data with varied m/z ranges
@@ -193,7 +193,7 @@ class TestImzMLMetadataExtractor:
 
         assert essential.mass_range == (50.0, 400.0)
 
-    @patch("msiconvert.metadata.extractors.imzml_extractor.ImzMLParser")
+    @patch("thyra.metadata.extractors.imzml_extractor.ImzMLParser")
     def test_memory_estimation(self, mock_imzml_parser_class):
         """Test memory estimation calculation."""
         # Create larger dataset for meaningful memory estimation
@@ -219,7 +219,7 @@ class TestImzMLMetadataExtractor:
         assert essential.estimated_memory_gb > 0
         assert essential.estimated_memory_gb < 100  # Sanity check
 
-    @patch("msiconvert.metadata.extractors.imzml_extractor.ImzMLParser")
+    @patch("thyra.metadata.extractors.imzml_extractor.ImzMLParser")
     def test_coordinate_bounds_calculation(self, mock_imzml_parser_class):
         """Test coordinate bounds calculation."""
         # Test with non-standard coordinate ranges
@@ -237,7 +237,7 @@ class TestImzMLMetadataExtractor:
             20,
         )  # min_x, max_x, min_y, max_y
 
-    @patch("msiconvert.metadata.extractors.imzml_extractor.ImzMLParser")
+    @patch("thyra.metadata.extractors.imzml_extractor.ImzMLParser")
     def test_caching_behavior(self, mock_imzml_parser_class):
         """Test that extraction results are properly cached."""
         mock_parser = self.create_mock_parser()
@@ -252,7 +252,7 @@ class TestImzMLMetadataExtractor:
 
         assert essential1 is essential2  # Same object reference due to caching
 
-    @patch("msiconvert.metadata.extractors.imzml_extractor.ImzMLParser")
+    @patch("thyra.metadata.extractors.imzml_extractor.ImzMLParser")
     def test_error_handling_parser_failure(self, mock_imzml_parser_class):
         """Test error handling when parser initialization fails."""
         # Create a parser that will fail when accessing coordinates
@@ -265,7 +265,7 @@ class TestImzMLMetadataExtractor:
         with pytest.raises(Exception):
             extractor.get_essential()
 
-    @patch("msiconvert.metadata.extractors.imzml_extractor.ImzMLParser")
+    @patch("thyra.metadata.extractors.imzml_extractor.ImzMLParser")
     def test_empty_dataset_handling(self, mock_imzml_parser_class):
         """Test handling of empty datasets."""
         mock_parser = self.create_mock_parser(
@@ -278,7 +278,7 @@ class TestImzMLMetadataExtractor:
         with pytest.raises((ValueError, IndexError)):
             extractor.get_essential()
 
-    @patch("msiconvert.metadata.extractors.imzml_extractor.ImzMLParser")
+    @patch("thyra.metadata.extractors.imzml_extractor.ImzMLParser")
     def test_single_spectrum_dataset(self, mock_imzml_parser_class):
         """Test handling of single spectrum dataset."""
         single_coordinates = [(1, 1, 1)]

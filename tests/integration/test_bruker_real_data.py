@@ -13,8 +13,8 @@ from pathlib import Path
 
 import pytest
 
-from msiconvert.core.registry import detect_format, get_reader_class
-from msiconvert.readers.bruker import BrukerReader
+from thyra.core.registry import detect_format, get_reader_class
+from thyra.readers.bruker import BrukerReader
 
 
 @pytest.mark.skipif(

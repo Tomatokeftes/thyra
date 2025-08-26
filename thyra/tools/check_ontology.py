@@ -1,4 +1,4 @@
-# msiconvert/tools/check_ontology.py
+# thyra/tools/check_ontology.py
 """Command-line tool to check ontology terms in imzML files."""
 
 import argparse

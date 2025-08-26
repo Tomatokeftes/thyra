@@ -1,4 +1,4 @@
-# msiconvert/converters/spatialdata/spatialdata_2d_converter.py
+# thyra/converters/spatialdata/spatialdata_2d_converter.py
 
 import logging
 from typing import Any, Dict, Tuple

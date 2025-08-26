@@ -1,11 +1,11 @@
-# msiconvert/__main__.py
+# thyra/__main__.py
 import argparse
 import logging
 from pathlib import Path
 
-from msiconvert.convert import convert_msi
-from msiconvert.utils.data_processors import optimize_zarr_chunks
-from msiconvert.utils.logging_config import setup_logging
+from thyra.convert import convert_msi
+from thyra.utils.data_processors import optimize_zarr_chunks
+from thyra.utils.logging_config import setup_logging
 
 
 def _create_argument_parser() -> argparse.ArgumentParser:

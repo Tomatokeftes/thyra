@@ -1,4 +1,4 @@
-# msiconvert/core/__init__.py
+# thyra/core/__init__.py
 from .base_converter import BaseMSIConverter
 from .base_extractor import MetadataExtractor
 from .base_reader import BaseMSIReader

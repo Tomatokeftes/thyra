@@ -11,7 +11,7 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 import pytest
 
-from msiconvert.readers.bruker.bruker_reader import BrukerReader
+from thyra.readers.bruker.bruker_reader import BrukerReader
 
 
 def normalize_path(path_str):
@@ -31,7 +31,7 @@ class TestBrukerReaderStructure:
 
     def test_class_registration(self):
         """Test that the BrukerReader class is properly registered."""
-        from msiconvert.core.registry import get_reader_class
+        from thyra.core.registry import get_reader_class
 
         # Test that we can get the bruker reader class
         reader_class = get_reader_class("bruker")
@@ -39,7 +39,7 @@ class TestBrukerReaderStructure:
 
     def test_interface_implementation(self):
         """Test that the BrukerReader implements the BaseMSIReader interface."""
-        from msiconvert.core.base_reader import BaseMSIReader
+        from thyra.core.base_reader import BaseMSIReader
 
         assert issubclass(BrukerReader, BaseMSIReader)
 

@@ -1,4 +1,4 @@
-# msiconvert/metadata/extractors/imzml_extractor.py
+# thyra/metadata/extractors/imzml_extractor.py
 import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple

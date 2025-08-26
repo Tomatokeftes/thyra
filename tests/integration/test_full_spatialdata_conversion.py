@@ -19,7 +19,7 @@ import numpy as np
 import pytest
 
 # Import from the correct location
-from msiconvert.readers.bruker.bruker_reader import BrukerReader
+from thyra.readers.bruker.bruker_reader import BrukerReader
 
 
 def _setup_test_environment():
@@ -62,7 +62,7 @@ def _check_spatialdata_dependencies():
     try:
         from spatialdata import SpatialData
 
-        from msiconvert.converters.spatialdata import SpatialDataConverter
+        from thyra.converters.spatialdata import SpatialDataConverter
 
         print("   ✅ SpatialData dependencies available")
         return True, SpatialData, SpatialDataConverter
@@ -208,17 +208,17 @@ def _setup_module_mocks(mock_converter, mock_reader, mock_decorator):
     import types
 
     # Setup mock modules
-    mock_base_module = types.ModuleType("msiconvert.core.base_converter")
+    mock_base_module = types.ModuleType("thyra.core.base_converter")
     mock_base_module.BaseMSIConverter = mock_converter
-    sys.modules["msiconvert.core.base_converter"] = mock_base_module
+    sys.modules["thyra.core.base_converter"] = mock_base_module
 
-    mock_reader_module = types.ModuleType("msiconvert.core.base_reader")
+    mock_reader_module = types.ModuleType("thyra.core.base_reader")
     mock_reader_module.BaseMSIReader = mock_reader
-    sys.modules["msiconvert.core.base_reader"] = mock_reader_module
+    sys.modules["thyra.core.base_reader"] = mock_reader_module
 
-    mock_registry_module = types.ModuleType("msiconvert.core.registry")
+    mock_registry_module = types.ModuleType("thyra.core.registry")
     mock_registry_module.register_converter = mock_decorator
-    sys.modules["msiconvert.core.registry"] = mock_registry_module
+    sys.modules["thyra.core.registry"] = mock_registry_module
 
 
 def _setup_relative_module_imports(
@@ -241,9 +241,9 @@ def _setup_mock_modules():
     _setup_module_mocks(mock_converter, mock_reader, mock_decorator)
 
     # Get the modules for relative imports
-    mock_base_module = sys.modules["msiconvert.core.base_converter"]
-    mock_reader_module = sys.modules["msiconvert.core.base_reader"]
-    mock_registry_module = sys.modules["msiconvert.core.registry"]
+    mock_base_module = sys.modules["thyra.core.base_converter"]
+    mock_reader_module = sys.modules["thyra.core.base_reader"]
+    mock_registry_module = sys.modules["thyra.core.registry"]
 
     # Setup relative imports
     _setup_relative_module_imports(

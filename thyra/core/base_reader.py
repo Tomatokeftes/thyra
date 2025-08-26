@@ -1,4 +1,4 @@
-# msiconvert/core/base_reader.py
+# thyra/core/base_reader.py
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import TYPE_CHECKING, Generator, Optional, Tuple

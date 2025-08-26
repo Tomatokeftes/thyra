@@ -1,4 +1,4 @@
-# msiconvert/core/registry.py
+# thyra/core/registry.py
 import logging
 from pathlib import Path
 from threading import RLock

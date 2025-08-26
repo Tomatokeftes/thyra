@@ -1,6 +1,6 @@
 # TASK.md - MSIConvert Refactoring Roadmap
 
-This document outlines the comprehensive refactoring tasks needed to transform msiconvert from a functional prototype into a professional, scalable, and collaborative open-source tool for converting mass spectrometry imaging (MSI) datasets to the modern SpatialData/Zarr format.
+This document outlines the comprehensive refactoring tasks needed to transform thyra from a functional prototype into a professional, scalable, and collaborative open-source tool for converting mass spectrometry imaging (MSI) datasets to the modern SpatialData/Zarr format.
 
 ## ✅ Recent Progress Summary (Completed Tasks)
 
@@ -128,7 +128,7 @@ This document outlines the comprehensive refactoring tasks needed to transform m
   - **Labels:** `priority:high`, `area:documentation`, `area:community`, `good-first-issue`
 
 - [ ] **Refactor CLI Module for Better Testability**
-  - **Description:** The current msiconvert_cli.py mixes argument parsing, business logic, and I/O operations. This task involves refactoring to separate concerns: 1) Pure argument parsing layer. 2) Core conversion logic as testable functions. 3) I/O operations isolated in separate functions. 4) Comprehensive unit tests for each layer.
+  - **Description:** The current thyra_cli.py mixes argument parsing, business logic, and I/O operations. This task involves refactoring to separate concerns: 1) Pure argument parsing layer. 2) Core conversion logic as testable functions. 3) I/O operations isolated in separate functions. 4) Comprehensive unit tests for each layer.
   - **Rationale:** Better separation of concerns improves testability, maintainability, and makes it easier to add new CLI features or alternative interfaces (GUI, API).
   - **Labels:** `priority:medium`, `area:code-quality`, `area:testing`
 
@@ -181,9 +181,9 @@ This document outlines the comprehensive refactoring tasks needed to transform m
 ### Code Refactoring & Maintainability
 
 - [x] **Extract Configuration Management System** *(Foundation Complete)*
-  - **Description:** ✅ **COMPLETED:** Created centralized `msiconvert/config.py` with all core constants: DEFAULT_BUFFER_SIZE (100000), batch sizes, memory limits (MB_TO_BYTES, LOG_FILE_MAX_SIZE_MB), performance thresholds, pixel size tolerance, and SDK buffer settings. Updated key modules (base_converter.py, __main__.py, logging_config.py) to import from config. **REMAINING:** Full YAML/JSON loading system and validation (phase 2).
+  - **Description:** ✅ **COMPLETED:** Created centralized `thyra/config.py` with all core constants: DEFAULT_BUFFER_SIZE (100000), batch sizes, memory limits (MB_TO_BYTES, LOG_FILE_MAX_SIZE_MB), performance thresholds, pixel size tolerance, and SDK buffer settings. Updated key modules (base_converter.py, __main__.py, logging_config.py) to import from config. **REMAINING:** Full YAML/JSON loading system and validation (phase 2).
 - [x] **Extract Configuration Management System** *(Foundation Complete)*
-  - **Description:** ✅ **COMPLETED:** Created centralized `msiconvert/config.py` with all core constants: DEFAULT_BUFFER_SIZE (100000), batch sizes, memory limits (MB_TO_BYTES, LOG_FILE_MAX_SIZE_MB), performance thresholds, pixel size tolerance, and SDK buffer settings. Updated key modules (base_converter.py, __main__.py, logging_config.py) to import from config. **REMAINING:** Full YAML/JSON loading system and validation (phase 2).
+  - **Description:** ✅ **COMPLETED:** Created centralized `thyra/config.py` with all core constants: DEFAULT_BUFFER_SIZE (100000), batch sizes, memory limits (MB_TO_BYTES, LOG_FILE_MAX_SIZE_MB), performance thresholds, pixel size tolerance, and SDK buffer settings. Updated key modules (base_converter.py, __main__.py, logging_config.py) to import from config. **REMAINING:** Full YAML/JSON loading system and validation (phase 2).
   - **Rationale:** Centralized configuration improves maintainability, allows easy tuning for different use cases, and makes the codebase more professional.
   - **Labels:** `priority:high`, `area:code-quality`, `area:maintainability`
 

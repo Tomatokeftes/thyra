@@ -1,4 +1,4 @@
-# msiconvert/metadata/core/metadata_types.py
+# thyra/metadata/core/metadata_types.py
 from dataclasses import dataclass
 from typing import Any, Dict, Optional, Tuple
 

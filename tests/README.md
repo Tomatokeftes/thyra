@@ -1,6 +1,6 @@
-# MSIConvert Test Suite
+# Thyra Test Suite
 
-This directory contains the test suite for the `msiconvert` package, providing both unit tests and integration tests.
+This directory contains the test suite for the `thyra` package, providing both unit tests and integration tests.
 
 ## Test Structure
 
@@ -67,13 +67,13 @@ pytest tests/unit/test_registry.py
 To run tests with coverage:
 
 ```bash
-pytest --cov=msiconvert
+pytest --cov=thyra
 ```
 
 For a detailed coverage report:
 
 ```bash
-pytest --cov=msiconvert --cov-report=html
+pytest --cov=thyra --cov-report=html
 ```
 
 ## Test Dependencies
@@ -100,7 +100,7 @@ pip install pytest pytest-cov mock
 
 ## Adding New Tests
 
-When adding new functionality to the `msiconvert` package, please follow these guidelines for testing:
+When adding new functionality to the `thyra` package, please follow these guidelines for testing:
 
 1. Add unit tests for new components, functions, or methods
 2. Update integration tests if the conversion workflow is affected

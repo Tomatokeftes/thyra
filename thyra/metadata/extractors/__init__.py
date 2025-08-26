@@ -1,4 +1,4 @@
-# msiconvert/metadata/extractors/__init__.py
+# thyra/metadata/extractors/__init__.py
 """
 Format-specific metadata extractors for MSI data.
 
@@ -12,7 +12,7 @@ Available Extractors:
 - BrukerMetadataExtractor: For Bruker TSF/TDF format files
 
 Example usage:
-    >>> from msiconvert.metadata.extractors import \
+    >>> from thyra.metadata.extractors import \
     ...     ImzMLMetadataExtractor, BrukerMetadataExtractor
     >>> from pyimzml.ImzMLParser import ImzMLParser
     >>>

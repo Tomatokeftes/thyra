@@ -1,8 +1,8 @@
 # tests/unit/metadata/core/test_base_extractor.py
 import pytest
 
-from msiconvert.core.base_extractor import MetadataExtractor
-from msiconvert.metadata.types import ComprehensiveMetadata, EssentialMetadata
+from thyra.core.base_extractor import MetadataExtractor
+from thyra.metadata.types import ComprehensiveMetadata, EssentialMetadata
 
 
 class ConcreteMetadataExtractor(MetadataExtractor):

@@ -1,4 +1,4 @@
-# msiconvert/metadata/core/base_extractor.py
+# thyra/metadata/core/base_extractor.py
 import logging
 from abc import ABC, abstractmethod
 from typing import Any, Optional

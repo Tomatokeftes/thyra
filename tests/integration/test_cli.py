@@ -6,7 +6,7 @@ import sys
 
 import pytest
 
-from msiconvert.__main__ import main
+from thyra.__main__ import main
 
 
 class TestCommandLineInterface:
@@ -15,7 +15,7 @@ class TestCommandLineInterface:
     def test_cli_help(self, capsys):
         """Test the help output."""
         # Set up command line arguments
-        sys.argv = ["msiconvert", "--help"]
+        sys.argv = ["thyra", "--help"]
 
         # Run main with exit handling
         with pytest.raises(SystemExit) as e:
@@ -43,7 +43,7 @@ class TestCommandLineInterface:
 
         # Use monkeypatch to simulate command line arguments
         sys.argv = [
-            "msiconvert",
+            "thyra",
             str(imzml_path),
             str(output_path),
             "--format",
@@ -68,7 +68,7 @@ class TestCommandLineInterface:
     def test_cli_missing_args(self, capsys):
         """Test CLI behavior with missing arguments."""
         # Set up command line arguments with missing output
-        sys.argv = ["msiconvert", "input.imzML"]
+        sys.argv = ["thyra", "input.imzML"]
 
         # Run main with exit handling
         with pytest.raises(SystemExit):
@@ -88,7 +88,7 @@ class TestCommandLineInterface:
 
         # Set up command line arguments with invalid format
         sys.argv = [
-            "msiconvert",
+            "thyra",
             str(imzml_path),
             str(output_path),
             "--format",
@@ -116,11 +116,11 @@ class TestCommandLineInterface:
             handle_3d_value = kwargs.get("handle_3d", False)
             return True
 
-        monkeypatch.setattr("msiconvert.__main__.convert_msi", mock_convert_msi)
+        monkeypatch.setattr("thyra.__main__.convert_msi", mock_convert_msi)
 
         # Set up command line arguments with 3D handling
         sys.argv = [
-            "msiconvert",
+            "thyra",
             str(imzml_path),
             str(output_path),
             "--handle-3d",
@@ -152,16 +152,14 @@ class TestCommandLineInterface:
             nonlocal configured_level
             configured_level = log_level
 
-        monkeypatch.setattr("msiconvert.__main__.setup_logging", mock_setup_logging)
+        monkeypatch.setattr("thyra.__main__.setup_logging", mock_setup_logging)
 
         # Mock convert_msi to always return True
-        monkeypatch.setattr(
-            "msiconvert.__main__.convert_msi", lambda *args, **kwargs: True
-        )
+        monkeypatch.setattr("thyra.__main__.convert_msi", lambda *args, **kwargs: True)
 
         # Set up command line arguments with debug log level
         sys.argv = [
-            "msiconvert",
+            "thyra",
             str(imzml_path),
             str(output_path),
             "--log-level",

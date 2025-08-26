@@ -1,11 +1,11 @@
-# Thyra
+# Thyra 🔬✨
 
-[![Tests](https://img.shields.io/github/actions/workflow/status/Tomatokeftes/Thyra/tests.yml?branch=main&logo=github)](https://github.com/Tomatokeftes/Thyra/actions/workflows/tests.yml)
+[![Tests](https://img.shields.io/github/actions/workflow/status/Tomatokeftes/thyra/tests.yml?branch=main&logo=github)](https://github.com/Tomatokeftes/thyra/actions/workflows/tests.yml)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
-A modern Python library for converting Mass Spectrometry Imaging (MSI) data into the standardized **SpatialData/Zarr format**, enabling seamless integration with spatial omics analysis workflows.
+**Thyra** (from Greek θύρα, meaning "door" or "portal") - A modern Python library for converting Mass Spectrometry Imaging (MSI) data into the standardized **SpatialData/Zarr format**, serving as your portal to spatial omics analysis workflows.
 
 ## 🚀 Features
 
@@ -41,19 +41,19 @@ poetry install
 
 ```bash
 # Basic conversion
-msiconvert input.imzML output.zarr
+thyra input.imzML output.zarr
 
 # With custom parameters
-msiconvert data.d output.zarr --pixel-size 50 --dataset-id "experiment_001"
+thyra data.d output.zarr --pixel-size 50 --dataset-id "experiment_001"
 
 # 3D volume processing
-msiconvert volume.imzML output.zarr --handle-3d
+thyra volume.imzML output.zarr --handle-3d
 ```
 
 ### Python API
 
 ```python
-from msiconvert import convert_msi
+from thyra import convert_msi
 
 # Simple conversion
 success = convert_msi(
@@ -91,7 +91,7 @@ success = convert_msi(
 
 ```bash
 # All available options
-msiconvert input.imzML output.zarr \
+thyra input.imzML output.zarr \
     --pixel-size 25 \
     --dataset-id "my_experiment" \
     --handle-3d \
@@ -104,7 +104,7 @@ msiconvert input.imzML output.zarr \
 
 ```python
 import glob
-from msiconvert import convert_msi
+from thyra import convert_msi
 
 # Process multiple files
 for input_file in glob.glob("data/*.imzML"):
@@ -152,7 +152,7 @@ poetry run pytest -m "not integration"
 poetry run pytest
 
 # With coverage
-poetry run pytest --cov=msiconvert
+poetry run pytest --cov=thyra
 ```
 
 ### Code Quality
@@ -202,11 +202,11 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 🏆 Citation
 
-If you use thyra in your research, please cite:
+If you use Thyra in your research, please cite:
 
 ```bibtex
-@software{msiconvert2024,
-  title = {thyra: Modern Mass Spectrometry Imaging Data Conversion},
+@software{thyra2024,
+  title = {Thyra: Modern Mass Spectrometry Imaging Data Conversion - Portal to Spatial Omics},
   author = {Visvikis, Theodoros},
   year = {2024},
   url = {https://github.com/Tomatokeftes/thyra}
@@ -221,4 +221,4 @@ If you use thyra in your research, please cite:
 
 ---
 
-**thyra** - Bridging traditional MSI formats with modern spatial omics workflows 🔬✨
+**Thyra** - Your portal from traditional MSI formats to modern spatial omics workflows 🔬✨

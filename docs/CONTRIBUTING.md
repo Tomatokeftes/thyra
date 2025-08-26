@@ -1,6 +1,6 @@
-# Contributing to MSIConverter
+# Contributing to Thyra
 
-Thank you for your interest in contributing to MSIConverter! This document provides guidelines for contributing to this project.
+Thank you for your interest in contributing to Thyra! This document provides guidelines for contributing to this project.
 
 ## Table of Contents
 
@@ -23,8 +23,8 @@ Thank you for your interest in contributing to MSIConverter! This document provi
 
 1. **Fork and Clone the Repository**
    ```bash
-   git clone https://github.com/yourusername/MSIConverter.git
-   cd MSIConverter
+   git clone https://github.com/yourusername/Thyra.git
+   cd Thyra
    ```
 
 2. **Install Dependencies**
@@ -70,7 +70,7 @@ poetry run isort .
 poetry run flake8
 
 # Run security checks
-poetry run bandit -r msiconvert/
+poetry run bandit -r thyra/
 ```
 
 ## Testing Requirements
@@ -92,7 +92,7 @@ poetry run bandit -r msiconvert/
 - Aim for >80% code coverage for new code
 - Run tests with coverage:
   ```bash
-  poetry run pytest --cov=msiconvert --cov-report=html
+  poetry run pytest --cov=thyra --cov-report=html
   ```
 
 ### Writing Tests
@@ -171,7 +171,7 @@ Use the appropriate issue template:
 **For Bug Reports:**
 - Operating system and version
 - Python version
-- MSIConverter version
+- Thyra version
 - Input file format and size (if relevant)
 - Complete error message and stack trace
 - Steps to reproduce
@@ -224,7 +224,7 @@ Please note that this project is governed by our [Code of Conduct](CODE_OF_CONDU
 
 ## Versioning Policy
 
-MSIConverter follows [Semantic Versioning](https://semver.org/) (SemVer):
+Thyra follows [Semantic Versioning](https://semver.org/) (SemVer):
 
 ### Version Format: `MAJOR.MINOR.PATCH`
 
@@ -254,8 +254,8 @@ MSIConverter follows [Semantic Versioning](https://semver.org/) (SemVer):
 
 If you have questions about contributing that aren't covered here, please:
 
-1. Check the existing [GitHub Discussions](https://github.com/Tomatokeftes/MSIConverter/discussions)
+1. Check the existing [GitHub Discussions](https://github.com/Tomatokeftes/Thyra/discussions)
 2. Open a new discussion if your question hasn't been asked
 3. Tag maintainers if you need urgent clarification
 
-Thank you for contributing to MSIConverter! 🚀
+Thank you for contributing to Thyra! 🚀

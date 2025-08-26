@@ -1,4 +1,4 @@
-# msiconvert/metadata/extractors/bruker_extractor.py
+# thyra/metadata/extractors/bruker_extractor.py
 import logging
 import sqlite3
 from pathlib import Path

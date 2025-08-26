@@ -4,14 +4,14 @@ Tests for data processing utilities.
 
 from unittest.mock import MagicMock, patch
 
-from msiconvert.utils.data_processors import optimize_zarr_chunks
+from thyra.utils.data_processors import optimize_zarr_chunks
 
 
 class TestOptimizeZarrChunks:
     """Test the zarr chunk optimization function."""
 
-    @patch("msiconvert.utils.data_processors.zarr")
-    @patch("msiconvert.utils.data_processors.da")
+    @patch("thyra.utils.data_processors.zarr")
+    @patch("thyra.utils.data_processors.da")
     def test_optimize_zarr_chunks_basic(self, mock_da, mock_zarr, temp_dir):
         """Test basic chunk optimization."""
         zarr_path = temp_dir / "test.zarr"
@@ -43,8 +43,8 @@ class TestOptimizeZarrChunks:
         mock_dask_array.rechunk.assert_called_once()
         mock_da.to_zarr.assert_called_once()
 
-    @patch("msiconvert.utils.data_processors.zarr")
-    @patch("msiconvert.utils.data_processors.da")
+    @patch("thyra.utils.data_processors.zarr")
+    @patch("thyra.utils.data_processors.da")
     def test_optimize_zarr_chunks_with_output_path(self, mock_da, mock_zarr, temp_dir):
         """Test chunk optimization with separate output path."""
         zarr_path = temp_dir / "input.zarr"
@@ -84,8 +84,8 @@ class TestOptimizeZarrChunks:
             overwrite=True,
         )
 
-    @patch("msiconvert.utils.data_processors.zarr")
-    @patch("msiconvert.utils.data_processors.da")
+    @patch("thyra.utils.data_processors.zarr")
+    @patch("thyra.utils.data_processors.da")
     def test_optimize_zarr_chunks_with_custom_chunks(
         self, mock_da, mock_zarr, temp_dir
     ):
@@ -116,8 +116,8 @@ class TestOptimizeZarrChunks:
         assert result is True
         mock_dask_array.rechunk.assert_called_with(custom_chunks)
 
-    @patch("msiconvert.utils.data_processors.zarr")
-    @patch("msiconvert.utils.data_processors.da")
+    @patch("thyra.utils.data_processors.zarr")
+    @patch("thyra.utils.data_processors.da")
     def test_optimize_zarr_chunks_with_compressor(self, mock_da, mock_zarr, temp_dir):
         """Test chunk optimization with custom compressor."""
         zarr_path = temp_dir / "test.zarr"
@@ -154,8 +154,8 @@ class TestOptimizeZarrChunks:
             overwrite=True,
         )
 
-    @patch("msiconvert.utils.data_processors.zarr")
-    @patch("msiconvert.utils.data_processors.da")
+    @patch("thyra.utils.data_processors.zarr")
+    @patch("thyra.utils.data_processors.da")
     def test_optimize_zarr_chunks_with_rename(self, mock_da, mock_zarr, temp_dir):
         """Test chunk optimization with renaming in the same store."""
         zarr_path = temp_dir / "test.zarr"
@@ -193,8 +193,8 @@ class TestOptimizeZarrChunks:
         del mock_store[f"{array_path}_optimized"]  # Should have been called
         del mock_store[f"{array_path}_backup"]  # Should have been called
 
-    @patch("msiconvert.utils.data_processors.zarr")
-    @patch("msiconvert.utils.data_processors.da")
+    @patch("thyra.utils.data_processors.zarr")
+    @patch("thyra.utils.data_processors.da")
     def test_optimize_zarr_chunks_error(self, mock_da, mock_zarr, temp_dir):
         """Test error handling in chunk optimization."""
         zarr_path = temp_dir / "test.zarr"

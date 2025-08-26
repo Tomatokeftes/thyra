@@ -4,8 +4,8 @@ Tests for simplified DecisionTree with only timsTOF support - Phase 3.
 
 import pytest
 
-from msiconvert.resampling.decision_tree import ResamplingDecisionTree
-from msiconvert.resampling.types import ResamplingMethod
+from thyra.resampling.decision_tree import ResamplingDecisionTree
+from thyra.resampling.types import ResamplingMethod
 
 
 class TestSimplifiedDecisionTree:

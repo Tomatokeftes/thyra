@@ -8,13 +8,13 @@ import numpy as np
 import pandas as pd
 from scipy import sparse
 
-from msiconvert.converters.spatialdata import SpatialDataConverter
+from thyra.converters.spatialdata import SpatialDataConverter
 
 
 def _create_mock_extractor(dims):
     """Create mock metadata extractor for test reader."""
-    from msiconvert.core.base_extractor import MetadataExtractor
-    from msiconvert.metadata.types import ComprehensiveMetadata, EssentialMetadata
+    from thyra.core.base_extractor import MetadataExtractor
+    from thyra.metadata.types import ComprehensiveMetadata, EssentialMetadata
 
     class MockExtractor(MetadataExtractor):
         def __init__(self, dims):
@@ -64,7 +64,7 @@ def create_mock_reader_with_dimensions(dimensions):
 
     import numpy as np
 
-    from msiconvert.core.base_reader import BaseMSIReader
+    from thyra.core.base_reader import BaseMSIReader
 
     class MockMSIReader(BaseMSIReader):
         def __init__(self, dims, **kwargs):
@@ -157,7 +157,7 @@ class TestSpatialDataConverter:
         output_path = temp_dir / "test_output.zarr"
 
         # Mock 3D dimensions but handle as 2D slices
-        from msiconvert.metadata.types import EssentialMetadata
+        from thyra.metadata.types import EssentialMetadata
 
         mock_essential = EssentialMetadata(
             dimensions=(3, 3, 2),
@@ -241,8 +241,8 @@ class TestSpatialDataConverter:
         assert data_structures["sparse_matrix"][pixel_idx, mz_indices[0]] == 100.0
         assert data_structures["sparse_matrix"][pixel_idx, mz_indices[1]] == 200.0
 
-    @patch("msiconvert.converters.spatialdata.spatialdata_3d_converter.AnnData")
-    @patch("msiconvert.converters.spatialdata.spatialdata_3d_converter.TableModel")
+    @patch("thyra.converters.spatialdata.spatialdata_3d_converter.AnnData")
+    @patch("thyra.converters.spatialdata.spatialdata_3d_converter.TableModel")
     def test_finalize_data_3d_volume(self, mock_table_model, mock_anndata, temp_dir):
         """Test finalizing data structures for 3D data."""
         output_path = temp_dir / "test_output.zarr"
@@ -257,7 +257,7 @@ class TestSpatialDataConverter:
         mock_table_model.parse.return_value = mock_table
 
         # Mock create_pixel_shapes - need to import the base class for patching
-        from msiconvert.converters.spatialdata.base_spatialdata_converter import (  # noqa: E501
+        from thyra.converters.spatialdata.base_spatialdata_converter import (  # noqa: E501
             BaseSpatialDataConverter,
         )
 
@@ -299,8 +299,8 @@ class TestSpatialDataConverter:
             # Restore original method
             BaseSpatialDataConverter._create_pixel_shapes = original_create_pixel_shapes
 
-    @patch("msiconvert.converters.spatialdata.spatialdata_2d_converter.AnnData")
-    @patch("msiconvert.converters.spatialdata.spatialdata_2d_converter.TableModel")
+    @patch("thyra.converters.spatialdata.spatialdata_2d_converter.AnnData")
+    @patch("thyra.converters.spatialdata.spatialdata_2d_converter.TableModel")
     def test_finalize_data_2d_slices(
         self,
         mock_table_model,
@@ -313,7 +313,7 @@ class TestSpatialDataConverter:
         output_path = temp_dir / "test_output.zarr"
 
         # Mock 3D dimensions but handle as 2D slices
-        from msiconvert.metadata.types import EssentialMetadata
+        from thyra.metadata.types import EssentialMetadata
 
         mock_essential = EssentialMetadata(
             dimensions=(3, 3, 2),
@@ -340,7 +340,7 @@ class TestSpatialDataConverter:
         mock_table_model.parse.return_value = mock_table
 
         # Mock create_pixel_shapes - need to import the base class for patching
-        from msiconvert.converters.spatialdata.base_spatialdata_converter import (  # noqa: E501
+        from thyra.converters.spatialdata.base_spatialdata_converter import (  # noqa: E501
             BaseSpatialDataConverter,
         )
 
@@ -388,12 +388,10 @@ class TestSpatialDataConverter:
             # Restore original method
             BaseSpatialDataConverter._create_pixel_shapes = original_create_pixel_shapes
 
-    @patch("msiconvert.converters.spatialdata.base_spatialdata_converter.box")
-    @patch("msiconvert.converters.spatialdata.base_spatialdata_converter.gpd")
-    @patch(
-        "msiconvert.converters.spatialdata.base_spatialdata_converter." "ShapesModel"
-    )
-    @patch("msiconvert.converters.spatialdata.base_spatialdata_converter.Identity")
+    @patch("thyra.converters.spatialdata.base_spatialdata_converter.box")
+    @patch("thyra.converters.spatialdata.base_spatialdata_converter.gpd")
+    @patch("thyra.converters.spatialdata.base_spatialdata_converter." "ShapesModel")
+    @patch("thyra.converters.spatialdata.base_spatialdata_converter.Identity")
     def test_create_pixel_shapes(
         self,
         mock_identity,
@@ -444,7 +442,7 @@ class TestSpatialDataConverter:
         # Patch the implementation's internals to avoid the coordinate
         # extraction issue
         with patch(
-            "msiconvert.converters.spatialdata.base_spatialdata_converter."
+            "thyra.converters.spatialdata.base_spatialdata_converter."
             "BaseSpatialDataConverter._create_pixel_shapes"  # noqa: E501
         ) as mock_create_shapes:
             mock_create_shapes.return_value = mock_shapes
@@ -456,15 +454,13 @@ class TestSpatialDataConverter:
             assert shapes == mock_shapes
             mock_create_shapes.assert_called_once_with(mock_adata, is_3d=False)
 
-    @patch(
-        "msiconvert.converters.spatialdata.base_spatialdata_converter." "SpatialData"
-    )
+    @patch("thyra.converters.spatialdata.base_spatialdata_converter." "SpatialData")
     def test_save_output(self, mock_spatial_data_class, mock_reader, temp_dir):
         """Test saving output."""
         output_path = temp_dir / "test_output.zarr"
 
         # Import the base class to access the method
-        from msiconvert.converters.spatialdata.base_spatialdata_converter import (  # noqa: E501
+        from thyra.converters.spatialdata.base_spatialdata_converter import (  # noqa: E501
             BaseSpatialDataConverter,
         )
 
@@ -545,9 +541,7 @@ class TestSpatialDataConverter:
         assert mock_sdata.metadata["conversion_info"]["pixel_size_um"] == 2.0
         assert "conversion_info" in mock_sdata.metadata
 
-    @patch(
-        "msiconvert.converters.spatialdata.base_spatialdata_converter." "SpatialData"
-    )
+    @patch("thyra.converters.spatialdata.base_spatialdata_converter." "SpatialData")
     def test_convert_end_to_end(self, mock_spatial_data, mock_reader, temp_dir):
         """Test the full conversion process."""
         output_path = temp_dir / "test_output.zarr"
@@ -578,7 +572,7 @@ class TestSpatialDataConverter:
         output_path = temp_dir / "test_output.zarr"
 
         # Mock 3D dimensions but handle as 2D slices
-        from msiconvert.metadata.types import EssentialMetadata
+        from thyra.metadata.types import EssentialMetadata
 
         mock_essential = EssentialMetadata(
             dimensions=(3, 3, 2),

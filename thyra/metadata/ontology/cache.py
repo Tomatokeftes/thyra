@@ -1,4 +1,4 @@
-# msiconvert/metadata/ontology/cache.py
+# thyra/metadata/ontology/cache.py
 """Local ontology cache for imzML terms."""
 
 import logging

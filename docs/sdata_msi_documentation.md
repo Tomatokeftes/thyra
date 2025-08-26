@@ -1,6 +1,6 @@
 # SpatialData MSI Documentation
 
-This document explains how to access Mass Spectrometry Imaging (MSI) data stored in SpatialData objects created by the MSIConverter package, including Total Ion Current (TIC) images, average mass spectra, and other metadata components.
+This document explains how to access Mass Spectrometry Imaging (MSI) data stored in SpatialData objects created by the Thyra package, including Total Ion Current (TIC) images, average mass spectra, and other metadata components.
 
 ## Table of Contents
 
@@ -16,7 +16,7 @@ This document explains how to access Mass Spectrometry Imaging (MSI) data stored
 
 ## SpatialData Structure Overview
 
-The SpatialData object created by MSIConverter contains the following components:
+The SpatialData object created by Thyra contains the following components:
 
 ### Main Components
 
@@ -285,7 +285,7 @@ plt.show()
 
 ## Working with 3D Data and Slices
 
-For 3D datasets, MSIConverter can either handle them as true 3D volumes or as a series of 2D slices.
+For 3D datasets, Thyra can either handle them as true 3D volumes or as a series of 2D slices.
 
 ### Detecting Dataset Dimensionality
 
