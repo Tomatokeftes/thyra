@@ -124,8 +124,8 @@ class BaseSpatialDataConverter(BaseMSIConverter, ABC):
         # Set up resampling if enabled
         if self._resampling_config:
             self._setup_resampling()
-            # Override the common mass axis with resampled axis
-            self._build_resampled_mass_axis()
+            # Note: _build_resampled_mass_axis() will be called in _initialize_conversion()
+            # after reader metadata is fully loaded
 
     def _setup_resampling(self) -> None:
         """Set up resampling configuration and strategy."""
@@ -298,13 +298,20 @@ class BaseSpatialDataConverter(BaseMSIConverter, ABC):
         """Build resampled mass axis using physics-based generators."""
         from ...resampling.common_axis import CommonAxisBuilder
 
-        # Get the original mass range from the raw data
-        essential_metadata = self.reader.get_essential_metadata()
-        mass_range = essential_metadata.mass_range
+        # Use already loaded essential metadata to avoid multiple reader calls
+        if hasattr(self, '_coordinate_bounds') and self._coordinate_bounds is not None:
+            # Mass range is available from essential metadata already loaded
+            essential_metadata = self.reader.get_essential_metadata()
+            mass_range = essential_metadata.mass_range
+        else:
+            # Fallback - shouldn't happen in normal flow
+            essential_metadata = self.reader.get_essential_metadata()
+            mass_range = essential_metadata.mass_range
+            
         min_mz = mass_range[0] if self._min_mz is None else self._min_mz
         max_mz = mass_range[1] if self._max_mz is None else self._max_mz
 
-        # Get metadata for axis type selection first
+        # Get metadata for axis type selection (use cached metadata if possible)
         metadata = self._get_reader_metadata_for_resampling()
         tree = ResamplingDecisionTree()
         axis_type = tree.select_axis_type(metadata)
@@ -404,12 +411,12 @@ class BaseSpatialDataConverter(BaseMSIConverter, ABC):
                     f"Using user-specified pixel size: {self.pixel_size_um} um"
                 )
 
-            # IMPORTANT: Don't overwrite _common_mass_axis if resampling
-            # is enabled
-            if self._resampling_config and self._common_mass_axis is not None:
-                # Already set by _build_resampled_mass_axis() - keep it
+            # Handle mass axis setup
+            if self._resampling_config:
+                # Build resampled mass axis now that reader metadata is loaded
+                self._build_resampled_mass_axis()
                 logging.info(
-                    f"Preserving resampled mass axis with "
+                    f"Built resampled mass axis with "
                     f"{len(self._common_mass_axis)} bins"
                 )
             else:
