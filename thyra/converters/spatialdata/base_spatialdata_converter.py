@@ -163,6 +163,8 @@ class BaseSpatialDataConverter(BaseMSIConverter, ABC):
         self._target_bins = self._resampling_config.get("target_bins", 5000)
         self._min_mz = self._resampling_config.get("min_mz")
         self._max_mz = self._resampling_config.get("max_mz")
+        self._width_at_mz = self._resampling_config.get("width_at_mz")
+        self._reference_mz = self._resampling_config.get("reference_mz", 1000.0)
 
     def _get_reader_metadata_for_resampling(self) -> Dict[str, Any]:
         """Extract metadata from reader for resampling decision tree."""
@@ -229,6 +231,67 @@ class BaseSpatialDataConverter(BaseMSIConverter, ABC):
         except Exception as e:
             logging.debug(f"Could not extract spectrum metadata: {e}")
 
+    def _calculate_bins_from_width(
+        self, min_mz: float, max_mz: float, axis_type
+    ) -> int:
+        """Calculate optimal number of bins from desired width at reference m/z.
+        
+        Args:
+            min_mz: Minimum m/z of the mass range
+            max_mz: Maximum m/z of the mass range  
+            axis_type: The axis type (determines physics-based spacing)
+            
+        Returns:
+            Calculated number of bins
+        """
+        if self._width_at_mz is None:
+            # Use default: 5.0 mDa at m/z 1000
+            width_at_mz = 0.005  # 5.0 mDa in Da
+            reference_mz = 1000.0
+        else:
+            width_at_mz = self._width_at_mz
+            reference_mz = self._reference_mz
+            
+        logging.info(
+            f"Calculating bins for {width_at_mz*1000:.1f} mDa width at m/z {reference_mz:.1f}"
+        )
+        
+        # Calculate bins based on axis type physics
+        if hasattr(axis_type, "value"):
+            axis_name = axis_type.value
+        else:
+            axis_name = str(axis_type).split(".")[-1].lower()
+            
+        if axis_name == "reflector_tof":
+            # REFLECTOR_TOF: constant relative resolution (width ∝ m/z)
+            # relative_resolution = reference_mz / width_at_mz
+            # For logarithmic spacing: bins ≈ ln(max_mz/min_mz) * (reference_mz / width_at_mz)
+            relative_resolution = reference_mz / width_at_mz
+            bins = int(np.log(max_mz / min_mz) * relative_resolution)
+            
+        elif axis_name == "linear_tof":
+            # LINEAR_TOF: width ∝ sqrt(m/z)
+            # For sqrt spacing: bins ≈ (sqrt(max_mz) - sqrt(min_mz)) / sqrt(width_at_mz / reference_mz)
+            scaling_factor = width_at_mz / np.sqrt(reference_mz)
+            bins = int((np.sqrt(max_mz) - np.sqrt(min_mz)) / np.sqrt(scaling_factor))
+            
+        elif axis_name == "orbitrap":
+            # ORBITRAP: width ∝ m/z^1.5  
+            # For 1/sqrt spacing: bins ≈ (1/sqrt(min_mz) - 1/sqrt(max_mz)) * (reference_mz^1.5 / width_at_mz)
+            scaling_factor = (reference_mz ** 1.5) / width_at_mz
+            bins = int((1/np.sqrt(min_mz) - 1/np.sqrt(max_mz)) * scaling_factor)
+            
+        else:
+            # LINEAR/CONSTANT: uniform spacing
+            # bins = (max_mz - min_mz) / width_at_mz
+            bins = int((max_mz - min_mz) / width_at_mz)
+            
+        # Ensure reasonable bounds
+        bins = max(100, min(bins, 100000))  # Between 100 and 100k bins
+        
+        logging.info(f"Calculated {bins} bins for {axis_name} axis type")
+        return bins
+
     def _build_resampled_mass_axis(self) -> None:
         """Build resampled mass axis using physics-based generators."""
         from ...resampling.common_axis import CommonAxisBuilder
@@ -238,30 +301,47 @@ class BaseSpatialDataConverter(BaseMSIConverter, ABC):
         min_mz = mass_range[0] if self._min_mz is None else self._min_mz
         max_mz = mass_range[1] if self._max_mz is None else self._max_mz
 
-        logging.info(
-            f"Building resampled mass axis: {min_mz:.2f} - {max_mz:.2f} m/z, "
-            f"{self._target_bins} bins"
-        )
-
-        # Get metadata for axis type selection
+        # Get metadata for axis type selection first
         metadata = self._get_reader_metadata_for_resampling()
-
-        # Select axis type using DecisionTree
         tree = ResamplingDecisionTree()
         axis_type = tree.select_axis_type(metadata)
+
+        # Calculate bins based on width if specified
+        if self._width_at_mz is not None or (self._width_at_mz is None and self._target_bins == 5000):
+            # Either user specified width OR using default (calculate from 5mDa@1000)
+            target_bins = self._calculate_bins_from_width(min_mz, max_mz, axis_type)
+        else:
+            # User explicitly specified bin count
+            target_bins = self._target_bins
+
+        logging.info(
+            f"Building resampled mass axis: {min_mz:.2f} - {max_mz:.2f} m/z, "
+            f"{target_bins} bins"
+        )
 
         logging.info(f"Selected axis type: {axis_type}")
 
         # Build the physics-based axis
         builder = CommonAxisBuilder()
 
+        # Determine reference parameters for physics generators
+        if self._width_at_mz is not None:
+            reference_width = self._width_at_mz
+            reference_mz = self._reference_mz
+        else:
+            # Use default: 5.0 mDa at m/z 1000
+            reference_width = 0.005
+            reference_mz = 1000.0
+
         if hasattr(axis_type, "value") and axis_type.value != "constant":
-            # Use physics-based generator
+            # Use physics-based generator with reference parameters
             mass_axis = builder.build_physics_axis(
                 min_mz=min_mz,
                 max_mz=max_mz,
-                num_bins=self._target_bins,
+                num_bins=target_bins,
                 axis_type=axis_type,
+                reference_mz=reference_mz,
+                reference_width=reference_width,
             )
             logging.info(
                 f"Built physics-based {axis_type} mass axis with "
@@ -269,7 +349,7 @@ class BaseSpatialDataConverter(BaseMSIConverter, ABC):
             )
         else:
             # Fall back to uniform axis
-            mass_axis = builder.build_uniform_axis(min_mz, max_mz, self._target_bins)
+            mass_axis = builder.build_uniform_axis(min_mz, max_mz, target_bins)
             logging.info(
                 f"Built uniform mass axis with " f"{len(mass_axis.mz_values)} points"
             )

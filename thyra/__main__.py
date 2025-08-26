@@ -69,7 +69,8 @@ def _create_argument_parser() -> argparse.ArgumentParser:
         "--resample-bins",
         type=int,
         default=5000,
-        help="Number of bins for resampled mass axis (default: 5000)",
+        help="Number of bins for resampled mass axis (default: 5000). "
+        "Mutually exclusive with --resample-width-at-mz.",
     )
     parser.add_argument(
         "--resample-min-mz",
@@ -82,6 +83,20 @@ def _create_argument_parser() -> argparse.ArgumentParser:
         type=float,
         default=None,
         help="Maximum m/z for resampled axis (default: auto-detect from data)",
+    )
+    parser.add_argument(
+        "--resample-width-at-mz",
+        type=float,
+        default=None,
+        help="Mass width (in Da) at reference m/z for physics-based binning. "
+        "Default: 0.005 Da at m/z 1000. Mutually exclusive with --resample-bins.",
+    )
+    parser.add_argument(
+        "--resample-reference-mz",
+        type=float,
+        default=1000.0,
+        help="Reference m/z for width specification (default: 1000.0). "
+        "Used with --resample-width-at-mz.",
     )
 
     return parser
@@ -119,6 +134,25 @@ def _validate_arguments(parser: argparse.ArgumentParser, args) -> None:
         and args.resample_min_mz >= args.resample_max_mz
     ):
         parser.error("Minimum m/z must be less than maximum m/z")
+
+    # Validate mutual exclusivity of resample-bins and resample-width-at-mz
+    if args.resample_bins != 5000 and args.resample_width_at_mz is not None:
+        parser.error(
+            "--resample-bins and --resample-width-at-mz are mutually exclusive. "
+            "Use either --resample-bins for fixed bin count or --resample-width-at-mz "
+            "for physics-based binning with target resolution."
+        )
+
+    # Validate resample-width-at-mz parameters
+    if args.resample_width_at_mz is not None and args.resample_width_at_mz <= 0:
+        parser.error(
+            "Mass width must be positive (got: {})".format(args.resample_width_at_mz)
+        )
+
+    if args.resample_reference_mz <= 0:
+        parser.error(
+            "Reference m/z must be positive (got: {})".format(args.resample_reference_mz)
+        )
 
 
 def _check_imzml_requirements(
@@ -174,6 +208,8 @@ def _perform_conversion(args) -> bool:
             "target_bins": args.resample_bins,
             "min_mz": args.resample_min_mz,
             "max_mz": args.resample_max_mz,
+            "width_at_mz": args.resample_width_at_mz,
+            "reference_mz": args.resample_reference_mz,
         }
 
     return convert_msi(
