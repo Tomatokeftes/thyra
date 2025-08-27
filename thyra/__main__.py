@@ -69,7 +69,8 @@ def _create_argument_parser() -> argparse.ArgumentParser:
         "--resample-bins",
         type=int,
         default=5000,
-        help="Number of bins for resampled mass axis (default: 5000)",
+        help="Number of bins for resampled mass axis (default: 5000). "
+        "Mutually exclusive with --resample-width-at-mz.",
     )
     parser.add_argument(
         "--resample-min-mz",
@@ -83,19 +84,35 @@ def _create_argument_parser() -> argparse.ArgumentParser:
         default=None,
         help="Maximum m/z for resampled axis (default: auto-detect from data)",
     )
+    parser.add_argument(
+        "--resample-width-at-mz",
+        type=float,
+        default=None,
+        help="Mass width (in Da) at reference m/z for physics-based binning. "
+        "Default: 0.005 Da at m/z 1000. Mutually exclusive with --resample-bins.",
+    )
+    parser.add_argument(
+        "--resample-reference-mz",
+        type=float,
+        default=1000.0,
+        help="Reference m/z for width specification (default: 1000.0). "
+        "Used with --resample-width-at-mz.",
+    )
 
     return parser
 
 
-def _validate_arguments(parser: argparse.ArgumentParser, args) -> None:
-    """Validate command line arguments."""
+def _validate_basic_arguments(parser: argparse.ArgumentParser, args) -> None:
+    """Validate basic arguments."""
     if args.pixel_size is not None and args.pixel_size <= 0:
         parser.error("Pixel size must be positive (got: {})".format(args.pixel_size))
 
     if not args.dataset_id.strip():
         parser.error("Dataset ID cannot be empty")
 
-    # Validate resampling arguments
+
+def _validate_resampling_bins(parser: argparse.ArgumentParser, args) -> None:
+    """Validate resampling bin arguments."""
     if args.resample_bins <= 0:
         parser.error(
             "Number of resampling bins must be positive (got: {})".format(
@@ -103,6 +120,9 @@ def _validate_arguments(parser: argparse.ArgumentParser, args) -> None:
             )
         )
 
+
+def _validate_resampling_ranges(parser: argparse.ArgumentParser, args) -> None:
+    """Validate resampling m/z range arguments."""
     if args.resample_min_mz is not None and args.resample_min_mz <= 0:
         parser.error(
             "Minimum m/z must be positive (got: {})".format(args.resample_min_mz)
@@ -119,6 +139,42 @@ def _validate_arguments(parser: argparse.ArgumentParser, args) -> None:
         and args.resample_min_mz >= args.resample_max_mz
     ):
         parser.error("Minimum m/z must be less than maximum m/z")
+
+
+def _validate_resampling_mutual_exclusivity(
+    parser: argparse.ArgumentParser, args
+) -> None:
+    """Validate mutual exclusivity of resampling parameters."""
+    if args.resample_bins != 5000 and args.resample_width_at_mz is not None:
+        parser.error(
+            "--resample-bins and --resample-width-at-mz are mutually exclusive. "
+            "Use either --resample-bins for fixed bin count or --resample-width-at-mz "
+            "for physics-based binning with target resolution."
+        )
+
+
+def _validate_resampling_width_params(parser: argparse.ArgumentParser, args) -> None:
+    """Validate width-based resampling parameters."""
+    if args.resample_width_at_mz is not None and args.resample_width_at_mz <= 0:
+        parser.error(
+            "Mass width must be positive (got: {})".format(args.resample_width_at_mz)
+        )
+
+    if args.resample_reference_mz <= 0:
+        parser.error(
+            "Reference m/z must be positive (got: {})".format(
+                args.resample_reference_mz
+            )
+        )
+
+
+def _validate_arguments(parser: argparse.ArgumentParser, args) -> None:
+    """Validate command line arguments."""
+    _validate_basic_arguments(parser, args)
+    _validate_resampling_bins(parser, args)
+    _validate_resampling_ranges(parser, args)
+    _validate_resampling_mutual_exclusivity(parser, args)
+    _validate_resampling_width_params(parser, args)
 
 
 def _check_imzml_requirements(
@@ -174,6 +230,8 @@ def _perform_conversion(args) -> bool:
             "target_bins": args.resample_bins,
             "min_mz": args.resample_min_mz,
             "max_mz": args.resample_max_mz,
+            "width_at_mz": args.resample_width_at_mz,
+            "reference_mz": args.resample_reference_mz,
         }
 
     return convert_msi(

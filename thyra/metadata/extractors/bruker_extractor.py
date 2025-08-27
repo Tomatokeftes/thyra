@@ -26,33 +26,29 @@ class BrukerMetadataExtractor(MetadataExtractor):
         self.conn = conn
         self.data_path = data_path
 
-    def _extract_essential_impl(self) -> EssentialMetadata:
-        """Extract essential metadata with proper coordinate normalization."""
-        cursor = self.conn.cursor()
-
-        # Get imaging area bounds from GlobalMetadata for coordinate
-        # normalization
+    def _query_imaging_bounds(self, cursor):
+        """Query imaging area bounds from GlobalMetadata."""
         imaging_bounds_query = """
         SELECT Key, Value FROM GlobalMetadata
         WHERE Key IN ('ImagingAreaMinXIndexPos', 'ImagingAreaMaxXIndexPos',
                       'ImagingAreaMinYIndexPos', 'ImagingAreaMaxYIndexPos',
                       'MzAcqRangeLower', 'MzAcqRangeUpper')
         """
-
         cursor.execute(imaging_bounds_query)
-        bounds_data = {row[0]: float(row[1]) for row in cursor.fetchall()}
+        return {row[0]: float(row[1]) for row in cursor.fetchall()}
 
-        # Get beam scan sizes from laser info
+    def _query_laser_info(self, cursor):
+        """Query beam scan sizes from laser info."""
         laser_query = """
         SELECT BeamScanSizeX, BeamScanSizeY, SpotSize
         FROM MaldiFrameLaserInfo
         LIMIT 1
         """
-
         cursor.execute(laser_query)
-        laser_result = cursor.fetchone()
+        return cursor.fetchone()
 
-        # Get coordinate bounds and frame count from frame info
+    def _query_frame_info(self, cursor):
+        """Query coordinate bounds and frame count from frame info."""
         frame_query = """
         SELECT
             MIN(XIndexPos), MAX(XIndexPos),
@@ -60,9 +56,38 @@ class BrukerMetadataExtractor(MetadataExtractor):
             COUNT(*) as frame_count
         FROM MaldiFrameInfo
         """
-
         cursor.execute(frame_query)
-        frame_result = cursor.fetchone()
+        return cursor.fetchone()
+
+    def _validate_mass_range(self, bounds_data):
+        """Validate that mass range data is available."""
+        min_mass = bounds_data.get("MzAcqRangeLower")
+        max_mass = bounds_data.get("MzAcqRangeUpper")
+
+        missing_keys = []
+        if min_mass is None:
+            missing_keys.append("MzAcqRangeLower")
+        if max_mass is None:
+            missing_keys.append("MzAcqRangeUpper")
+
+        if missing_keys:
+            error_msg = (
+                f"Missing critical mass range bounds in GlobalMetadata: "
+                f"{', '.join(missing_keys)}. Cannot establish mass range."
+            )
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+
+        return min_mass, max_mass
+
+    def _extract_essential_impl(self) -> EssentialMetadata:
+        """Extract essential metadata with proper coordinate normalization."""
+        cursor = self.conn.cursor()
+
+        # Query database tables
+        bounds_data = self._query_imaging_bounds(cursor)
+        laser_result = self._query_laser_info(cursor)
+        frame_result = self._query_frame_info(cursor)
 
         try:
             if not frame_result:
@@ -80,62 +105,25 @@ class BrukerMetadataExtractor(MetadataExtractor):
             imaging_area_offsets = (int(imaging_min_x), int(imaging_min_y), 0)
 
             # Normalize coordinates to start from 0
-            min_x = 0.0  # Normalized coordinates always start from 0
+            min_x = 0.0
             max_x = float(imaging_max_x - imaging_min_x)
             min_y = 0.0
             max_y = float(imaging_max_y - imaging_min_y)
 
-            # Extract beam sizes for pixel size
+            # Extract beam sizes and validate mass range
             beam_x, beam_y, spot_size = (
                 laser_result if laser_result else (None, None, None)
             )
+            min_mass, max_mass = self._validate_mass_range(bounds_data)
 
-            # Mass range from GlobalMetadata
-            min_mass = bounds_data.get("MzAcqRangeLower")
-            max_mass = bounds_data.get("MzAcqRangeUpper")
-
-            # --- Error Tracing for Mass Range ---
-            missing_mass_keys = []
-            if min_mass is None:
-                missing_mass_keys.append("MzAcqRangeLower")
-            if max_mass is None:
-                missing_mass_keys.append("MzAcqRangeUpper")
-
-            if missing_mass_keys:
-                error_msg = (
-                    f"Missing critical mass range bounds in GlobalMetadata: "
-                    f"{', '.join(missing_mass_keys)}. Cannot establish mass "
-                    f"range."
-                )
-                logger.error(error_msg)
-                raise ValueError(error_msg)
-
-            # Calculate dimensions and bounds
+            # Build final metadata objects
             dimensions = self._calculate_dimensions_from_coords(
                 min_x, max_x, min_y, max_y
             )
-            coordinate_bounds = (
-                float(min_x) if min_x is not None else 0.0,
-                float(max_x) if max_x is not None else 0.0,
-                float(min_y) if min_y is not None else 0.0,
-                float(max_y) if max_y is not None else 0.0,
-            )
-
-            # Extract pixel size
-            pixel_size = None
-            if beam_x is not None and beam_y is not None:
-                pixel_size = (float(beam_x), float(beam_y))
-
-            # Mass range
-            mass_range = (
-                float(min_mass) if min_mass is not None else 0.0,
-                float(max_mass) if max_mass is not None else 1000.0,
-            )
-
-            # Frame count
-            n_spectra = int(frame_count) if frame_count is not None else 0
-
-            # Memory estimation
+            coordinate_bounds = (float(min_x), float(max_x), float(min_y), float(max_y))
+            pixel_size = (float(beam_x), float(beam_y)) if beam_x and beam_y else None
+            mass_range = (float(min_mass), float(max_mass))
+            n_spectra = int(frame_count) if frame_count else 0
             estimated_memory = self._estimate_memory_from_frames(n_spectra)
 
             return EssentialMetadata(
