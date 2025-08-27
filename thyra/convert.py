@@ -76,7 +76,7 @@ def _validate_input_parameters(
 ) -> bool:
     """Validate all input parameters for convert_msi function."""
     return (
-        _validate_paths_parameters(input_path, output_path) 
+        _validate_paths_parameters(input_path, output_path)
         and _validate_string_parameters(format_type, dataset_id)
         and _validate_numeric_parameters(pixel_size_um, handle_3d)
     )

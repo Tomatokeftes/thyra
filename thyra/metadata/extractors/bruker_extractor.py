@@ -63,13 +63,13 @@ class BrukerMetadataExtractor(MetadataExtractor):
         """Validate that mass range data is available."""
         min_mass = bounds_data.get("MzAcqRangeLower")
         max_mass = bounds_data.get("MzAcqRangeUpper")
-        
+
         missing_keys = []
         if min_mass is None:
             missing_keys.append("MzAcqRangeLower")
         if max_mass is None:
             missing_keys.append("MzAcqRangeUpper")
-        
+
         if missing_keys:
             error_msg = (
                 f"Missing critical mass range bounds in GlobalMetadata: "
@@ -77,7 +77,7 @@ class BrukerMetadataExtractor(MetadataExtractor):
             )
             logger.error(error_msg)
             raise ValueError(error_msg)
-        
+
         return min_mass, max_mass
 
     def _extract_essential_impl(self) -> EssentialMetadata:
@@ -101,6 +101,9 @@ class BrukerMetadataExtractor(MetadataExtractor):
             imaging_min_y = bounds_data.get("ImagingAreaMinYIndexPos", min_y_raw or 0)
             imaging_max_y = bounds_data.get("ImagingAreaMaxYIndexPos", max_y_raw or 0)
 
+            # Store imaging area offsets for coordinate normalization
+            imaging_area_offsets = (int(imaging_min_x), int(imaging_min_y), 0)
+
             # Normalize coordinates to start from 0
             min_x = 0.0
             max_x = float(imaging_max_x - imaging_min_x)
@@ -108,11 +111,15 @@ class BrukerMetadataExtractor(MetadataExtractor):
             max_y = float(imaging_max_y - imaging_min_y)
 
             # Extract beam sizes and validate mass range
-            beam_x, beam_y, spot_size = laser_result if laser_result else (None, None, None)
+            beam_x, beam_y, spot_size = (
+                laser_result if laser_result else (None, None, None)
+            )
             min_mass, max_mass = self._validate_mass_range(bounds_data)
 
             # Build final metadata objects
-            dimensions = self._calculate_dimensions_from_coords(min_x, max_x, min_y, max_y)
+            dimensions = self._calculate_dimensions_from_coords(
+                min_x, max_x, min_y, max_y
+            )
             coordinate_bounds = (float(min_x), float(max_x), float(min_y), float(max_y))
             pixel_size = (float(beam_x), float(beam_y)) if beam_x and beam_y else None
             mass_range = (float(min_mass), float(max_mass))

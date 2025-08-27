@@ -141,7 +141,9 @@ def _validate_resampling_ranges(parser: argparse.ArgumentParser, args) -> None:
         parser.error("Minimum m/z must be less than maximum m/z")
 
 
-def _validate_resampling_mutual_exclusivity(parser: argparse.ArgumentParser, args) -> None:
+def _validate_resampling_mutual_exclusivity(
+    parser: argparse.ArgumentParser, args
+) -> None:
     """Validate mutual exclusivity of resampling parameters."""
     if args.resample_bins != 5000 and args.resample_width_at_mz is not None:
         parser.error(

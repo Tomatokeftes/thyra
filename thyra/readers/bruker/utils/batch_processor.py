@@ -239,26 +239,36 @@ class BatchProcessor:
                 self._stats["total_items_processed"] / self._stats["total_batches"]
             )
 
-    def _calculate_initial_batch_size(self, total_spectra: int, initial_batch_size: Optional[int]) -> int:
+    def _calculate_initial_batch_size(
+        self, total_spectra: int, initial_batch_size: Optional[int]
+    ) -> int:
         """Calculate initial batch size."""
         if initial_batch_size is None:
             return min(50, max(10, total_spectra // 100))
         return initial_batch_size
 
-    def _should_process_batch(self, current_batch: list, batch_size: int, spectrum_count: int, total_spectra: int) -> bool:
+    def _should_process_batch(
+        self,
+        current_batch: list,
+        batch_size: int,
+        spectrum_count: int,
+        total_spectra: int,
+    ) -> bool:
         """Check if batch should be processed."""
         return len(current_batch) >= batch_size or spectrum_count >= total_spectra
 
-    def _adjust_batch_size_adaptively(self, batch_times: list, current_batch_size: int) -> int:
+    def _adjust_batch_size_adaptively(
+        self, batch_times: list, current_batch_size: int
+    ) -> int:
         """Adjust batch size based on performance."""
         if len(batch_times) >= 3:
             avg_time = np.mean(batch_times[-3:])
-            
+
             if avg_time < 0.5:  # Fast processing, increase batch size
                 return min(current_batch_size + 10, self.max_batch_size)
             elif avg_time > 2.0:  # Slow processing, decrease batch size
                 return max(current_batch_size - 10, self.min_batch_size)
-        
+
         return current_batch_size
 
     def adaptive_batch_processing(
@@ -282,7 +292,9 @@ class BatchProcessor:
         """
         import time
 
-        batch_size = self._calculate_initial_batch_size(total_spectra, initial_batch_size)
+        batch_size = self._calculate_initial_batch_size(
+            total_spectra, initial_batch_size
+        )
 
         pbar = tqdm(
             total=total_spectra,
@@ -294,13 +306,15 @@ class BatchProcessor:
         try:
             current_batch = []
             spectrum_count = 0
-            batch_times = []
+            batch_times: List[float] = []
 
             for spectrum_data in spectrum_iterator:
                 current_batch.append(spectrum_data)
                 spectrum_count += 1
 
-                if self._should_process_batch(current_batch, batch_size, spectrum_count, total_spectra):
+                if self._should_process_batch(
+                    current_batch, batch_size, spectrum_count, total_spectra
+                ):
                     start_time = time.time()
 
                     batch_info = BatchInfo(
@@ -316,8 +330,10 @@ class BatchProcessor:
 
                     batch_time = time.time() - start_time
                     batch_times.append(batch_time)
-                    
-                    batch_size = self._adjust_batch_size_adaptively(batch_times, batch_size)
+
+                    batch_size = self._adjust_batch_size_adaptively(
+                        batch_times, batch_size
+                    )
 
                     pbar.update(len(current_batch))
 
