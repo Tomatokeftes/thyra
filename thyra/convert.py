@@ -21,15 +21,10 @@ warnings.filterwarnings(
 # )
 
 
-def _validate_input_parameters(
-    input_path: Union[str, Path],
-    output_path: Union[str, Path],
-    format_type: str,
-    dataset_id: str,
-    pixel_size_um: Optional[float],
-    handle_3d: bool,
+def _validate_paths_parameters(
+    input_path: Union[str, Path], output_path: Union[str, Path]
 ) -> bool:
-    """Validate all input parameters for convert_msi function."""
+    """Validate path parameters."""
     if not input_path or not isinstance(input_path, (str, Path)):
         logging.error("Input path must be a valid string or Path object")
         return False
@@ -38,6 +33,11 @@ def _validate_input_parameters(
         logging.error("Output path must be a valid string or Path object")
         return False
 
+    return True
+
+
+def _validate_string_parameters(format_type: str, dataset_id: str) -> bool:
+    """Validate string parameters."""
     if not isinstance(format_type, str) or not format_type.strip():
         logging.error("Format type must be a non-empty string")
         return False
@@ -46,6 +46,13 @@ def _validate_input_parameters(
         logging.error("Dataset ID must be a non-empty string")
         return False
 
+    return True
+
+
+def _validate_numeric_parameters(
+    pixel_size_um: Optional[float], handle_3d: bool
+) -> bool:
+    """Validate numeric and boolean parameters."""
     if pixel_size_um is not None and (
         not isinstance(pixel_size_um, (int, float)) or pixel_size_um <= 0
     ):
@@ -57,6 +64,22 @@ def _validate_input_parameters(
         return False
 
     return True
+
+
+def _validate_input_parameters(
+    input_path: Union[str, Path],
+    output_path: Union[str, Path],
+    format_type: str,
+    dataset_id: str,
+    pixel_size_um: Optional[float],
+    handle_3d: bool,
+) -> bool:
+    """Validate all input parameters for convert_msi function."""
+    return (
+        _validate_paths_parameters(input_path, output_path) 
+        and _validate_string_parameters(format_type, dataset_id)
+        and _validate_numeric_parameters(pixel_size_um, handle_3d)
+    )
 
 
 def _validate_paths(input_path: Path, output_path: Path) -> bool:

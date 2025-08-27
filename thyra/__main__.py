@@ -102,15 +102,17 @@ def _create_argument_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _validate_arguments(parser: argparse.ArgumentParser, args) -> None:
-    """Validate command line arguments."""
+def _validate_basic_arguments(parser: argparse.ArgumentParser, args) -> None:
+    """Validate basic arguments."""
     if args.pixel_size is not None and args.pixel_size <= 0:
         parser.error("Pixel size must be positive (got: {})".format(args.pixel_size))
 
     if not args.dataset_id.strip():
         parser.error("Dataset ID cannot be empty")
 
-    # Validate resampling arguments
+
+def _validate_resampling_bins(parser: argparse.ArgumentParser, args) -> None:
+    """Validate resampling bin arguments."""
     if args.resample_bins <= 0:
         parser.error(
             "Number of resampling bins must be positive (got: {})".format(
@@ -118,6 +120,9 @@ def _validate_arguments(parser: argparse.ArgumentParser, args) -> None:
             )
         )
 
+
+def _validate_resampling_ranges(parser: argparse.ArgumentParser, args) -> None:
+    """Validate resampling m/z range arguments."""
     if args.resample_min_mz is not None and args.resample_min_mz <= 0:
         parser.error(
             "Minimum m/z must be positive (got: {})".format(args.resample_min_mz)
@@ -135,7 +140,9 @@ def _validate_arguments(parser: argparse.ArgumentParser, args) -> None:
     ):
         parser.error("Minimum m/z must be less than maximum m/z")
 
-    # Validate mutual exclusivity of resample-bins and resample-width-at-mz
+
+def _validate_resampling_mutual_exclusivity(parser: argparse.ArgumentParser, args) -> None:
+    """Validate mutual exclusivity of resampling parameters."""
     if args.resample_bins != 5000 and args.resample_width_at_mz is not None:
         parser.error(
             "--resample-bins and --resample-width-at-mz are mutually exclusive. "
@@ -143,7 +150,9 @@ def _validate_arguments(parser: argparse.ArgumentParser, args) -> None:
             "for physics-based binning with target resolution."
         )
 
-    # Validate resample-width-at-mz parameters
+
+def _validate_resampling_width_params(parser: argparse.ArgumentParser, args) -> None:
+    """Validate width-based resampling parameters."""
     if args.resample_width_at_mz is not None and args.resample_width_at_mz <= 0:
         parser.error(
             "Mass width must be positive (got: {})".format(args.resample_width_at_mz)
@@ -155,6 +164,15 @@ def _validate_arguments(parser: argparse.ArgumentParser, args) -> None:
                 args.resample_reference_mz
             )
         )
+
+
+def _validate_arguments(parser: argparse.ArgumentParser, args) -> None:
+    """Validate command line arguments."""
+    _validate_basic_arguments(parser, args)
+    _validate_resampling_bins(parser, args)
+    _validate_resampling_ranges(parser, args)
+    _validate_resampling_mutual_exclusivity(parser, args)
+    _validate_resampling_width_params(parser, args)
 
 
 def _check_imzml_requirements(
