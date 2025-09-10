@@ -1,4 +1,4 @@
-# Thyra 🔬✨
+# Thyra
 
 [![Tests](https://img.shields.io/github/actions/workflow/status/Tomatokeftes/thyra/tests.yml?branch=main&logo=github)](https://github.com/Tomatokeftes/thyra/actions/workflows/tests.yml)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
@@ -7,7 +7,7 @@
 
 **Thyra** (from Greek θύρα, meaning "door" or "portal") - A modern Python library for converting Mass Spectrometry Imaging (MSI) data into the standardized **SpatialData/Zarr format**, serving as your portal to spatial omics analysis workflows.
 
-## 🚀 Features
+## Features
 
 - **Multiple Input Formats**: ImzML, Bruker (.d directories)
 - **SpatialData Output**: Modern, cloud-ready format with Zarr backend
@@ -16,7 +16,7 @@
 - **3D Support**: Process volume data or treat as 2D slices
 - **Cross-Platform**: Windows, macOS, and Linux support
 
-## 📦 Installation
+## Installation
 
 ### Via pip (Recommended)
 ```bash
@@ -35,7 +35,7 @@ cd thyra
 poetry install
 ```
 
-## 🏃‍♂️ Quick Start
+## Quick Start
 
 ### Command Line Interface
 
@@ -72,7 +72,7 @@ success = convert_msi(
 )
 ```
 
-## 📊 Supported Formats
+## Supported Formats
 
 ### Input Formats
 | Format | Extension | Description | Status |
@@ -85,7 +85,7 @@ success = convert_msi(
 |--------|-------------|----------|
 | SpatialData/Zarr | Modern spatial omics standard | Cloud-ready, efficient, standardized |
 
-## 🛠️ Advanced Usage
+## Advanced Usage
 
 ### Configuration Options
 
@@ -126,7 +126,7 @@ print(f"Shape: {msi_data.shape}")
 print(f"Mass channels: {msi_data.var.index}")
 ```
 
-## 🔧 Development
+## Development
 
 ### Setup Development Environment
 
@@ -169,14 +169,14 @@ poetry run flake8
 poetry run pre-commit run --all-files
 ```
 
-## 📚 Documentation
+## Documentation
 
 - **API Documentation**: [Auto-generated docs](https://github.com/Tomatokeftes/thyra#readme)
 - **Contributing Guide**: [CONTRIBUTING.md](CONTRIBUTING.md)
 - **Architecture Overview**: [docs/architecture.md](docs/architecture.md)
 - **Changelog**: [CHANGELOG.md](CHANGELOG.md)
 
-## 🤝 Contributing
+## Contributing
 
 We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.md) for details.
 
@@ -190,17 +190,17 @@ We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.
 6. Push to your branch (`git push origin feature/amazing-feature`)
 7. Open a Pull Request
 
-## 📄 License
+## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## 📞 Support
+## Support
 
 - **Issues**: [GitHub Issues](https://github.com/Tomatokeftes/thyra/issues)
 - **Discussions**: [GitHub Discussions](https://github.com/Tomatokeftes/thyra/discussions)
 - **Email**: t.visvikis@maastrichtuniversity.nl
 
-## 🏆 Citation
+## Citation
 
 If you use Thyra in your research, please cite:
 
@@ -213,7 +213,7 @@ If you use Thyra in your research, please cite:
 }
 ```
 
-## 🙏 Acknowledgments
+## Acknowledgments
 
 - Built with [SpatialData](https://spatialdata.scverse.org/) ecosystem
 - Powered by [Zarr](https://zarr.readthedocs.io/) for efficient storage
@@ -221,4 +221,4 @@ If you use Thyra in your research, please cite:
 
 ---
 
-**Thyra** - Your portal from traditional MSI formats to modern spatial omics workflows 🔬✨
+**Thyra** - Your portal from traditional MSI formats to modern spatial omics workflows
