@@ -1,11 +1,30 @@
 # thyra/__main__.py
-import argparse
-import logging
-from pathlib import Path
 
-from thyra.convert import convert_msi
-from thyra.utils.data_processors import optimize_zarr_chunks
-from thyra.utils.logging_config import setup_logging
+# Configure dependencies to suppress warnings BEFORE any imports
+import argparse  # noqa: E402
+import logging  # noqa: E402
+import os  # noqa: E402
+import warnings  # noqa: E402
+from pathlib import Path  # noqa: E402
+
+from thyra.convert import convert_msi  # noqa: E402
+from thyra.utils.data_processors import optimize_zarr_chunks  # noqa: E402
+from thyra.utils.logging_config import setup_logging  # noqa: E402
+
+# Configure Dask to use new query planning (silences legacy DataFrame warning)
+os.environ["DASK_DATAFRAME__QUERY_PLANNING"] = "True"
+
+# Suppress dependency warnings at the earliest possible moment
+warnings.filterwarnings("ignore", category=FutureWarning, module="dask")
+warnings.filterwarnings("ignore", category=UserWarning, module="xarray_schema")
+warnings.filterwarnings(
+    "ignore", message="pkg_resources is deprecated", category=UserWarning
+)
+warnings.filterwarnings(
+    "ignore",
+    message="The legacy Dask DataFrame implementation is deprecated",
+    category=FutureWarning,
+)
 
 
 def _create_argument_parser() -> argparse.ArgumentParser:

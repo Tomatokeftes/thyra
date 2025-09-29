@@ -168,9 +168,9 @@ class BaseSpatialDataConverter(BaseMSIConverter, ABC):
 
     def _get_cached_metadata_for_resampling(self) -> Dict[str, Any]:
         """Get cached metadata for resampling decision tree to avoid multiple reader calls."""
-        if hasattr(self, '_resampling_metadata_cached'):
+        if hasattr(self, "_resampling_metadata_cached"):
             return self._resampling_metadata_cached
-            
+
         # If not cached yet, extract and cache it
         return self._get_reader_metadata_for_resampling()
 
@@ -191,12 +191,12 @@ class BaseSpatialDataConverter(BaseMSIConverter, ABC):
         """Extract essential metadata for resampling decisions."""
         try:
             # Use cached essential metadata if available
-            if hasattr(self, '_essential_metadata_cached'):
+            if hasattr(self, "_essential_metadata_cached"):
                 essential = self._essential_metadata_cached
             else:
                 essential = self.reader.get_essential_metadata()
                 self._essential_metadata_cached = essential
-                
+
             if hasattr(essential, "source_path"):
                 metadata["source_path"] = str(essential.source_path)
 
@@ -214,12 +214,12 @@ class BaseSpatialDataConverter(BaseMSIConverter, ABC):
         """Extract comprehensive metadata including Bruker GlobalMetadata."""
         try:
             # Use cached comprehensive metadata if available
-            if hasattr(self, '_comprehensive_metadata_cached'):
+            if hasattr(self, "_comprehensive_metadata_cached"):
                 comp_meta = self._comprehensive_metadata_cached
             else:
                 comp_meta = self.reader.get_comprehensive_metadata()
                 self._comprehensive_metadata_cached = comp_meta
-                
+
             self._extract_bruker_metadata(metadata, comp_meta)
             self._extract_instrument_info(metadata, comp_meta)
         except Exception as e:
@@ -248,12 +248,12 @@ class BaseSpatialDataConverter(BaseMSIConverter, ABC):
         try:
             if hasattr(self.reader, "get_spectrum_metadata"):
                 # Use cached spectrum metadata if available
-                if hasattr(self, '_spectrum_metadata_cached'):
+                if hasattr(self, "_spectrum_metadata_cached"):
                     spec_meta = self._spectrum_metadata_cached
                 else:
                     spec_meta = self.reader.get_spectrum_metadata()
                     self._spectrum_metadata_cached = spec_meta
-                    
+
                 if spec_meta:
                     metadata.update(spec_meta)
         except Exception as e:
@@ -299,14 +299,14 @@ class BaseSpatialDataConverter(BaseMSIConverter, ABC):
 
         elif axis_name == "linear_tof":
             # LINEAR_TOF: width ∝ sqrt(m/z)
-            # For sqrt spacing: bins ≈ (sqrt(max_mz) - sqrt(min_mz)) / 
+            # For sqrt spacing: bins ≈ (sqrt(max_mz) - sqrt(min_mz)) /
             # sqrt(width_at_mz / reference_mz)
             scaling_factor = width_at_mz / np.sqrt(reference_mz)
             bins = int((np.sqrt(max_mz) - np.sqrt(min_mz)) / np.sqrt(scaling_factor))
 
         elif axis_name == "orbitrap":
             # ORBITRAP: width ∝ m/z^1.5
-            # For 1/sqrt spacing: bins ≈ (1/sqrt(min_mz) - 1/sqrt(max_mz)) * 
+            # For 1/sqrt spacing: bins ≈ (1/sqrt(min_mz) - 1/sqrt(max_mz)) *
             # (reference_mz^1.5 / width_at_mz)
             scaling_factor = (reference_mz**1.5) / width_at_mz
             bins = int((1 / np.sqrt(min_mz) - 1 / np.sqrt(max_mz)) * scaling_factor)
@@ -328,10 +328,10 @@ class BaseSpatialDataConverter(BaseMSIConverter, ABC):
 
         # Use cached essential metadata to avoid reader calls
         # This should be called after _initialize_conversion() has loaded metadata
-        if not hasattr(self, '_essential_metadata_cached'):
+        if not hasattr(self, "_essential_metadata_cached"):
             # Cache essential metadata for reuse
             self._essential_metadata_cached = self.reader.get_essential_metadata()
-        
+
         mass_range = self._essential_metadata_cached.mass_range
         min_mz = mass_range[0] if self._min_mz is None else self._min_mz
         max_mz = mass_range[1] if self._max_mz is None else self._max_mz
@@ -398,7 +398,7 @@ class BaseSpatialDataConverter(BaseMSIConverter, ABC):
         bin_widths = np.diff(self._common_mass_axis)
         min_bin_size = np.min(bin_widths) * 1000  # Convert to mDa
         max_bin_size = np.max(bin_widths) * 1000  # Convert to mDa
-        
+
         logging.info(
             f"Resampled mass axis created: {len(self._common_mass_axis)} bins, "
             f"range {self._common_mass_axis[0]:.2f}-{self._common_mass_axis[-1]:.2f} m/z, "
