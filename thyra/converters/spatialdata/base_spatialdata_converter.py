@@ -160,7 +160,8 @@ class BaseSpatialDataConverter(BaseMSIConverter, ABC):
         logging.info(f"Using resampling method: {self._resampling_method}")
 
         # Store resampling parameters
-        self._target_bins = self._resampling_config.get("target_bins", 5000)
+        # Default to None for target_bins - will use width-based calculation if not specified
+        self._target_bins = self._resampling_config.get("target_bins", None)
         self._min_mz = self._resampling_config.get("min_mz")
         self._max_mz = self._resampling_config.get("max_mz")
         self._width_at_mz = self._resampling_config.get("width_at_mz")
@@ -341,10 +342,8 @@ class BaseSpatialDataConverter(BaseMSIConverter, ABC):
         tree = ResamplingDecisionTree()
         axis_type = tree.select_axis_type(metadata)
 
-        # Calculate bins based on width if specified
-        if self._width_at_mz is not None or (
-            self._width_at_mz is None and self._target_bins == 5000
-        ):
+        # Calculate bins based on width if specified OR if no bins were specified (default)
+        if self._width_at_mz is not None or self._target_bins is None:
             # Either user specified width OR using default (calculate from 5mDa@1000)
             target_bins = self._calculate_bins_from_width(min_mz, max_mz, axis_type)
         else:
@@ -444,8 +443,15 @@ class BaseSpatialDataConverter(BaseMSIConverter, ABC):
                 )
 
             # Handle mass axis setup
+            logging.info(
+                f"Mass axis mode: resampling_config={'SET' if self._resampling_config else 'NOT SET'}"
+            )
             if self._resampling_config:
                 # Build resampled mass axis now that reader metadata is loaded
+                logging.info(
+                    "Building RESAMPLED mass axis (resampling enabled) - "
+                    "will NOT iterate through all spectra"
+                )
                 self._build_resampled_mass_axis()
                 logging.info(
                     f"Built resampled mass axis with "
@@ -453,6 +459,10 @@ class BaseSpatialDataConverter(BaseMSIConverter, ABC):
                 )
             else:
                 # No resampling - load raw mass axis as usual
+                logging.warning(
+                    "Building RAW mass axis (no resampling) - "
+                    "WILL iterate through ALL spectra. This is slow for large datasets!"
+                )
                 self._common_mass_axis = self.reader.get_common_mass_axis()
                 if len(self._common_mass_axis) == 0:
                     raise ValueError(

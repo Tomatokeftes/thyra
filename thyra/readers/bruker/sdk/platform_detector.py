@@ -57,13 +57,38 @@ def get_dll_paths(data_directory: Optional[Path] = None) -> List[Path]:
 
     Returns:
         List of Path objects representing potential library locations
+
+    Note:
+        You can set the BRUKER_SDK_PATH environment variable to specify
+        a custom location for the Bruker SDK library.
     """
+    import os
+
     paths = []
     platform_name = PlatformDetector.get_platform()
+
+    # Check environment variable first (highest priority)
+    sdk_path_env = os.environ.get("BRUKER_SDK_PATH")
+    if sdk_path_env:
+        sdk_path = Path(sdk_path_env)
+        logger.info(f"Using BRUKER_SDK_PATH environment variable: {sdk_path}")
+        paths.append(sdk_path)
 
     if platform_name == "windows":
         # Windows DLL paths
         dll_name = "timsdata.dll"
+
+        # Current working directory and script location (HIGHEST PRIORITY after env var)
+        # This ensures we check the C: drive where the codebase is, not just the data location
+        paths.extend(
+            [
+                Path.cwd() / dll_name,  # Current working directory
+                Path(__file__).parent / dll_name,  # SDK module directory
+                Path(__file__).parent.parent / dll_name,  # Bruker reader directory
+                Path(__file__).parent.parent.parent / dll_name,  # Readers directory
+                Path(__file__).parent.parent.parent.parent / dll_name,  # Thyra root
+            ]
+        )
 
         # Standard installation paths
         paths.extend(
@@ -84,18 +109,34 @@ def get_dll_paths(data_directory: Optional[Path] = None) -> List[Path]:
         ]
         paths.extend(user_paths)
 
-        # Local data directory
+        # Local data directory and parent directories (walk up the tree)
         if data_directory:
-            paths.append(data_directory.parent / dll_name)
+            # Check the data directory itself
             paths.append(data_directory / dll_name)
+            # Check parent directory
+            paths.append(data_directory.parent / dll_name)
+            # Check grandparent and great-grandparent (for deep folder structures)
+            if data_directory.parent.parent:
+                paths.append(data_directory.parent.parent / dll_name)
+            if data_directory.parent.parent.parent:
+                paths.append(data_directory.parent.parent.parent / dll_name)
 
-        # Current working directory and PATH
-        paths.extend(
-            [
-                Path.cwd() / dll_name,
-                Path(dll_name),  # Rely on system PATH
-            ]
-        )
+            # If on a network drive (like V:), check common SDK locations on that drive
+            try:
+                drive = Path(data_directory.anchor)  # Gets 'V:\' or 'C:\' etc
+                if drive != Path("C:/") and drive != Path("C:\\"):
+                    # Check root of the drive
+                    paths.append(drive / dll_name)
+                    # Check common SDK folders on the network drive
+                    paths.append(drive / "Bruker" / dll_name)
+                    paths.append(drive / "Bruker" / "sdk" / dll_name)
+                    paths.append(drive / "SDK" / dll_name)
+                    paths.append(drive / "timsTOF" / "sdk" / dll_name)
+            except Exception as e:
+                logger.debug(f"Could not check network drive locations: {e}")
+
+        # System PATH fallback (Path.cwd() already checked above)
+        paths.append(Path(dll_name))  # Rely on system PATH
 
     elif platform_name == "linux":
         # Linux SO paths
@@ -148,17 +189,24 @@ def get_dll_paths(data_directory: Optional[Path] = None) -> List[Path]:
 
     # Filter to only existing paths and log findings
     existing_paths = []
+    checked_count = 0
     for path in paths:
+        checked_count += 1
         if path.exists():
             existing_paths.append(path)
-            logger.debug(f"Found potential SDK library: {path}")
+            logger.info(f"Found SDK library: {path}")
         else:
-            logger.debug(f"SDK library not found: {path}")
+            logger.debug(f"SDK library not found at: {path}")
 
     if existing_paths:
-        logger.info(f"Found {len(existing_paths)} potential SDK libraries")
+        logger.info(
+            f"Found {len(existing_paths)} SDK libraries out of {checked_count} checked paths"
+        )
     else:
-        logger.warning("No SDK libraries found in standard locations")
+        logger.warning(
+            f"No SDK libraries found in {checked_count} standard locations. "
+            f"Checked paths include: {[str(p) for p in paths[:5]]}..."
+        )
 
     return existing_paths
 

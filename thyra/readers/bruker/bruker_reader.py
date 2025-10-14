@@ -62,15 +62,39 @@ def build_raw_mass_axis(
     Returns:
         numpy array of unique m/z values in ascending order
     """
+    from tqdm import tqdm
+
     unique_mzs = set()
     count = 0
 
-    for coords, mzs, intensities in spectra_iterator:
-        if mzs.size > 0:
-            unique_mzs.update(mzs)
-        count += 1
-        if progress_callback and count % 100 == 0:
-            progress_callback(count)
+    # Create progress bar
+    pbar = tqdm(
+        desc="Building raw mass axis",
+        unit=" spectra",
+        dynamic_ncols=True,
+        bar_format="{l_bar}{bar}| {n_fmt} spectra [{elapsed}<{remaining}]",
+    )
+
+    try:
+        for coords, mzs, intensities in spectra_iterator:
+            if mzs.size > 0:
+                unique_mzs.update(mzs)
+            count += 1
+            pbar.update(1)
+
+            # Log progress periodically
+            if count % 10000 == 0:
+                pbar.set_postfix(
+                    {
+                        "unique_mz": len(unique_mzs),
+                        "memory_est_mb": len(unique_mzs) * 8 / 1024 / 1024,
+                    }
+                )
+
+            if progress_callback and count % 100 == 0:
+                progress_callback(count)
+    finally:
+        pbar.close()
 
     return np.array(sorted(unique_mzs))
 
@@ -275,16 +299,35 @@ class BrukerReader(BaseMSIReader):
     def _initialize_database(self) -> None:
         """Initialize database connection with optimizations."""
         try:
-            self.conn = sqlite3.connect(str(self.db_path))
+            # Open database in read-only mode to avoid locking issues
+            # This allows reading from network drives and concurrent access
+            db_uri = f"file:{self.db_path}?mode=ro&immutable=1"
+            self.conn = sqlite3.connect(
+                db_uri, uri=True, timeout=30.0, check_same_thread=False
+            )
 
-            # Apply SQLite optimizations
-            self.conn.execute("PRAGMA journal_mode = WAL")
-            self.conn.execute("PRAGMA synchronous = NORMAL")
+            # Apply read-only compatible SQLite optimizations
+            # Note: journal_mode and synchronous are not needed for read-only access
             self.conn.execute("PRAGMA cache_size = 10000")
             self.conn.execute("PRAGMA temp_store = MEMORY")
 
-            logger.debug("Initialized database connection with optimizations")
+            logger.debug("Initialized database connection in read-only mode")
 
+        except sqlite3.OperationalError as e:
+            if "database is locked" in str(e):
+                logger.error(
+                    f"Database is locked. This may occur if another process "
+                    f"(e.g., DataAnalysis) has the file open: {self.db_path}"
+                )
+                raise DataError(
+                    f"Database is locked. Please close any other applications "
+                    f"that may have this dataset open: {e}"
+                ) from e
+            elif "unable to open database file" in str(e):
+                logger.error(f"Cannot access database file: {self.db_path}")
+                raise DataError(f"Cannot access database file: {e}") from e
+            else:
+                raise DataError(f"Failed to open database: {e}") from e
         except Exception as e:
             logger.error(f"Failed to initialize database: {e}")
             raise DataError(f"Failed to open database: {e}") from e

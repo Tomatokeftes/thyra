@@ -87,8 +87,9 @@ def _create_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--resample-bins",
         type=int,
-        default=5000,
-        help="Number of bins for resampled mass axis (default: 5000). "
+        default=None,
+        help="Number of bins for resampled mass axis. "
+        "If not specified, uses physics-based width calculation (5 mDa @ m/z 1000). "
         "Mutually exclusive with --resample-width-at-mz.",
     )
     parser.add_argument(
@@ -106,8 +107,11 @@ def _create_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--resample-width-at-mz",
         type=float,
+        nargs="?",
+        const=0.005,
         default=None,
         help="Mass width (in Da) at reference m/z for physics-based binning. "
+        "Use flag alone for default (0.005 Da), or specify custom value. "
         "Default: 0.005 Da at m/z 1000. Mutually exclusive with --resample-bins.",
     )
     parser.add_argument(
@@ -132,7 +136,7 @@ def _validate_basic_arguments(parser: argparse.ArgumentParser, args) -> None:
 
 def _validate_resampling_bins(parser: argparse.ArgumentParser, args) -> None:
     """Validate resampling bin arguments."""
-    if args.resample_bins <= 0:
+    if args.resample_bins is not None and args.resample_bins <= 0:
         parser.error(
             "Number of resampling bins must be positive (got: {})".format(
                 args.resample_bins
@@ -164,7 +168,11 @@ def _validate_resampling_mutual_exclusivity(
     parser: argparse.ArgumentParser, args
 ) -> None:
     """Validate mutual exclusivity of resampling parameters."""
-    if args.resample_bins != 5000 and args.resample_width_at_mz is not None:
+    # Check if both bin count AND width were explicitly specified
+    bins_specified = args.resample_bins is not None
+    width_specified = args.resample_width_at_mz is not None
+
+    if bins_specified and width_specified:
         parser.error(
             "--resample-bins and --resample-width-at-mz are mutually exclusive. "
             "Use either --resample-bins for fixed bin count or --resample-width-at-mz "

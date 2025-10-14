@@ -109,11 +109,18 @@ class DLLManager:
             logger.debug(f"Failed to load library using system PATH: {e}")
 
         # If all attempts failed, raise error with helpful message
-        raise SDKError(
-            f"Failed to load Bruker SDK library. Tried {len(library_paths)} paths. "
-            f"Please ensure the Bruker SDK is installed or the library is in your PATH. "
+        lib_name = "timsdata.dll" if platform_name == "windows" else "libtimsdata.so"
+        error_msg = (
+            f"Failed to load Bruker SDK library '{lib_name}'. "
+            f"Checked {len(library_paths)} locations.\n\n"
+            f"Solutions:\n"
+            f"1. Place {lib_name} in the same directory as your data (.d folder)\n"
+            f"2. Place {lib_name} in your current working directory\n"
+            f"3. Set environment variable: BRUKER_SDK_PATH=<path_to_{lib_name}>\n"
+            f"4. Add the SDK directory to your system PATH\n\n"
             f"Platform: {platform_name}"
         )
+        raise SDKError(error_msg)
 
     def _load_library_at_path(self, lib_path: Path) -> CDLL:
         """
