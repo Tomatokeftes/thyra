@@ -1,10 +1,7 @@
-"""Benchmark comparing sparse matrix construction approaches.
+"""Quick test of sparse matrix construction benchmark (smaller dataset).
 
-This script compares different methods for building large sparse matrices
-to optimize the conversion process. It simulates realistic MSI data with:
-- 1,000,000 pixels
-- 400,000 m/z bins
-- ~2,000 peaks per pixel (~0.5% density)
+This is a reduced version for quick validation (4-6 minutes runtime).
+Use this to verify everything works before running the full benchmark.
 """
 
 import time
@@ -27,7 +24,7 @@ class SparseMatrixBenchmark:
     """Benchmark sparse matrix construction approaches."""
 
     def __init__(
-        self, n_pixels: int = 1_000_000, n_mz: int = 400_000, avg_peaks: int = 2000
+        self, n_pixels: int = 100_000, n_mz: int = 400_000, avg_peaks: int = 2000
     ):
         """Initialize benchmark parameters.
 
@@ -42,7 +39,7 @@ class SparseMatrixBenchmark:
         self.total_nnz = n_pixels * avg_peaks
 
         print("=" * 70)
-        print("SPARSE MATRIX CONSTRUCTION BENCHMARK")
+        print("SPARSE MATRIX CONSTRUCTION BENCHMARK - QUICK TEST")
         print("=" * 70)
         print(f"Dataset parameters:")
         print(f"  Pixels:           {self.n_pixels:,}")
@@ -114,11 +111,11 @@ class SparseMatrixBenchmark:
         for pixel_idx, mz_idx, intensities in data_iterator:
             lil[pixel_idx, mz_idx] = intensities
 
-            # Log progress every 100k pixels (for non-tqdm mode)
-            if not HAS_TQDM and (pixel_idx + 1) % 100_000 == 0:
+            # Log progress every 20k pixels (for non-tqdm mode)
+            if not HAS_TQDM and (pixel_idx + 1) % 20_000 == 0:
                 now = time.time()
                 interval_time = now - last_check
-                interval_rate = 100_000 / interval_time
+                interval_rate = 20_000 / interval_time
                 elapsed = now - start_time
                 overall_rate = (pixel_idx + 1) / elapsed
                 percent = ((pixel_idx + 1) / self.n_pixels) * 100
@@ -138,7 +135,7 @@ class SparseMatrixBenchmark:
                 last_check = now
 
         # Convert to CSR
-        print("  Converting LIL → CSR...")
+        print("  Converting LIL -> CSR...")
         convert_start = time.time()
         csr = lil.tocsr()
         convert_time = time.time() - convert_start
@@ -209,11 +206,11 @@ class SparseMatrixBenchmark:
             data[current_idx : current_idx + n] = intensities
             current_idx += n
 
-            # Log progress every 100k pixels (for non-tqdm mode)
-            if not HAS_TQDM and (pixel_idx + 1) % 100_000 == 0:
+            # Log progress every 20k pixels (for non-tqdm mode)
+            if not HAS_TQDM and (pixel_idx + 1) % 20_000 == 0:
                 now = time.time()
                 interval_time = now - last_check
-                interval_rate = 100_000 / interval_time
+                interval_rate = 20_000 / interval_time
                 elapsed = now - start_time
                 overall_rate = (pixel_idx + 1) / elapsed
                 percent = ((pixel_idx + 1) / self.n_pixels) * 100
@@ -238,8 +235,8 @@ class SparseMatrixBenchmark:
         cols = cols[:current_idx]
         data = data[:current_idx]
 
-        # Convert COO → CSR
-        print("  Converting COO → CSR...")
+        # Convert COO -> CSR
+        print("  Converting COO -> CSR...")
         convert_start = time.time()
         coo = sparse.coo_matrix(
             (data, (rows, cols)), shape=(self.n_pixels, self.n_mz), dtype=np.float64
@@ -267,8 +264,8 @@ class SparseMatrixBenchmark:
             "csr_matrix": csr,
         }
 
-    def benchmark_batched_lil(self, batch_size: int = 100_000) -> Dict[str, Any]:
-        """Benchmark alternative approach: Batched LIL → CSR.
+    def benchmark_batched_lil(self, batch_size: int = 20_000) -> Dict[str, Any]:
+        """Benchmark alternative approach: Batched LIL -> CSR.
 
         Args:
             batch_size: Number of pixels per batch
@@ -315,11 +312,11 @@ class SparseMatrixBenchmark:
                 if HAS_TQDM:
                     pbar.update(1)
 
-                # Log progress every 100k pixels (for non-tqdm mode)
-                if not HAS_TQDM and total_processed % 100_000 == 0:
+                # Log progress every 20k pixels (for non-tqdm mode)
+                if not HAS_TQDM and total_processed % 20_000 == 0:
                     now = time.time()
                     interval_time = now - last_check
-                    interval_rate = 100_000 / interval_time
+                    interval_rate = 20_000 / interval_time
                     elapsed = now - start_time
                     overall_rate = total_processed / elapsed
                     percent = (total_processed / self.n_pixels) * 100
@@ -355,10 +352,10 @@ class SparseMatrixBenchmark:
         peak_mem_bytes, _ = tracemalloc.get_traced_memory()
         tracemalloc.stop()
 
-        print(f"  ✓ Stacking completed: {stack_time:.2f}s")
-        print(f"  ✓ Total time: {total_time:.2f}s")
-        print(f"  ✓ Peak memory: {peak_mem_bytes/1e9:.2f} GB")
-        print(f"  ✓ Final NNZ: {csr.nnz:,}")
+        print(f"  [DONE] Stacking completed: {stack_time:.2f}s")
+        print(f"  [DONE] Total time: {total_time:.2f}s")
+        print(f"  [DONE] Peak memory: {peak_mem_bytes/1e9:.2f} GB")
+        print(f"  [DONE] Final NNZ: {csr.nnz:,}")
         print()
 
         return {
@@ -425,7 +422,7 @@ class SparseMatrixBenchmark:
         print("=" * 70)
         print("BENCHMARK SUMMARY")
         print("=" * 70)
-        print(f"Dataset: {self.n_pixels:,} pixels × {self.n_mz:,} m/z bins")
+        print(f"Dataset: {self.n_pixels:,} pixels x {self.n_mz:,} m/z bins")
         print(f"Density: ~{self.avg_peaks/self.n_mz*100:.2f}%")
         print()
 
@@ -449,7 +446,7 @@ class SparseMatrixBenchmark:
             )
 
             if speedup != 1.0:
-                print(f"  → {speedup:.2f}x speedup vs baseline")
+                print(f"  -> {speedup:.2f}x speedup vs baseline")
 
         print("=" * 70)
         print()
@@ -481,7 +478,7 @@ class SparseMatrixBenchmark:
         # Run each benchmark
         results.append(self.benchmark_lil_matrix())
         results.append(self.benchmark_coo_preallocated())
-        results.append(self.benchmark_batched_lil(batch_size=100_000))
+        results.append(self.benchmark_batched_lil(batch_size=20_000))
 
         # Verify consistency
         if self.verify_results(results):
@@ -496,17 +493,16 @@ class SparseMatrixBenchmark:
 
 
 def main():
-    """Run benchmark with realistic parameters."""
-    # Use smaller dataset for quick testing (can be increased for full benchmark)
+    """Run quick test benchmark with smaller dataset."""
     benchmark = SparseMatrixBenchmark(
-        n_pixels=1_000_000,  # 1M pixels (realistic large dataset)
-        n_mz=400_000,  # 400k m/z bins
-        avg_peaks=2000,  # ~2k peaks per pixel
+        n_pixels=100_000,  # 100k pixels (10% of full benchmark)
+        n_mz=400_000,  # 400k m/z bins (same as full)
+        avg_peaks=2000,  # ~2k peaks per pixel (same as full)
     )
 
     results = benchmark.run_all_benchmarks()
 
-    # Optionally save results to JSON
+    # Save results
     try:
         import json
         from pathlib import Path
@@ -514,7 +510,7 @@ def main():
         output_dir = Path(__file__).parent / "results"
         output_dir.mkdir(exist_ok=True)
 
-        output_file = output_dir / "sparse_construction_benchmark.json"
+        output_file = output_dir / "sparse_construction_quick_test.json"
 
         # Prepare JSON-serializable results (exclude CSR matrices)
         json_results = []

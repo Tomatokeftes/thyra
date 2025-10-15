@@ -146,10 +146,29 @@ class SpatialData3DConverter(BaseSpatialDataConverter):
             # Store pixel count for metadata
             self._non_empty_pixel_count = data_structures["pixel_count"]
 
-            # Convert lil_matrix to csr_matrix for efficient access
-            sparse_matrix = data_structures["sparse_matrix"].tocsr()
+            # Convert COO arrays to CSR matrix for efficient access
+            logging.info("Converting COO arrays to CSR format...")
+            coo_arrays = data_structures["sparse_matrix"]
+            current_idx = coo_arrays["current_idx"]
+
+            # Trim arrays to actual size
+            from scipy import sparse
+
+            coo = sparse.coo_matrix(
+                (
+                    coo_arrays["data"][:current_idx],
+                    (
+                        coo_arrays["rows"][:current_idx],
+                        coo_arrays["cols"][:current_idx],
+                    ),
+                ),
+                shape=(coo_arrays["n_rows"], coo_arrays["n_cols"]),
+                dtype=np.float64,
+            )
+            sparse_matrix = coo.tocsr()
+
             logging.info(
-                f"Converted sparse matrix: {sparse_matrix.nnz:,} non-zero " f"entries"
+                f"Converted sparse matrix: {sparse_matrix.nnz:,} non-zero entries"
             )
 
             # Create AnnData

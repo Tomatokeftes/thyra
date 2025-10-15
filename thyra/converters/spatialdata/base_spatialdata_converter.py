@@ -638,11 +638,11 @@ class BaseSpatialDataConverter(BaseMSIConverter, ABC):
         # This method should be overridden by specific converters (2D/3D)
         pass
 
-    def _create_sparse_matrix(self) -> sparse.lil_matrix:
-        """Create sparse matrix for storing intensity values.
+    def _create_sparse_matrix(self) -> Dict[str, Any]:
+        """Create COO arrays for storing intensity values.
 
         Returns:
-            Sparse matrix for storing intensity values
+            Dictionary containing pre-allocated COO arrays and metadata
 
         Raises:
             ValueError: If dimensions or common mass axis are not initialized
@@ -656,11 +656,25 @@ class BaseSpatialDataConverter(BaseMSIConverter, ABC):
         n_pixels = n_x * n_y * n_z
         n_masses = len(self._common_mass_axis)
 
+        # Estimate number of non-zero values (assume ~2000 peaks per pixel on average)
+        # This is a conservative estimate; actual value varies by instrument
+        avg_peaks_per_pixel = 2000
+        estimated_nnz = int(n_pixels * avg_peaks_per_pixel * 1.1)  # 10% buffer
+
         logging.info(
-            f"Creating sparse matrix with {n_pixels} pixels and "
-            f"{n_masses} mass values"
+            f"Pre-allocating COO arrays: {n_pixels:,} pixels x {n_masses:,} m/z bins"
         )
-        return sparse.lil_matrix((n_pixels, n_masses), dtype=np.float64)
+        logging.info(f"Estimated non-zero values: {estimated_nnz:,}")
+
+        # Pre-allocate arrays (int32 for indices saves memory)
+        return {
+            "rows": np.empty(estimated_nnz, dtype=np.int32),
+            "cols": np.empty(estimated_nnz, dtype=np.int32),
+            "data": np.empty(estimated_nnz, dtype=np.float64),
+            "current_idx": 0,
+            "n_rows": n_pixels,
+            "n_cols": n_masses,
+        }
 
     def _create_coordinates_dataframe(self) -> pd.DataFrame:
         """Create coordinates dataframe with pixel positions.
@@ -740,16 +754,15 @@ class BaseSpatialDataConverter(BaseMSIConverter, ABC):
 
     def _add_to_sparse_matrix(
         self,
-        sparse_matrix: sparse.lil_matrix,
+        coo_arrays: Dict[str, Any],
         pixel_idx: int,
         mz_indices: NDArray[np.int_],
         intensities: NDArray[np.float64],
     ) -> None:
-        """Add intensity data to sparse matrix efficiently.
+        """Add intensity data to COO arrays efficiently.
 
         Args:
-            sparse_matrix: Target sparse matrix (lil_matrix for efficient
-                construction)
+            coo_arrays: Dictionary with pre-allocated COO arrays
             pixel_idx: Linear pixel index
             mz_indices: Indices for mass values
             intensities: Intensity values to add
@@ -761,9 +774,17 @@ class BaseSpatialDataConverter(BaseMSIConverter, ABC):
 
         valid_mz_indices = mz_indices[nonzero_mask]
         valid_intensities = intensities[nonzero_mask]
+        n = len(valid_intensities)
 
-        # Direct assignment to lil_matrix (simple and robust)
-        sparse_matrix[pixel_idx, valid_mz_indices] = valid_intensities
+        # Direct array assignment (vectorized, very fast)
+        current_idx = coo_arrays["current_idx"]
+        end_idx = current_idx + n
+
+        coo_arrays["rows"][current_idx:end_idx] = pixel_idx
+        coo_arrays["cols"][current_idx:end_idx] = valid_mz_indices
+        coo_arrays["data"][current_idx:end_idx] = valid_intensities
+
+        coo_arrays["current_idx"] = end_idx
 
     def _create_pixel_shapes(
         self, adata: AnnData, is_3d: bool = False
