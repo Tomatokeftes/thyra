@@ -59,6 +59,19 @@ class BrukerMetadataExtractor(MetadataExtractor):
         cursor.execute(frame_query)
         return cursor.fetchone()
 
+    def _query_total_peaks(self, cursor):
+        """Query total peaks across all frames from NumPeaks column."""
+        try:
+            cursor.execute("SELECT SUM(NumPeaks) FROM Frames WHERE NumPeaks IS NOT NULL AND NumPeaks > 0")
+            result = cursor.fetchone()
+            if result and result[0]:
+                return int(result[0])
+            logger.warning("No NumPeaks data available, total_peaks will be 0")
+            return 0
+        except sqlite3.OperationalError as e:
+            logger.warning(f"Could not query NumPeaks: {e}, total_peaks will be 0")
+            return 0
+
     def _validate_mass_range(self, bounds_data):
         """Validate that mass range data is available."""
         min_mass = bounds_data.get("MzAcqRangeLower")
@@ -88,6 +101,7 @@ class BrukerMetadataExtractor(MetadataExtractor):
         bounds_data = self._query_imaging_bounds(cursor)
         laser_result = self._query_laser_info(cursor)
         frame_result = self._query_frame_info(cursor)
+        total_peaks = self._query_total_peaks(cursor)
 
         try:
             if not frame_result:
@@ -132,6 +146,7 @@ class BrukerMetadataExtractor(MetadataExtractor):
                 mass_range=mass_range,
                 pixel_size=pixel_size,
                 n_spectra=n_spectra,
+                total_peaks=total_peaks,
                 estimated_memory_gb=estimated_memory,
                 source_path=str(self.data_path),
                 coordinate_offsets=imaging_area_offsets,

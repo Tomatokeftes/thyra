@@ -192,18 +192,9 @@ class SpatialData2DConverter(BaseSpatialDataConverter):
         # Calculate TIC for this pixel
         tic_value = float(np.sum(intensities))
 
-        # Update total intensity for average spectrum calculation
-        # Handle both resampled and non-resampled cases
-        if len(intensities) == len(data_structures["total_intensity"]):
-            # Resampled case - intensities match common mass axis length
-            data_structures["total_intensity"] += intensities
-        else:
-            # Non-resampled case - need to map to indices
-            for i, intensity in enumerate(intensities):
-                if i < len(mz_indices) and mz_indices[i] < len(
-                    data_structures["total_intensity"]
-                ):
-                    data_structures["total_intensity"][mz_indices[i]] += intensity
+        # Update total intensity for average spectrum calculation using sparse indexing
+        # OPTIMIZATION: Use np.add.at for vectorized sparse accumulation
+        np.add.at(data_structures["total_intensity"], mz_indices, intensities)
         data_structures["pixel_count"] += 1
 
         # Add data to the appropriate slice

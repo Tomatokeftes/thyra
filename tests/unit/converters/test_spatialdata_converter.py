@@ -22,12 +22,14 @@ def _create_mock_extractor(dims):
             self._dims = dims
 
         def _extract_essential_impl(self):
+            n_spectra = self._dims[0] * self._dims[1] * self._dims[2]
             return EssentialMetadata(
                 dimensions=self._dims,
                 coordinate_bounds=(0.0, 2.0, 0.0, 2.0),
                 mass_range=(100.0, 1000.0),
                 pixel_size=None,
-                n_spectra=self._dims[0] * self._dims[1] * self._dims[2],
+                n_spectra=n_spectra,
+                total_peaks=n_spectra * 100,  # 100 peaks per spectrum
                 estimated_memory_gb=0.001,
                 source_path="/mock/path",
             )
@@ -166,6 +168,7 @@ class TestSpatialDataConverter:
             mass_range=(100.0, 1000.0),
             pixel_size=None,
             n_spectra=18,
+            total_peaks=1800,
             estimated_memory_gb=0.001,
             source_path="/mock/path",
         )
@@ -341,6 +344,7 @@ class TestSpatialDataConverter:
             mass_range=(100.0, 1000.0),
             pixel_size=None,
             n_spectra=18,
+            total_peaks=1800,
             estimated_memory_gb=0.001,
             source_path="/mock/path",
         )
@@ -600,6 +604,7 @@ class TestSpatialDataConverter:
             mass_range=(100.0, 1000.0),
             pixel_size=None,
             n_spectra=18,
+            total_peaks=1800,
             estimated_memory_gb=0.001,
             source_path="/mock/path",
         )

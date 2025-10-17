@@ -3,7 +3,7 @@
 import logging
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -13,6 +13,7 @@ from scipy import sparse
 from ...core.base_converter import BaseMSIConverter, PixelSizeSource
 from ...core.base_reader import BaseMSIReader
 from ...resampling import ResamplingDecisionTree, ResamplingMethod
+from ...resampling.types import ResamplingConfig
 
 # Check SpatialData availability (defer imports to avoid issues)
 SPATIALDATA_AVAILABLE = False
@@ -60,7 +61,7 @@ class BaseSpatialDataConverter(BaseMSIConverter, ABC):
         pixel_size_source: PixelSizeSource = PixelSizeSource.DEFAULT,
         handle_3d: bool = False,
         pixel_size_detection_info: Optional[Dict[str, Any]] = None,
-        resampling_config: Optional[Dict[str, Any]] = None,
+        resampling_config: Optional[Union[Dict[str, Any], ResamplingConfig]] = None,
         **kwargs: Any,
     ) -> None:
         """Initialize the base SpatialData converter.
@@ -127,15 +128,32 @@ class BaseSpatialDataConverter(BaseMSIConverter, ABC):
             # Note: _build_resampled_mass_axis() will be called in _initialize_conversion()
             # after reader metadata is fully loaded
 
+        # Cache for dense mass axis indices (to avoid repeated np.arange calls)
+        self._cached_mass_axis_indices: Optional[NDArray[np.int_]] = None
+
     def _setup_resampling(self) -> None:
         """Set up resampling configuration and strategy."""
         if not self._resampling_config:
             return
 
-        method = self._resampling_config.get("method", "auto")
+        # Access method - handle both dict and dataclass
+        # Check for ResamplingConfig dataclass first (more specific)
+        if isinstance(self._resampling_config, ResamplingConfig):
+            method = self._resampling_config.method
+        elif isinstance(self._resampling_config, dict):
+            method = self._resampling_config.get("method", "auto")
+            # Convert string to enum if needed
+            if isinstance(method, str):
+                method_map = {
+                    "nearest_neighbor": ResamplingMethod.NEAREST_NEIGHBOR,
+                    "tic_preserving": ResamplingMethod.TIC_PRESERVING,
+                }
+                method = method_map.get(method, None)
+        else:
+            method = self._resampling_config.method
 
-        # If method is "auto", use DecisionTree to determine strategy
-        if method == "auto":
+        # If method is None or "auto", use DecisionTree to determine strategy
+        if method is None:
             try:
                 # Get metadata from reader for instrument detection
                 metadata = self._get_reader_metadata_for_resampling()
@@ -148,24 +166,25 @@ class BaseSpatialDataConverter(BaseMSIConverter, ABC):
                 logging.info("Falling back to nearest_neighbor for resampling")
                 self._resampling_method = ResamplingMethod.NEAREST_NEIGHBOR
         else:
-            # Convert string to enum
-            method_map = {
-                "nearest_neighbor": ResamplingMethod.NEAREST_NEIGHBOR,
-                "tic_preserving": ResamplingMethod.TIC_PRESERVING,
-            }
-            self._resampling_method = method_map.get(
-                method, ResamplingMethod.NEAREST_NEIGHBOR
-            )
+            # Use provided method directly (already an enum)
+            self._resampling_method = method
 
         logging.info(f"Using resampling method: {self._resampling_method}")
 
-        # Store resampling parameters
-        # Default to None for target_bins - will use width-based calculation if not specified
-        self._target_bins = self._resampling_config.get("target_bins", None)
-        self._min_mz = self._resampling_config.get("min_mz")
-        self._max_mz = self._resampling_config.get("max_mz")
-        self._width_at_mz = self._resampling_config.get("width_at_mz")
-        self._reference_mz = self._resampling_config.get("reference_mz", 1000.0)
+        # Store resampling parameters - handle both dict and dataclass
+        if isinstance(self._resampling_config, ResamplingConfig):
+            # ResamplingConfig dataclass
+            self._target_bins = self._resampling_config.target_bins
+            self._min_mz = self._resampling_config.min_mz
+            self._max_mz = self._resampling_config.max_mz
+            self._width_at_mz = self._resampling_config.mass_width_da
+            self._reference_mz = self._resampling_config.reference_mz
+        elif isinstance(self._resampling_config, dict):
+            self._target_bins = self._resampling_config.get("target_bins", None)
+            self._min_mz = self._resampling_config.get("min_mz")
+            self._max_mz = self._resampling_config.get("max_mz")
+            self._width_at_mz = self._resampling_config.get("width_at_mz")
+            self._reference_mz = self._resampling_config.get("reference_mz", 1000.0)
 
     def _get_cached_metadata_for_resampling(self) -> Dict[str, Any]:
         """Get cached metadata for resampling decision tree to avoid multiple reader calls."""
@@ -393,6 +412,9 @@ class BaseSpatialDataConverter(BaseMSIConverter, ABC):
         # Override the parent's common mass axis
         self._common_mass_axis = mass_axis.mz_values
 
+        # Cache the mass axis indices array to avoid repeated np.arange() calls
+        self._cached_mass_axis_indices = np.arange(len(self._common_mass_axis), dtype=np.int_)
+
         # Calculate bin sizes for informative logging
         bin_widths = np.diff(self._common_mass_axis)
         min_bin_size = np.min(bin_widths) * 1000  # Convert to mDa
@@ -518,7 +540,7 @@ class BaseSpatialDataConverter(BaseMSIConverter, ABC):
         mzs: NDArray[np.float64],
         intensities: NDArray[np.float64],
     ) -> None:
-        """Override spectrum processing to handle resampling."""
+        """Override spectrum processing to handle resampling with sparse optimization."""
         # Only log detailed per-spectrum info at DEBUG level
         logging.debug(
             f"Processing spectrum at {coords}: {len(mzs)} peaks, "
@@ -526,13 +548,23 @@ class BaseSpatialDataConverter(BaseMSIConverter, ABC):
         )
 
         if self._resampling_config:
-            # Resample the spectrum onto the common mass axis
-            resampled_intensities = self._resample_spectrum(mzs, intensities)
-            mz_indices = np.arange(len(self._common_mass_axis), dtype=np.int_)
-            logging.debug(
-                f"Resampled: {len(resampled_intensities)} values, "
-                f"sum: {np.sum(resampled_intensities):.2e}"
-            )
+            # OPTIMIZATION: Use sparse resampling directly for nearest_neighbor
+            if hasattr(self, "_resampling_method") and self._resampling_method == ResamplingMethod.NEAREST_NEIGHBOR:
+                # Sparse path - much faster, no dense array allocation
+                mz_indices, resampled_intensities = self._nearest_neighbor_resample(mzs, intensities)
+                logging.debug(
+                    f"Resampled (sparse): {len(resampled_intensities)} non-zero bins, "
+                    f"sum: {np.sum(resampled_intensities):.2e}"
+                )
+            else:
+                # Dense path for other methods (TIC-preserving, etc.)
+                resampled_intensities = self._resample_spectrum(mzs, intensities)
+                # Use cached indices instead of creating new array every time
+                mz_indices = self._cached_mass_axis_indices
+                logging.debug(
+                    f"Resampled: {len(resampled_intensities)} values, "
+                    f"sum: {np.sum(resampled_intensities):.2e}"
+                )
 
             # Call the specific converter's processing with resampled data
             self._process_resampled_spectrum(
@@ -552,50 +584,72 @@ class BaseSpatialDataConverter(BaseMSIConverter, ABC):
     def _resample_spectrum(
         self, mzs: NDArray[np.float64], intensities: NDArray[np.float64]
     ) -> NDArray[np.float64]:
-        """Resample a single spectrum onto the common mass axis using the
-        selected strategy."""
+        """Resample a single spectrum onto the common mass axis using TIC-preserving method.
+
+        Note: Nearest neighbor resampling is handled directly in _process_single_spectrum
+        for performance optimization (returns sparse data).
+        """
         if self._common_mass_axis is None:
             raise ValueError("Common mass axis is not initialized")
 
-        # Use the selected resampling method
-        if hasattr(self, "_resampling_method"):
-            if self._resampling_method == ResamplingMethod.NEAREST_NEIGHBOR:
-                return self._nearest_neighbor_resample(mzs, intensities)
-            elif self._resampling_method == ResamplingMethod.TIC_PRESERVING:
-                return self._tic_preserving_resample(mzs, intensities)
-
-        # Fallback to nearest neighbor
-        return self._nearest_neighbor_resample(mzs, intensities)
+        # This method is only called for TIC-preserving resampling (dense path)
+        return self._tic_preserving_resample(mzs, intensities)
 
     def _nearest_neighbor_resample(
         self, mzs: NDArray[np.float64], intensities: NDArray[np.float64]
-    ) -> NDArray[np.float64]:
-        """Resample using vectorized nearest neighbor - optimized and
-        clean."""
-        if mzs.size == 0:
-            return np.zeros(len(self._common_mass_axis))
+    ) -> Tuple[NDArray[np.int_], NDArray[np.float64]]:
+        """Resample spectrum using nearest neighbor interpolation.
 
+        Maps each m/z value to its nearest bin in the common mass axis and
+        accumulates intensities. Returns only non-zero bins for efficiency.
+
+        Args:
+            mzs: Original m/z values from spectrum
+            intensities: Corresponding intensity values
+
+        Returns:
+            Tuple of (bin_indices, accumulated_intensities) containing only non-zero bins
+        """
+        if mzs.size == 0:
+            return np.array([], dtype=np.int_), np.array([], dtype=np.float64)
+
+        # Ensure common mass axis is initialized
+        if self._common_mass_axis is None:
+            raise ValueError("Common mass axis is not initialized")
         # Find insertion points using vectorized binary search
         indices = np.searchsorted(self._common_mass_axis, mzs)
 
-        # Handle edge cases and find actual nearest neighbors
-        indices = np.clip(indices, 0, len(self._common_mass_axis) - 1)
+        # OPTIMIZED: Handle boundary and nearest neighbor in one pass
+        # Clip to valid range
+        indices_clipped = np.clip(indices, 0, len(self._common_mass_axis) - 1)
 
-        # Check if left neighbor is closer (when not at boundary)
-        mask = indices > 0
-        left_indices = indices - 1
-        left_dist = np.abs(self._common_mass_axis[left_indices[mask]] - mzs[mask])
-        right_dist = np.abs(self._common_mass_axis[indices[mask]] - mzs[mask])
-        indices[mask] = np.where(
-            left_dist <= right_dist, left_indices[mask], indices[mask]
-        )
+        # For non-boundary points, check if left is closer
+        # Only check where we're not at the left edge
+        check_left = indices > 0
+        if np.any(check_left):
+            # Get distances only for points that need checking
+            mz_values = self._common_mass_axis[indices_clipped[check_left]]
+            mz_values_left = self._common_mass_axis[indices_clipped[check_left] - 1]
+            mz_query = mzs[check_left]
 
-        # Accumulate intensities using bincount (fastest accumulation)
-        resampled = np.bincount(
-            indices, weights=intensities, minlength=len(self._common_mass_axis)
-        )
+            # Use left if it's closer
+            use_left = np.abs(mz_values_left - mz_query) < np.abs(mz_values - mz_query)
+            indices_clipped[check_left] = np.where(
+                use_left,
+                indices_clipped[check_left] - 1,
+                indices_clipped[check_left]
+            )
 
-        return resampled
+        # OPTIMIZATION: Use pandas-style groupby or bincount for accumulation
+        # bincount without minlength is fastest
+        accumulated = np.bincount(indices_clipped, weights=intensities)
+
+        # Extract non-zero bins for sparse representation
+        nonzero_mask = accumulated > 0
+        nonzero_indices = np.where(nonzero_mask)[0].astype(np.int_)
+        nonzero_values = accumulated[nonzero_mask]
+
+        return nonzero_indices, nonzero_values
 
     def _tic_preserving_resample(
         self, mzs: NDArray[np.float64], intensities: NDArray[np.float64]
@@ -656,21 +710,19 @@ class BaseSpatialDataConverter(BaseMSIConverter, ABC):
         n_pixels = n_x * n_y * n_z
         n_masses = len(self._common_mass_axis)
 
-        # Estimate number of non-zero values (assume ~2000 peaks per pixel on average)
-        # This is a conservative estimate; actual value varies by instrument
-        avg_peaks_per_pixel = 2000
-        estimated_nnz = int(n_pixels * avg_peaks_per_pixel * 1.1)  # 10% buffer
+        # Get exact number of peaks from cached metadata (no iteration needed!)
+        exact_nnz = self._essential_metadata_cached.total_peaks
 
         logging.info(
             f"Pre-allocating COO arrays: {n_pixels:,} pixels x {n_masses:,} m/z bins"
         )
-        logging.info(f"Estimated non-zero values: {estimated_nnz:,}")
+        logging.info(f"Exact non-zero values from metadata: {exact_nnz:,}")
 
-        # Pre-allocate arrays (int32 for indices saves memory)
+        # Pre-allocate arrays with exact size (uint32 for indices, all values are positive)
         return {
-            "rows": np.empty(estimated_nnz, dtype=np.int32),
-            "cols": np.empty(estimated_nnz, dtype=np.int32),
-            "data": np.empty(estimated_nnz, dtype=np.float64),
+            "rows": np.empty(exact_nnz, dtype=np.uint32),
+            "cols": np.empty(exact_nnz, dtype=np.uint32),
+            "data": np.empty(exact_nnz, dtype=np.float64),
             "current_idx": 0,
             "n_rows": n_pixels,
             "n_cols": n_masses,
@@ -776,10 +828,26 @@ class BaseSpatialDataConverter(BaseMSIConverter, ABC):
         valid_intensities = intensities[nonzero_mask]
         n = len(valid_intensities)
 
-        # Direct array assignment (vectorized, very fast)
+        # Check if we need to resize arrays
         current_idx = coo_arrays["current_idx"]
         end_idx = current_idx + n
+        current_size = len(coo_arrays["rows"])
 
+        if end_idx > current_size:
+            # Resize arrays by 50% to accommodate more data
+            new_size = int(current_size * 1.5)
+            if new_size < end_idx:
+                new_size = end_idx + int(current_size * 0.1)  # Ensure it fits
+
+            logging.info(
+                f"Resizing COO arrays from {current_size:,} to {new_size:,} elements"
+            )
+
+            coo_arrays["rows"] = np.resize(coo_arrays["rows"], new_size)
+            coo_arrays["cols"] = np.resize(coo_arrays["cols"], new_size)
+            coo_arrays["data"] = np.resize(coo_arrays["data"], new_size)
+
+        # Direct array assignment (vectorized, very fast)
         coo_arrays["rows"][current_idx:end_idx] = pixel_idx
         coo_arrays["cols"][current_idx:end_idx] = valid_mz_indices
         coo_arrays["data"][current_idx:end_idx] = valid_intensities

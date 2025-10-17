@@ -47,7 +47,7 @@ def build_raw_mass_axis(
         None,
     ],
     progress_callback: Optional[Callable[[int], None]] = None,
-) -> NDArray[np.float64]:
+) -> Tuple[NDArray[np.float64], int]:
     """Build raw mass axis from spectra iterator.
 
     Raw Mass axis in case the user wants the full data. Not recommended for
@@ -55,21 +55,24 @@ def build_raw_mass_axis(
     Future interpolation module will create optimized mass axis using
     min/max mass + bin width.
 
+    Also counts total peaks for COO matrix pre-allocation.
+
     Args:
         spectra_iterator: Iterator yielding (coords, mzs, intensities) tuples
         progress_callback: Optional callback for progress updates
 
     Returns:
-        numpy array of unique m/z values in ascending order
+        Tuple of (numpy array of unique m/z values in ascending order, total_peaks)
     """
     from tqdm import tqdm
 
     unique_mzs = set()
     count = 0
+    total_peaks = 0
 
     # Create progress bar
     pbar = tqdm(
-        desc="Building raw mass axis",
+        desc="Building raw mass axis and counting peaks",
         unit=" spectra",
         dynamic_ncols=True,
         bar_format="{l_bar}{bar}| {n_fmt} spectra [{elapsed}<{remaining}]",
@@ -79,6 +82,7 @@ def build_raw_mass_axis(
         for coords, mzs, intensities in spectra_iterator:
             if mzs.size > 0:
                 unique_mzs.update(mzs)
+                total_peaks += len(mzs)
             count += 1
             pbar.update(1)
 
@@ -87,6 +91,7 @@ def build_raw_mass_axis(
                 pbar.set_postfix(
                     {
                         "unique_mz": len(unique_mzs),
+                        "total_peaks": total_peaks,
                         "memory_est_mb": len(unique_mzs) * 8 / 1024 / 1024,
                     }
                 )
@@ -96,7 +101,8 @@ def build_raw_mass_axis(
     finally:
         pbar.close()
 
-    return np.array(sorted(unique_mzs))
+    logger.info(f"Total peaks counted: {total_peaks:,}")
+    return (np.array(sorted(unique_mzs)), total_peaks)
 
 
 def _get_frame_coordinates(
@@ -350,7 +356,7 @@ class BrukerReader(BaseMSIReader):
         return self._common_mass_axis
 
     def _build_common_mass_axis(self) -> NDArray[np.float64]:
-        """Build the common mass axis."""
+        """Build the common mass axis and cache total peaks."""
         logger.info("Building raw mass axis")
 
         # Create iterator for mass axis building
@@ -358,8 +364,12 @@ class BrukerReader(BaseMSIReader):
             for coords, mzs, intensities in self._iter_spectra_raw():
                 yield coords, mzs, intensities
 
-        # Build raw mass axis using simplified function
-        mass_axis = build_raw_mass_axis(mz_iterator(), self.progress_callback)
+        # Build raw mass axis using simplified function (returns mass_axis and total_peaks)
+        mass_axis, total_peaks = build_raw_mass_axis(mz_iterator(), self.progress_callback)
+
+        # Cache total_peaks for later retrieval (if not already set from NumPeaks cache)
+        if not hasattr(self, '_total_peaks_from_mass_axis'):
+            self._total_peaks_from_mass_axis = total_peaks
 
         if len(mass_axis) == 0:
             logger.warning("No m/z values found in dataset")
@@ -619,6 +629,22 @@ class BrukerReader(BaseMSIReader):
             frame count)
         """
         return self._get_frame_count()
+
+    def get_total_peak_count(self) -> int:
+        """Get total number of peaks across all spectra from NumPeaks cache.
+
+        This is very fast as NumPeaks data is cached from the database at initialization.
+
+        Returns:
+            Total number of peaks across all spectra
+        """
+        if not self._num_peaks_cache:
+            logger.warning("NumPeaks cache not available, cannot get exact count")
+            return 0
+
+        total = sum(self._num_peaks_cache.values())
+        logger.info(f"Total peak count from NumPeaks cache: {total:,}")
+        return total
 
     def __del__(self) -> None:
         """Destructor to ensure cleanup."""

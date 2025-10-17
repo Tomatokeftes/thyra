@@ -12,6 +12,7 @@ class EssentialMetadata:
     mass_range: Tuple[float, float]  # (min_mass, max_mass)
     pixel_size: Optional[Tuple[float, float]]  # (x_size, y_size) in micrometers
     n_spectra: int  # Total number of spectra
+    total_peaks: int  # Total number of peaks across all spectra (for COO allocation)
     estimated_memory_gb: float  # Memory usage estimate
     source_path: str  # Path to source data
     # (x_offset, y_offset, z_offset) for raw coordinate normalization
