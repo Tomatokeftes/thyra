@@ -60,9 +60,10 @@ class TestBrukerReader:
             yield (0, 0, 0), np.array([100.0, 200.0]), np.array([10.0, 20.0])
             yield (0, 0, 1), np.array([150.0, 250.0]), np.array([15.0, 25.0])
 
-        mass_axis = build_raw_mass_axis(mock_spectra_iterator())
+        mass_axis, total_peaks = build_raw_mass_axis(mock_spectra_iterator())
         expected = np.array([100.0, 150.0, 200.0, 250.0])
         np.testing.assert_array_equal(mass_axis, expected)
+        assert total_peaks == 4  # 2 peaks from first spectrum + 2 from second
 
     @patch("thyra.readers.bruker.bruker_reader.DLLManager")
     @patch("thyra.readers.bruker.bruker_reader.SDKFunctions")
@@ -126,10 +127,11 @@ class TestRawMassAxisBuilder:
 
         from thyra.readers.bruker.bruker_reader import build_raw_mass_axis
 
-        mass_axis = build_raw_mass_axis(mock_spectra_iterator())
+        mass_axis, total_peaks = build_raw_mass_axis(mock_spectra_iterator())
 
         expected = np.array([100.0, 150.0, 200.0, 250.0, 300.0, 350.0])
         np.testing.assert_array_equal(mass_axis, expected)
+        assert total_peaks == 8  # 3 + 3 + 2 peaks
 
     def test_build_raw_mass_axis_empty_input(self):
         """Test raw mass axis building with empty input."""
@@ -140,9 +142,10 @@ class TestRawMassAxisBuilder:
 
         from thyra.readers.bruker.bruker_reader import build_raw_mass_axis
 
-        mass_axis = build_raw_mass_axis(empty_iterator())
+        mass_axis, total_peaks = build_raw_mass_axis(empty_iterator())
 
         assert len(mass_axis) == 0
+        assert total_peaks == 0
 
     def test_build_raw_mass_axis_with_progress_callback(self):
         """Test raw mass axis building with progress callback."""
@@ -157,12 +160,13 @@ class TestRawMassAxisBuilder:
 
         from thyra.readers.bruker.bruker_reader import build_raw_mass_axis
 
-        build_raw_mass_axis(mock_spectra_iterator(), progress_callback)
+        mass_axis, total_peaks = build_raw_mass_axis(mock_spectra_iterator(), progress_callback)
 
         # Should have called progress callback
         assert len(progress_calls) > 0
         assert 100 in progress_calls  # Should call at multiples of 100
         assert 200 in progress_calls
+        assert total_peaks == 250  # 250 spectra with 1 peak each
 
 
 class TestDirectCoordinateExtraction:

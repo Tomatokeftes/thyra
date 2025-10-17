@@ -39,7 +39,7 @@ class ImzMLMetadataExtractor(MetadataExtractor):
 
         dimensions = self._calculate_dimensions(coords)
         coordinate_bounds = self._calculate_bounds(coords)
-        mass_range = self._get_mass_range_complete()
+        mass_range, total_peaks = self._get_mass_range_complete()
         pixel_size = self._extract_pixel_size_fast()
         n_spectra = len(coords)
         estimated_memory = self._estimate_memory(n_spectra)
@@ -53,6 +53,7 @@ class ImzMLMetadataExtractor(MetadataExtractor):
             mass_range=mass_range,
             pixel_size=pixel_size,
             n_spectra=n_spectra,
+            total_peaks=total_peaks,
             estimated_memory_gb=estimated_memory,
             source_path=str(self.imzml_path),
             spectrum_type=spectrum_type,  # Add spectrum type to essential
@@ -104,22 +105,27 @@ class ImzMLMetadataExtractor(MetadataExtractor):
             float(np.max(y_coords)),
         )
 
-    def _get_mass_range_complete(self) -> Tuple[float, float]:
+    def _get_mass_range_complete(self) -> Tuple[Tuple[float, float], int]:
         """Complete mass range extraction by scanning ALL spectra.
 
         Required for resampling to ensure no m/z values are missed.
+        Also counts total peaks for COO matrix pre-allocation.
+
+        Returns:
+            Tuple of ((min_mass, max_mass), total_peaks)
         """
         try:
-            logger.info("Scanning ALL spectra for complete mass range...")
+            logger.info("Scanning ALL spectra for complete mass range and peak count...")
 
             n_spectra = len(self.parser.coordinates)
             min_mass = float("inf")
             max_mass = float("-inf")
+            total_peaks = 0
 
             from tqdm import tqdm
 
             with tqdm(
-                total=n_spectra, desc="Scanning mass range", unit="spectrum"
+                total=n_spectra, desc="Scanning mass range and counting peaks", unit="spectrum"
             ) as pbar:
                 for idx in range(n_spectra):
                     try:
@@ -127,6 +133,7 @@ class ImzMLMetadataExtractor(MetadataExtractor):
                         if len(mzs) > 0:
                             min_mass = min(min_mass, float(np.min(mzs)))
                             max_mass = max(max_mass, float(np.max(mzs)))
+                            total_peaks += len(mzs)
                     except Exception as e:
                         logger.debug(f"Failed to read spectrum {idx}: {e}")
                         continue  # Skip problematic spectra
@@ -134,14 +141,15 @@ class ImzMLMetadataExtractor(MetadataExtractor):
 
             if min_mass == float("inf"):
                 logger.warning("No valid spectra found")
-                return (0.0, 1000.0)
+                return ((0.0, 1000.0), 0)
 
             logger.info(f"Complete mass range: {min_mass:.2f} - {max_mass:.2f} m/z")
-            return (min_mass, max_mass)
+            logger.info(f"Total peaks: {total_peaks:,}")
+            return ((min_mass, max_mass), total_peaks)
 
         except Exception as e:
             logger.error(f"Complete mass range scan failed: {e}")
-            return (0.0, 1000.0)
+            return ((0.0, 1000.0), 0)
 
     def get_mass_range_for_resampling(self) -> Tuple[float, float]:
         """Get accurate mass range required for resampling.
@@ -149,7 +157,8 @@ class ImzMLMetadataExtractor(MetadataExtractor):
         This performs a complete scan of all spectra to ensure no m/z values
         are missed when building the resampled axis.
         """
-        return self._get_mass_range_complete()
+        mass_range, _ = self._get_mass_range_complete()
+        return mass_range
 
     def _extract_pixel_size_fast(self) -> Optional[Tuple[float, float]]:
         """Fast pixel size extraction from imzmldict first."""

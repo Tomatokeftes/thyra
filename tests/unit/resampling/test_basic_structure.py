@@ -39,8 +39,8 @@ class TestBasicImports:
 
     def test_dataclasses_import(self):
         """Test dataclasses can be created."""
-        config = ResamplingConfig(target_bins=5000)
-        assert config.target_bins == 5000
+        config = ResamplingConfig(target_bins=300000)
+        assert config.target_bins == 300000
         assert config.reference_mz == 500.0  # default
 
 

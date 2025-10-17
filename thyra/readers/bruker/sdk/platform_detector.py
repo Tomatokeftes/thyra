@@ -45,6 +45,164 @@ class PlatformDetector:
         return PlatformDetector.get_platform() == "macos"
 
 
+def _get_windows_paths(lib_name: str, data_directory: Optional[Path]) -> List[Path]:
+    """Get Windows-specific DLL search paths."""
+    paths = []
+
+    # Repository DLL folder (HIGHEST PRIORITY)
+    repository_dll_folder = Path(__file__).parent / "dll" / lib_name
+    paths.append(repository_dll_folder)
+    logger.info(f"Checking repository DLL folder: {repository_dll_folder}")
+
+    # Current working directory and script location
+    paths.extend(
+        [
+            Path.cwd() / lib_name,
+            Path(__file__).parent / lib_name,
+            Path(__file__).parent.parent / lib_name,
+            Path(__file__).parent.parent.parent / lib_name,
+            Path(__file__).parent.parent.parent.parent / lib_name,
+        ]
+    )
+
+    # Standard installation paths
+    paths.extend(
+        [
+            Path("C:/Program Files/Bruker/timsTOF/sdk") / lib_name,
+            Path("C:/Program Files (x86)/Bruker/timsTOF/sdk") / lib_name,
+            Path("C:/Bruker/sdk") / lib_name,
+            Path("C:/Bruker/timsdata") / lib_name,
+        ]
+    )
+
+    # User-specific paths
+    paths.extend(
+        [
+            Path(r"C:\Users\P70078823\Desktop\MSIConverter") / lib_name,
+            Path.home() / "Desktop" / "MSIConverter" / lib_name,
+            Path.home() / "Downloads" / lib_name,
+            Path.home() / "Documents" / "Bruker" / lib_name,
+        ]
+    )
+
+    # Data directory paths
+    if data_directory:
+        paths.extend(_get_data_directory_paths(lib_name, data_directory))
+
+    # System PATH fallback
+    paths.append(Path(lib_name))
+
+    return paths
+
+
+def _get_data_directory_paths(lib_name: str, data_directory: Path) -> List[Path]:
+    """Get paths relative to data directory and network drives."""
+    paths = [
+        data_directory / lib_name,
+        data_directory.parent / lib_name,
+    ]
+
+    # Walk up directory tree
+    if data_directory.parent.parent:
+        paths.append(data_directory.parent.parent / lib_name)
+    if data_directory.parent.parent.parent:
+        paths.append(data_directory.parent.parent.parent / lib_name)
+
+    # Network drive locations
+    try:
+        drive = Path(data_directory.anchor)
+        if drive not in (Path("C:/"), Path("C:\\")):
+            paths.extend(
+                [
+                    drive / lib_name,
+                    drive / "Bruker" / lib_name,
+                    drive / "Bruker" / "sdk" / lib_name,
+                    drive / "SDK" / lib_name,
+                    drive / "timsTOF" / "sdk" / lib_name,
+                ]
+            )
+    except Exception as e:
+        logger.debug(f"Could not check network drive locations: {e}")
+
+    return paths
+
+
+def _get_linux_paths(lib_name: str, data_directory: Optional[Path]) -> List[Path]:
+    """Get Linux-specific SO search paths."""
+    paths = []
+
+    # Repository DLL folder (HIGHEST PRIORITY)
+    repository_dll_folder = Path(__file__).parent / "dll" / lib_name
+    paths.append(repository_dll_folder)
+    logger.info(f"Checking repository DLL folder: {repository_dll_folder}")
+
+    # Standard library paths
+    paths.extend(
+        [
+            Path("/usr/lib") / lib_name,
+            Path("/usr/local/lib") / lib_name,
+            Path("/opt/bruker/lib") / lib_name,
+            Path("/usr/lib/x86_64-linux-gnu") / lib_name,
+        ]
+    )
+
+    # Local data directory
+    if data_directory:
+        paths.extend(
+            [
+                data_directory.parent / lib_name,
+                data_directory / lib_name,
+            ]
+        )
+
+    # Current working directory and LD_LIBRARY_PATH
+    paths.extend(
+        [
+            Path.cwd() / lib_name,
+            Path(lib_name),
+        ]
+    )
+
+    return paths
+
+
+def _get_macos_paths(lib_name: str, data_directory: Optional[Path]) -> List[Path]:
+    """Get macOS-specific dylib search paths."""
+    paths = []
+
+    # Repository DLL folder (HIGHEST PRIORITY)
+    repository_dll_folder = Path(__file__).parent / "dll" / lib_name
+    paths.append(repository_dll_folder)
+    logger.info(f"Checking repository DLL folder: {repository_dll_folder}")
+
+    # Standard library paths
+    paths.extend(
+        [
+            Path("/usr/local/lib") / lib_name,
+            Path("/opt/bruker/lib") / lib_name,
+        ]
+    )
+
+    # Local data directory
+    if data_directory:
+        paths.extend(
+            [
+                data_directory.parent / lib_name,
+                data_directory / lib_name,
+            ]
+        )
+
+    # Current working directory
+    paths.extend(
+        [
+            Path.cwd() / lib_name,
+            Path(lib_name),
+        ]
+    )
+
+    return paths
+
+
 def get_dll_paths(data_directory: Optional[Path] = None) -> List[Path]:
     """
     Get list of potential DLL/SO library paths for the current platform.
@@ -57,108 +215,52 @@ def get_dll_paths(data_directory: Optional[Path] = None) -> List[Path]:
 
     Returns:
         List of Path objects representing potential library locations
+
+    Note:
+        You can set the BRUKER_SDK_PATH environment variable to specify
+        a custom location for the Bruker SDK library.
     """
+    import os
+
     paths = []
     platform_name = PlatformDetector.get_platform()
 
+    # Check environment variable first (highest priority)
+    sdk_path_env = os.environ.get("BRUKER_SDK_PATH")
+    if sdk_path_env:
+        sdk_path = Path(sdk_path_env)
+        logger.info(f"Using BRUKER_SDK_PATH environment variable: {sdk_path}")
+        paths.append(sdk_path)
+
+    # Get platform-specific paths using helper functions
+    lib_name = get_library_name()
     if platform_name == "windows":
-        # Windows DLL paths
-        dll_name = "timsdata.dll"
-
-        # Standard installation paths
-        paths.extend(
-            [
-                Path("C:/Program Files/Bruker/timsTOF/sdk") / dll_name,
-                Path("C:/Program Files (x86)/Bruker/timsTOF/sdk") / dll_name,
-                Path("C:/Bruker/sdk") / dll_name,
-                Path("C:/Bruker/timsdata") / dll_name,
-            ]
-        )
-
-        # User-specific paths (from timsconvert)
-        user_paths = [
-            Path(r"C:\Users\P70078823\Desktop\MSIConverter") / dll_name,
-            Path.home() / "Desktop" / "MSIConverter" / dll_name,
-            Path.home() / "Downloads" / dll_name,
-            Path.home() / "Documents" / "Bruker" / dll_name,
-        ]
-        paths.extend(user_paths)
-
-        # Local data directory
-        if data_directory:
-            paths.append(data_directory.parent / dll_name)
-            paths.append(data_directory / dll_name)
-
-        # Current working directory and PATH
-        paths.extend(
-            [
-                Path.cwd() / dll_name,
-                Path(dll_name),  # Rely on system PATH
-            ]
-        )
-
+        paths.extend(_get_windows_paths(lib_name, data_directory))
     elif platform_name == "linux":
-        # Linux SO paths
-        so_name = "libtimsdata.so"
-
-        # Standard library paths
-        paths.extend(
-            [
-                Path("/usr/lib") / so_name,
-                Path("/usr/local/lib") / so_name,
-                Path("/opt/bruker/lib") / so_name,
-                Path("/usr/lib/x86_64-linux-gnu") / so_name,
-            ]
-        )
-
-        # Local data directory
-        if data_directory:
-            paths.append(data_directory.parent / so_name)
-            paths.append(data_directory / so_name)
-
-        # Current working directory and LD_LIBRARY_PATH
-        paths.extend(
-            [
-                Path.cwd() / so_name,
-                Path(so_name),  # Rely on LD_LIBRARY_PATH
-            ]
-        )
-
+        paths.extend(_get_linux_paths(lib_name, data_directory))
     elif platform_name == "macos":
-        # macOS dylib paths (limited support)
-        dylib_name = "libtimsdata.dylib"
-
-        paths.extend(
-            [
-                Path("/usr/local/lib") / dylib_name,
-                Path("/opt/bruker/lib") / dylib_name,
-            ]
-        )
-
-        if data_directory:
-            paths.append(data_directory.parent / dylib_name)
-            paths.append(data_directory / dylib_name)
-
-        paths.extend(
-            [
-                Path.cwd() / dylib_name,
-                Path(dylib_name),
-            ]
-        )
+        paths.extend(_get_macos_paths(lib_name, data_directory))
 
     # Filter to only existing paths and log findings
     existing_paths = []
+    checked_count = 0
     for path in paths:
+        checked_count += 1
         if path.exists():
             existing_paths.append(path)
-            logger.debug(f"Found potential SDK library: {path}")
+            logger.info(f"Found SDK library: {path}")
         else:
-            logger.debug(f"SDK library not found: {path}")
+            logger.debug(f"SDK library not found at: {path}")
 
     if existing_paths:
-        logger.info(f"Found {len(existing_paths)} potential SDK libraries")
+        logger.info(
+            f"Found {len(existing_paths)} SDK libraries out of {checked_count} checked paths"
+        )
     else:
-        logger.warning("No SDK libraries found in standard locations")
+        logger.warning(
+            f"No SDK libraries found in {checked_count} standard locations. "
+            f"Checked paths include: {[str(p) for p in paths[:5]]}..."
+        )
 
     return existing_paths
 

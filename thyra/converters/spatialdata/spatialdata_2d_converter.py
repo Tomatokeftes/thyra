@@ -68,15 +68,15 @@ class SpatialData2DConverter(BaseSpatialDataConverter):
             "pixel_count": 0,
         }
 
-    def _create_sparse_matrix_for_slice(self, z_value: int) -> sparse.lil_matrix:
+    def _create_sparse_matrix_for_slice(self, z_value: int) -> Dict[str, Any]:
         """
-        Create sparse matrix for a single slice.
+        Create COO arrays for a single slice.
 
         Args:
             z_value: Z-index of the slice
 
         Returns:
-            Sparse matrix for this slice
+            Dictionary containing pre-allocated COO arrays for this slice
         """
         if self._dimensions is None:
             raise ValueError("Dimensions are not initialized")
@@ -87,12 +87,24 @@ class SpatialData2DConverter(BaseSpatialDataConverter):
         n_pixels = n_x * n_y
         n_masses = len(self._common_mass_axis)
 
+        # Estimate number of non-zero values (assume ~2000 peaks per pixel)
+        avg_peaks_per_pixel = 2000
+        estimated_nnz = int(n_pixels * avg_peaks_per_pixel * 1.1)  # 10% buffer
+
         logging.info(
-            f"Creating sparse matrix for slice z={z_value} with {n_pixels} "
-            f"pixels and {n_masses} mass values"
+            f"Pre-allocating COO arrays for slice z={z_value}: {n_pixels:,} pixels x "
+            f"{n_masses:,} m/z bins"
         )
 
-        return sparse.lil_matrix((n_pixels, n_masses), dtype=np.float64)
+        # Pre-allocate arrays (int32 for indices saves memory)
+        return {
+            "rows": np.empty(estimated_nnz, dtype=np.int32),
+            "cols": np.empty(estimated_nnz, dtype=np.int32),
+            "data": np.empty(estimated_nnz, dtype=np.float64),
+            "current_idx": 0,
+            "n_rows": n_pixels,
+            "n_cols": n_masses,
+        }
 
     def _create_coordinates_dataframe_for_slice(self, z_value: int) -> pd.DataFrame:
         """
@@ -180,18 +192,9 @@ class SpatialData2DConverter(BaseSpatialDataConverter):
         # Calculate TIC for this pixel
         tic_value = float(np.sum(intensities))
 
-        # Update total intensity for average spectrum calculation
-        # Handle both resampled and non-resampled cases
-        if len(intensities) == len(data_structures["total_intensity"]):
-            # Resampled case - intensities match common mass axis length
-            data_structures["total_intensity"] += intensities
-        else:
-            # Non-resampled case - need to map to indices
-            for i, intensity in enumerate(intensities):
-                if i < len(mz_indices) and mz_indices[i] < len(
-                    data_structures["total_intensity"]
-                ):
-                    data_structures["total_intensity"][mz_indices[i]] += intensity
+        # Update total intensity for average spectrum calculation using sparse indexing
+        # OPTIMIZATION: Use np.add.at for vectorized sparse accumulation
+        np.add.at(data_structures["total_intensity"], mz_indices, intensities)
         data_structures["pixel_count"] += 1
 
         # Add data to the appropriate slice
@@ -232,8 +235,25 @@ class SpatialData2DConverter(BaseSpatialDataConverter):
         # Process each slice separately
         for slice_id, slice_data in data_structures["slices_data"].items():
             try:
-                # Convert lil_matrix to csr_matrix for efficient access
-                sparse_matrix = slice_data["sparse_data"].tocsr()
+                # Convert COO arrays to CSR matrix for efficient access
+                logging.info(f"Converting COO arrays to CSR for {slice_id}...")
+                coo_arrays = slice_data["sparse_data"]
+                current_idx = coo_arrays["current_idx"]
+
+                # Trim arrays to actual size and create COO matrix
+                coo = sparse.coo_matrix(
+                    (
+                        coo_arrays["data"][:current_idx],
+                        (
+                            coo_arrays["rows"][:current_idx],
+                            coo_arrays["cols"][:current_idx],
+                        ),
+                    ),
+                    shape=(coo_arrays["n_rows"], coo_arrays["n_cols"]),
+                    dtype=np.float64,
+                )
+                sparse_matrix = coo.tocsr()
+
                 logging.info(
                     f"Converted sparse matrix for {slice_id}: "
                     f"{sparse_matrix.nnz:,} non-zero entries"

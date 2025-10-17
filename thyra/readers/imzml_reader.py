@@ -448,6 +448,37 @@ class ImzMLReader(BaseMSIReader):
         parser = cast(ImzMLParser, self.parser)
         return len(parser.coordinates)  # type: ignore
 
+    def get_total_peak_count(self) -> int:
+        """Get total number of peaks across all spectra.
+
+        For ImzML, this requires iterating through spectra to count peaks.
+
+        Returns:
+            Total number of peaks across all spectra
+        """
+        self._ensure_parser_initialized()
+        parser = cast(ImzMLParser, self.parser)
+        total_spectra = len(parser.coordinates)  # type: ignore
+
+        logging.info("Counting peaks across all spectra for exact allocation...")
+        total_peaks = 0
+
+        with tqdm(
+            total=total_spectra,
+            desc="Counting peaks",
+            unit="spectrum",
+        ) as pbar:
+            for idx in range(total_spectra):
+                try:
+                    mzs, _ = parser.getspectrum(idx)  # type: ignore
+                    total_peaks += len(mzs)
+                except Exception as e:
+                    logging.warning(f"Error getting spectrum {idx}: {e}")
+                pbar.update(1)
+
+        logging.info(f"Total peak count: {total_peaks:,}")
+        return total_peaks
+
     @property
     def mass_range(self) -> Tuple[float, float]:
         """Return the mass range (min_mz, max_mz) of the dataset.

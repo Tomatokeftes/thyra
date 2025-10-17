@@ -44,6 +44,7 @@ class TestBaseMSIReader:
                             mass_range=(100.0, 200.0),
                             pixel_size=None,
                             n_spectra=1,
+                            total_peaks=100,
                             estimated_memory_gb=0.001,
                             source_path="/test/path",
                         )
@@ -110,6 +111,7 @@ class TestBaseMSIConverter:
                             mass_range=(0.0, 0.0),
                             pixel_size=None,
                             n_spectra=1,
+                            total_peaks=0,
                             estimated_memory_gb=0.001,
                             source_path="/test/path",
                         )
@@ -191,6 +193,7 @@ class TestBaseMSIConverter:
                             mass_range=(100.0, 300.0),
                             pixel_size=None,
                             n_spectra=4,
+                            total_peaks=8,
                             estimated_memory_gb=0.001,
                             source_path="/test/path",
                         )

@@ -22,12 +22,14 @@ def _create_mock_extractor(dims):
             self._dims = dims
 
         def _extract_essential_impl(self):
+            n_spectra = self._dims[0] * self._dims[1] * self._dims[2]
             return EssentialMetadata(
                 dimensions=self._dims,
                 coordinate_bounds=(0.0, 2.0, 0.0, 2.0),
                 mass_range=(100.0, 1000.0),
                 pixel_size=None,
-                n_spectra=self._dims[0] * self._dims[1] * self._dims[2],
+                n_spectra=n_spectra,
+                total_peaks=n_spectra * 100,  # 100 peaks per spectrum
                 estimated_memory_gb=0.001,
                 source_path="/mock/path",
             )
@@ -137,12 +139,13 @@ class TestSpatialDataConverter:
         assert "tables" in data_structures
         assert "shapes" in data_structures
 
-        # Check sparse matrix
-        assert isinstance(data_structures["sparse_matrix"], sparse.lil_matrix)
-        assert data_structures["sparse_matrix"].shape == (
-            18,
-            100,
-        )  # 3x3x2 grid, 100 m/z values
+        # Check sparse matrix (now COO arrays dict)
+        assert isinstance(data_structures["sparse_matrix"], dict)
+        assert "rows" in data_structures["sparse_matrix"]
+        assert "cols" in data_structures["sparse_matrix"]
+        assert "data" in data_structures["sparse_matrix"]
+        assert data_structures["sparse_matrix"]["n_rows"] == 18  # 3x3x2 grid
+        assert data_structures["sparse_matrix"]["n_cols"] == 100  # 100 m/z values
 
         # Check coordinates dataframe
         assert isinstance(data_structures["coords_df"], pd.DataFrame)
@@ -165,6 +168,7 @@ class TestSpatialDataConverter:
             mass_range=(100.0, 1000.0),
             pixel_size=None,
             n_spectra=18,
+            total_peaks=1800,
             estimated_memory_gb=0.001,
             source_path="/mock/path",
         )
@@ -204,12 +208,13 @@ class TestSpatialDataConverter:
         assert "sparse_data" in slice_data
         assert "coords_df" in slice_data
 
-        # Check sparse matrix for slice
-        assert isinstance(slice_data["sparse_data"], sparse.lil_matrix)
-        assert slice_data["sparse_data"].shape == (
-            9,
-            100,
-        )  # 3x3 grid, 100 m/z values
+        # Check sparse matrix for slice (now COO arrays dict)
+        assert isinstance(slice_data["sparse_data"], dict)
+        assert "rows" in slice_data["sparse_data"]
+        assert "cols" in slice_data["sparse_data"]
+        assert "data" in slice_data["sparse_data"]
+        assert slice_data["sparse_data"]["n_rows"] == 9  # 3x3 grid
+        assert slice_data["sparse_data"]["n_cols"] == 100  # 100 m/z values
 
         # Check coordinates dataframe for slice
         assert isinstance(slice_data["coords_df"], pd.DataFrame)
@@ -234,12 +239,30 @@ class TestSpatialDataConverter:
         intensities = np.array([100.0, 200.0])  # Example intensities
         converter._process_single_spectrum(data_structures, (1, 1, 0), mzs, intensities)
 
-        # Check that data was added to the sparse matrix
+        # Check that data was added to the COO arrays
         pixel_idx = converter._get_pixel_index(1, 1, 0)
         mz_indices = converter._map_mass_to_indices(mzs)
 
-        assert data_structures["sparse_matrix"][pixel_idx, mz_indices[0]] == 100.0
-        assert data_structures["sparse_matrix"][pixel_idx, mz_indices[1]] == 200.0
+        # Data is in COO arrays now, so check the arrays were populated
+        coo_arrays = data_structures["sparse_matrix"]
+        assert coo_arrays["current_idx"] > 0  # Data was added
+
+        # Convert to CSR to verify the data
+        from scipy import sparse as sp
+
+        csr = sp.coo_matrix(
+            (
+                coo_arrays["data"][: coo_arrays["current_idx"]],
+                (
+                    coo_arrays["rows"][: coo_arrays["current_idx"]],
+                    coo_arrays["cols"][: coo_arrays["current_idx"]],
+                ),
+            ),
+            shape=(coo_arrays["n_rows"], coo_arrays["n_cols"]),
+        ).tocsr()
+
+        assert csr[pixel_idx, mz_indices[0]] == 100.0
+        assert csr[pixel_idx, mz_indices[1]] == 200.0
 
     @patch("thyra.converters.spatialdata.spatialdata_3d_converter.AnnData")
     @patch("thyra.converters.spatialdata.spatialdata_3d_converter.TableModel")
@@ -321,6 +344,7 @@ class TestSpatialDataConverter:
             mass_range=(100.0, 1000.0),
             pixel_size=None,
             n_spectra=18,
+            total_peaks=1800,
             estimated_memory_gb=0.001,
             source_path="/mock/path",
         )
@@ -580,6 +604,7 @@ class TestSpatialDataConverter:
             mass_range=(100.0, 1000.0),
             pixel_size=None,
             n_spectra=18,
+            total_peaks=1800,
             estimated_memory_gb=0.001,
             source_path="/mock/path",
         )
@@ -618,14 +643,43 @@ class TestSpatialDataConverter:
         slice0_data = data_structures["slices_data"]["test_dataset_z0"]
         slice1_data = data_structures["slices_data"]["test_dataset_z1"]
 
-        # Check slice 0
+        # Check slice 0 - data is in COO arrays now
         pixel_idx0 = 1 * 3 + 1  # y * width + x
         mz_indices0 = converter._map_mass_to_indices(mzs)
-        assert slice0_data["sparse_data"][pixel_idx0, mz_indices0[0]] == 100.0
-        assert slice0_data["sparse_data"][pixel_idx0, mz_indices0[1]] == 200.0
+        coo_arrays0 = slice0_data["sparse_data"]
+        assert coo_arrays0["current_idx"] > 0  # Data was added
+
+        # Convert to CSR to verify
+        from scipy import sparse as sp
+
+        csr0 = sp.coo_matrix(
+            (
+                coo_arrays0["data"][: coo_arrays0["current_idx"]],
+                (
+                    coo_arrays0["rows"][: coo_arrays0["current_idx"]],
+                    coo_arrays0["cols"][: coo_arrays0["current_idx"]],
+                ),
+            ),
+            shape=(coo_arrays0["n_rows"], coo_arrays0["n_cols"]),
+        ).tocsr()
+        assert csr0[pixel_idx0, mz_indices0[0]] == 100.0
+        assert csr0[pixel_idx0, mz_indices0[1]] == 200.0
 
         # Check slice 1
         pixel_idx1 = 1 * 3 + 1  # y * width + x
         mz_indices1 = converter._map_mass_to_indices(mzs2)
-        assert slice1_data["sparse_data"][pixel_idx1, mz_indices1[0]] == 150.0
-        assert slice1_data["sparse_data"][pixel_idx1, mz_indices1[1]] == 250.0
+        coo_arrays1 = slice1_data["sparse_data"]
+        assert coo_arrays1["current_idx"] > 0  # Data was added
+
+        csr1 = sp.coo_matrix(
+            (
+                coo_arrays1["data"][: coo_arrays1["current_idx"]],
+                (
+                    coo_arrays1["rows"][: coo_arrays1["current_idx"]],
+                    coo_arrays1["cols"][: coo_arrays1["current_idx"]],
+                ),
+            ),
+            shape=(coo_arrays1["n_rows"], coo_arrays1["n_cols"]),
+        ).tocsr()
+        assert csr1[pixel_idx1, mz_indices1[0]] == 150.0
+        assert csr1[pixel_idx1, mz_indices1[1]] == 250.0

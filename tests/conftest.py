@@ -45,6 +45,7 @@ def mock_reader():
                         mass_range=(100.0, 1000.0),
                         pixel_size=None,
                         n_spectra=9,
+                        total_peaks=900,  # 9 spectra * 100 peaks each
                         estimated_memory_gb=0.001,
                         source_path="/mock/path",
                     )

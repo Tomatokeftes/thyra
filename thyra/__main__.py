@@ -1,11 +1,30 @@
 # thyra/__main__.py
-import argparse
-import logging
-from pathlib import Path
 
-from thyra.convert import convert_msi
-from thyra.utils.data_processors import optimize_zarr_chunks
-from thyra.utils.logging_config import setup_logging
+# Configure dependencies to suppress warnings BEFORE any imports
+import argparse  # noqa: E402
+import logging  # noqa: E402
+import os  # noqa: E402
+import warnings  # noqa: E402
+from pathlib import Path  # noqa: E402
+
+from thyra.convert import convert_msi  # noqa: E402
+from thyra.utils.data_processors import optimize_zarr_chunks  # noqa: E402
+from thyra.utils.logging_config import setup_logging  # noqa: E402
+
+# Configure Dask to use new query planning (silences legacy DataFrame warning)
+os.environ["DASK_DATAFRAME__QUERY_PLANNING"] = "True"
+
+# Suppress dependency warnings at the earliest possible moment
+warnings.filterwarnings("ignore", category=FutureWarning, module="dask")
+warnings.filterwarnings("ignore", category=UserWarning, module="xarray_schema")
+warnings.filterwarnings(
+    "ignore", message="pkg_resources is deprecated", category=UserWarning
+)
+warnings.filterwarnings(
+    "ignore",
+    message="The legacy Dask DataFrame implementation is deprecated",
+    category=FutureWarning,
+)
 
 
 def _create_argument_parser() -> argparse.ArgumentParser:
@@ -68,8 +87,9 @@ def _create_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--resample-bins",
         type=int,
-        default=5000,
-        help="Number of bins for resampled mass axis (default: 5000). "
+        default=None,
+        help="Number of bins for resampled mass axis. "
+        "If not specified, uses physics-based width calculation (5 mDa @ m/z 1000). "
         "Mutually exclusive with --resample-width-at-mz.",
     )
     parser.add_argument(
@@ -87,8 +107,11 @@ def _create_argument_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--resample-width-at-mz",
         type=float,
+        nargs="?",
+        const=0.005,
         default=None,
         help="Mass width (in Da) at reference m/z for physics-based binning. "
+        "Use flag alone for default (0.005 Da), or specify custom value. "
         "Default: 0.005 Da at m/z 1000. Mutually exclusive with --resample-bins.",
     )
     parser.add_argument(
@@ -113,7 +136,7 @@ def _validate_basic_arguments(parser: argparse.ArgumentParser, args) -> None:
 
 def _validate_resampling_bins(parser: argparse.ArgumentParser, args) -> None:
     """Validate resampling bin arguments."""
-    if args.resample_bins <= 0:
+    if args.resample_bins is not None and args.resample_bins <= 0:
         parser.error(
             "Number of resampling bins must be positive (got: {})".format(
                 args.resample_bins
@@ -145,7 +168,11 @@ def _validate_resampling_mutual_exclusivity(
     parser: argparse.ArgumentParser, args
 ) -> None:
     """Validate mutual exclusivity of resampling parameters."""
-    if args.resample_bins != 5000 and args.resample_width_at_mz is not None:
+    # Check if both bin count AND width were explicitly specified
+    bins_specified = args.resample_bins is not None
+    width_specified = args.resample_width_at_mz is not None
+
+    if bins_specified and width_specified:
         parser.error(
             "--resample-bins and --resample-width-at-mz are mutually exclusive. "
             "Use either --resample-bins for fixed bin count or --resample-width-at-mz "
