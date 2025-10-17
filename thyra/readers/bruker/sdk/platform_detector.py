@@ -78,7 +78,13 @@ def get_dll_paths(data_directory: Optional[Path] = None) -> List[Path]:
         # Windows DLL paths
         dll_name = "timsdata.dll"
 
-        # Current working directory and script location (HIGHEST PRIORITY after env var)
+        # Repository DLL folder (HIGHEST PRIORITY after env var)
+        # This dedicated folder ensures the DLL is always found regardless of data location
+        repository_dll_folder = Path(__file__).parent / "dll" / dll_name
+        paths.append(repository_dll_folder)
+        logger.info(f"Checking repository DLL folder: {repository_dll_folder}")
+
+        # Current working directory and script location
         # This ensures we check the C: drive where the codebase is, not just the data location
         paths.extend(
             [
@@ -142,6 +148,11 @@ def get_dll_paths(data_directory: Optional[Path] = None) -> List[Path]:
         # Linux SO paths
         so_name = "libtimsdata.so"
 
+        # Repository DLL folder (HIGHEST PRIORITY after env var)
+        repository_dll_folder = Path(__file__).parent / "dll" / so_name
+        paths.append(repository_dll_folder)
+        logger.info(f"Checking repository DLL folder: {repository_dll_folder}")
+
         # Standard library paths
         paths.extend(
             [
@@ -168,6 +179,11 @@ def get_dll_paths(data_directory: Optional[Path] = None) -> List[Path]:
     elif platform_name == "macos":
         # macOS dylib paths (limited support)
         dylib_name = "libtimsdata.dylib"
+
+        # Repository DLL folder (HIGHEST PRIORITY after env var)
+        repository_dll_folder = Path(__file__).parent / "dll" / dylib_name
+        paths.append(repository_dll_folder)
+        logger.info(f"Checking repository DLL folder: {repository_dll_folder}")
 
         paths.extend(
             [

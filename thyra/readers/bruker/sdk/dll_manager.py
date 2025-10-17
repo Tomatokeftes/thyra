@@ -110,15 +110,28 @@ class DLLManager:
 
         # If all attempts failed, raise error with helpful message
         lib_name = "timsdata.dll" if platform_name == "windows" else "libtimsdata.so"
+
+        # Get the repository DLL folder path for the error message
+        repository_dll_folder = Path(__file__).parent / "dll"
+        repository_dll_path = repository_dll_folder / lib_name
+
         error_msg = (
             f"Failed to load Bruker SDK library '{lib_name}'. "
             f"Checked {len(library_paths)} locations.\n\n"
-            f"Solutions:\n"
-            f"1. Place {lib_name} in the same directory as your data (.d folder)\n"
-            f"2. Place {lib_name} in your current working directory\n"
-            f"3. Set environment variable: BRUKER_SDK_PATH=<path_to_{lib_name}>\n"
+            f"RECOMMENDED SOLUTION (most reliable):\n"
+            f"Place {lib_name} in the repository DLL folder:\n"
+            f"  {repository_dll_path}\n\n"
+            f"Alternative solutions:\n"
+            f"1. Set environment variable: BRUKER_SDK_PATH=<path_to_{lib_name}>\n"
+            f"2. Place {lib_name} in the same directory as your data (.d folder)\n"
+            f"3. Place {lib_name} in your current working directory\n"
             f"4. Add the SDK directory to your system PATH\n\n"
-            f"Platform: {platform_name}"
+            f"Where to get the SDK:\n"
+            f"- Bruker Daltonics official channels\n"
+            f"- Bruker timsTOF software installation\n"
+            f"- Contact your Bruker representative\n\n"
+            f"Platform: {platform_name}\n"
+            f"Repository DLL folder exists: {repository_dll_folder.exists()}"
         )
         raise SDKError(error_msg)
 
