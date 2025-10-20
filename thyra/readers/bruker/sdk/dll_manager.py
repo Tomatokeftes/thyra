@@ -1,7 +1,7 @@
 """DLL/Library manager for Bruker SDK integration.
 
-This module provides robust loading and management of the Bruker SDK libraries
-with comprehensive error handling and fallback mechanisms.
+This module provides robust loading and management of the Bruker SDK
+libraries with comprehensive error handling and fallback mechanisms.
 """
 
 import logging
@@ -25,8 +25,8 @@ logger = logging.getLogger(__name__)
 class DLLManager:
     """Manages loading and access to Bruker SDK libraries.
 
-    This class provides a singleton-like interface for managing the SDK library
-    with automatic discovery, validation, and error handling.
+    This class provides a singleton-like interface for managing the SDK
+    library with automatic discovery, validation, and error handling.
     """
 
     _instance: Optional["DLLManager"] = None

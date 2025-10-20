@@ -1,7 +1,7 @@
 """SDK function definitions and wrappers for Bruker data access.
 
-This module defines all the Bruker SDK functions with proper type annotations
-and provides a clean interface for data access operations.
+This module defines all the Bruker SDK functions with proper type
+annotations and provides a clean interface for data access operations.
 """
 
 import logging

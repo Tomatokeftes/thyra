@@ -10,16 +10,15 @@ from .base_generator import BaseAxisGenerator
 
 
 class LinearAxisGenerator(BaseAxisGenerator):
-    """
-    Mass axis generator for uniform/constant spacing.
+    """Mass axis generator for uniform/constant spacing.
 
-    Creates equidistant m/z bins with constant spacing across the entire range.
-    This is the simplest and most common approach for mass axis generation.
+    Creates equidistant m/z bins with constant spacing across the entire
+    range. This is the simplest and most common approach for mass axis
+    generation.
     """
 
     def generate_axis(self, min_mz: float, max_mz: float, target_bins: int) -> MassAxis:
-        """
-        Generate uniform mass axis with constant spacing.
+        """Generate uniform mass axis with constant spacing.
 
         Parameters
         ----------

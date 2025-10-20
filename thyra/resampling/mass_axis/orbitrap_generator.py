@@ -10,12 +10,12 @@ from .base_generator import BaseAxisGenerator
 
 
 class OrbitrapAxisGenerator(BaseAxisGenerator):
-    """
-    Mass axis generator for Orbitrap analyzers.
+    """Mass axis generator for Orbitrap analyzers.
 
-    Orbitrap has bin size ∝ m/z^1.5, meaning spacing increases faster at high mass.
-    This reflects the Orbitrap's frequency-based detection where f ∝ 1/√m/z,
-    so equal frequency bins translate to m/z^1.5 spacing.
+    Orbitrap has bin size ∝ m/z^1.5, meaning spacing increases faster at
+    high mass. This reflects the Orbitrap's frequency-based detection
+    where f ∝ 1/√m/z, so equal frequency bins translate to m/z^1.5
+    spacing.
     """
 
     def generate_axis(
@@ -26,8 +26,7 @@ class OrbitrapAxisGenerator(BaseAxisGenerator):
         reference_mz: float = 500.0,
         reference_width: float = 0.1,
     ) -> MassAxis:
-        """
-        Generate Orbitrap mass axis with m/z^1.5 spacing.
+        """Generate Orbitrap mass axis with m/z^1.5 spacing.
 
         Parameters
         ----------
@@ -79,8 +78,7 @@ class OrbitrapAxisGenerator(BaseAxisGenerator):
         reference_mz: float = 500.0,
         reference_width: float = 0.1,
     ) -> float:
-        """
-        Calculate expected bin width at given m/z for Orbitrap.
+        """Calculate expected bin width at given m/z for Orbitrap.
 
         Parameters
         ----------

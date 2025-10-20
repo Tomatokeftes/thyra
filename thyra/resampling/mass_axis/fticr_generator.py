@@ -10,12 +10,11 @@ from .base_generator import BaseAxisGenerator
 
 
 class FTICRAxisGenerator(BaseAxisGenerator):
-    """
-    Mass axis generator for FT-ICR (Fourier Transform Ion Cyclotron Resonance) analyzers.
+    """Mass axis generator for FT-ICR (Fourier Transform Ion Cyclotron Resonance) analyzers.
 
-    FT-ICR has bin size ∝ m/z^2, meaning spacing increases quadratically with mass.
-    This reflects FT-ICR's cyclotron frequency detection where f ∝ 1/m/z,
-    so equal frequency bins translate to m/z^2 spacing.
+    FT-ICR has bin size ∝ m/z^2, meaning spacing increases quadratically
+    with mass. This reflects FT-ICR's cyclotron frequency detection
+    where f ∝ 1/m/z, so equal frequency bins translate to m/z^2 spacing.
     """
 
     def generate_axis(
@@ -26,8 +25,7 @@ class FTICRAxisGenerator(BaseAxisGenerator):
         reference_mz: float = 500.0,
         reference_width: float = 0.1,
     ) -> MassAxis:
-        """
-        Generate FT-ICR mass axis with m/z^2 spacing.
+        """Generate FT-ICR mass axis with m/z^2 spacing.
 
         Parameters
         ----------
@@ -79,8 +77,7 @@ class FTICRAxisGenerator(BaseAxisGenerator):
         reference_mz: float = 500.0,
         reference_width: float = 0.1,
     ) -> float:
-        """
-        Calculate expected bin width at given m/z for FT-ICR.
+        """Calculate expected bin width at given m/z for FT-ICR.
 
         Parameters
         ----------

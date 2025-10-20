@@ -10,12 +10,12 @@ from .base_generator import BaseAxisGenerator
 
 
 class ReflectorTOFAxisGenerator(BaseAxisGenerator):
-    """
-    Mass axis generator for Reflector Time-of-Flight analyzers (like timsTOF).
+    """Mass axis generator for Reflector Time-of-Flight analyzers (like timsTOF).
 
-    Reflector TOF has bin size ∝ m/z, providing constant relative resolution (R = m/Δm).
-    This is optimal for most MS applications as it maintains constant relative
-    mass accuracy across the entire mass range.
+    Reflector TOF has bin size ∝ m/z, providing constant relative
+    resolution (R = m/Δm). This is optimal for most MS applications as
+    it maintains constant relative mass accuracy across the entire mass
+    range.
     """
 
     def generate_axis(
@@ -26,8 +26,7 @@ class ReflectorTOFAxisGenerator(BaseAxisGenerator):
         reference_mz: float = 500.0,
         reference_width: float = 0.1,
     ) -> MassAxis:
-        """
-        Generate Reflector TOF mass axis with m/z-proportional spacing.
+        """Generate Reflector TOF mass axis with m/z-proportional spacing.
 
         Parameters
         ----------
@@ -79,8 +78,7 @@ class ReflectorTOFAxisGenerator(BaseAxisGenerator):
         reference_mz: float = 500.0,
         reference_width: float = 0.1,
     ) -> float:
-        """
-        Calculate expected bin width at given m/z for Reflector TOF.
+        """Calculate expected bin width at given m/z for Reflector TOF.
 
         Parameters
         ----------

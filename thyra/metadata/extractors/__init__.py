@@ -1,6 +1,5 @@
 # thyra/metadata/extractors/__init__.py
-"""
-Format-specific metadata extractors for MSI data.
+"""Format-specific metadata extractors for MSI data.
 
 This module provides specialized metadata extractors for different MSI data
 formats,
@@ -47,8 +46,7 @@ FORMAT_EXTRACTORS = {
 
 
 def get_extractor_for_format(format_name: str):
-    """
-    Get the appropriate metadata extractor class for a given format.
+    """Get the appropriate metadata extractor class for a given format.
 
     Args:
         format_name: Format identifier (e.g., 'imzml', 'bruker', 'tsf', 'tdf')
@@ -74,8 +72,7 @@ def get_extractor_for_format(format_name: str):
 
 
 def list_supported_formats() -> list[str]:
-    """
-    List all supported metadata extraction formats.
+    """List all supported metadata extraction formats.
 
     Returns:
         List of supported format names

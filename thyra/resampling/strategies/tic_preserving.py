@@ -1,8 +1,8 @@
-"""
-TIC-preserving linear interpolation strategy for profile data.
+"""TIC-preserving linear interpolation strategy for profile data.
 
-This strategy uses linear interpolation while preserving the Total Ion Current (TIC)
-of the original spectrum, making it ideal for profile data from most MS instruments.
+This strategy uses linear interpolation while preserving the Total Ion
+Current (TIC) of the original spectrum, making it ideal for profile data
+from most MS instruments.
 """
 
 from typing import Any
@@ -20,8 +20,7 @@ class TICPreservingStrategy(ResamplingStrategy):
     def resample(
         self, spectrum: Spectrum, target_axis: npt.NDArray[np.floating[Any]]
     ) -> Spectrum:
-        """
-        Resample spectrum using TIC-preserving linear interpolation.
+        """Resample spectrum using TIC-preserving linear interpolation.
 
         Uses scipy's linear interpolation and then scales the result
         to preserve the original Total Ion Current (TIC).

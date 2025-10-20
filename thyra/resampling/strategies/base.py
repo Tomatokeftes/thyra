@@ -1,6 +1,4 @@
-"""
-Abstract base class for resampling strategies.
-"""
+"""Abstract base class for resampling strategies."""
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
@@ -36,8 +34,7 @@ class ResamplingStrategy(ABC):
     def resample(
         self, spectrum: Spectrum, target_axis: npt.NDArray[np.floating[Any]]
     ) -> Spectrum:
-        """
-        Resample spectrum to target mass axis.
+        """Resample spectrum to target mass axis.
 
         Parameters
         ----------

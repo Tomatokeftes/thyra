@@ -1,9 +1,8 @@
-"""Bruker reader implementation combining best features from all
-implementations.
+"""Bruker reader implementation combining best features from all implementations.
 
-This module provides a high-performance, memory-efficient reader for Bruker
-TSF/TDF data formats with lazy loading, intelligent caching, and comprehensive
-error handling.
+This module provides a high-performance, memory-efficient reader for
+Bruker TSF/TDF data formats with lazy loading, intelligent caching, and
+comprehensive error handling.
 """
 
 import logging
@@ -365,10 +364,12 @@ class BrukerReader(BaseMSIReader):
                 yield coords, mzs, intensities
 
         # Build raw mass axis using simplified function (returns mass_axis and total_peaks)
-        mass_axis, total_peaks = build_raw_mass_axis(mz_iterator(), self.progress_callback)
+        mass_axis, total_peaks = build_raw_mass_axis(
+            mz_iterator(), self.progress_callback
+        )
 
         # Cache total_peaks for later retrieval (if not already set from NumPeaks cache)
-        if not hasattr(self, '_total_peaks_from_mass_axis'):
+        if not hasattr(self, "_total_peaks_from_mass_axis"):
             self._total_peaks_from_mass_axis = total_peaks
 
         if len(mass_axis) == 0:
@@ -467,8 +468,7 @@ class BrukerReader(BaseMSIReader):
         frame_id: int,
         coordinate_offsets: Optional[Tuple[int, int, int]] = None,
     ) -> Optional[Tuple[int, int, int]]:
-        """Get normalized coordinates for a specific frame using persistent
-        connection.
+        """Get normalized coordinates for a specific frame using persistent connection.
 
         This avoids opening new SQLite connections for every frame.
 

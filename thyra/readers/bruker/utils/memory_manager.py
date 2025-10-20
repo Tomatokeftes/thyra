@@ -1,8 +1,8 @@
-"""
-Memory management utilities for efficient buffer handling.
+"""Memory management utilities for efficient buffer handling.
 
-This module provides memory management capabilities including buffer pooling,
-memory monitoring, and efficient array operations to handle large datasets.
+This module provides memory management capabilities including buffer
+pooling, memory monitoring, and efficient array operations to handle
+large datasets.
 """
 
 import gc
@@ -25,16 +25,14 @@ logger = logging.getLogger(__name__)
 
 
 class BufferPool:
-    """
-    Thread-safe buffer pool for reusing numpy arrays.
+    """Thread-safe buffer pool for reusing numpy arrays.
 
-    This reduces memory allocation overhead by reusing buffers
-    of common sizes throughout the reading process.
+    This reduces memory allocation overhead by reusing buffers of common
+    sizes throughout the reading process.
     """
 
     def __init__(self, max_buffers_per_size: int = 10):
-        """
-        Initialize the buffer pool.
+        """Initialize the buffer pool.
 
         Args:
             max_buffers_per_size: Maximum number of buffers to keep per size
@@ -46,8 +44,7 @@ class BufferPool:
         self._lock = Lock()
 
     def get_float64_buffer(self, size: int) -> np.ndarray:
-        """
-        Get a float64 buffer of the specified size.
+        """Get a float64 buffer of the specified size.
 
         Args:
             size: Required buffer size
@@ -67,6 +64,14 @@ class BufferPool:
                 return buffer
 
     def get_float32_buffer(self, size: int) -> np.ndarray:
+        """Get a float32 buffer of the specified size.
+
+        Args:
+            size: Required buffer size
+
+        Returns:
+            numpy array buffer
+        """
         with self._lock:
             buffers = self._float32_buffers.get(size, [])
             if buffers:
@@ -79,6 +84,14 @@ class BufferPool:
                 return buffer
 
     def get_uint32_buffer(self, size: int) -> np.ndarray:
+        """Get a uint32 buffer of the specified size.
+
+        Args:
+            size: Required buffer size
+
+        Returns:
+            numpy array buffer
+        """
         with self._lock:
             buffers = self._uint32_buffers.get(size, [])
             if buffers:
@@ -91,6 +104,11 @@ class BufferPool:
                 return buffer
 
     def return_float64_buffer(self, buffer: np.ndarray) -> None:
+        """Return a float64 buffer to the pool.
+
+        Args:
+            buffer: Buffer to return to the pool
+        """
         if buffer.dtype != np.float64:
             return
 
@@ -135,6 +153,7 @@ class BufferPool:
                 logger.debug(f"Returned uint32 buffer of size {size} to pool")
 
     def clear(self) -> None:
+        """Clear all buffers from the pool."""
         with self._lock:
             self._float64_buffers.clear()
             self._float32_buffers.clear()
@@ -155,11 +174,10 @@ class BufferPool:
 
 
 class MemoryManager:
-    """
-    Comprehensive memory management for the Bruker reader.
+    """Comprehensive memory management for the Bruker reader.
 
-    This class provides memory monitoring, buffer management, and
-    memory optimization strategies for large dataset processing.
+    This class provides memory monitoring, buffer management, and memory
+    optimization strategies for large dataset processing.
     """
 
     def __init__(
@@ -167,8 +185,7 @@ class MemoryManager:
         memory_limit_gb: Optional[float] = None,
         buffer_pool_size: int = 10,
     ):
-        """
-        Initialize the memory manager.
+        """Initialize the memory manager.
 
         Args:
             memory_limit_gb: Optional memory limit in GB
@@ -188,8 +205,7 @@ class MemoryManager:
         logger.info(f"Initialized MemoryManager with limit: {memory_limit_gb}GB")
 
     def get_memory_usage(self) -> Dict[str, float]:
-        """
-        Get current memory usage statistics.
+        """Get current memory usage statistics.
 
         Returns:
             Dictionary with memory usage information
@@ -223,8 +239,7 @@ class MemoryManager:
         }
 
     def check_memory_limit(self) -> bool:
-        """
-        Check if we're approaching memory limits.
+        """Check if we're approaching memory limits.
 
         Returns:
             True if memory usage is within limits, False otherwise
@@ -244,8 +259,7 @@ class MemoryManager:
         return True
 
     def optimize_memory(self) -> None:
-        """
-        Perform memory optimization operations.
+        """Perform memory optimization operations.
 
         This includes garbage collection and buffer pool cleanup.
         """
@@ -265,8 +279,7 @@ class MemoryManager:
     def allocate_spectrum_buffers(
         self, estimated_peaks: int
     ) -> Tuple[np.ndarray, np.ndarray]:
-        """
-        Allocate buffers for spectrum data with intelligent sizing.
+        """Allocate buffers for spectrum data with intelligent sizing.
 
         Args:
             estimated_peaks: Estimated number of peaks in the spectrum
@@ -287,8 +300,7 @@ class MemoryManager:
     def return_spectrum_buffers(
         self, mz_buffer: np.ndarray, intensity_buffer: np.ndarray
     ) -> None:
-        """
-        Return spectrum buffers to the pool.
+        """Return spectrum buffers to the pool.
 
         Args:
             mz_buffer: m/z buffer to return
@@ -300,8 +312,7 @@ class MemoryManager:
     def estimate_memory_requirements(
         self, n_spectra: int, avg_peaks_per_spectrum: int, n_unique_masses: int
     ) -> Dict[str, float]:
-        """
-        Estimate memory requirements for dataset processing.
+        """Estimate memory requirements for dataset processing.
 
         Args:
             n_spectra: Number of spectra in the dataset
@@ -353,8 +364,7 @@ class MemoryManager:
         avg_peaks_per_spectrum: int,
         target_memory_mb: float = 512,
     ) -> int:
-        """
-        Suggest an optimal batch size based on memory constraints.
+        """Suggest an optimal batch size based on memory constraints.
 
         Args:
             total_spectra: Total number of spectra

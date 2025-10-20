@@ -127,8 +127,8 @@ class ImzMLReader(BaseMSIReader):
     def _cache_all_coordinates(self) -> None:
         """Cache all coordinates for faster access.
 
-        Converts 1-based coordinates from imzML to 0-based coordinates for
-        internal use.
+        Converts 1-based coordinates from imzML to 0-based coordinates
+        for internal use.
         """
         # Parser should already be initialized when this is called from
         # _initialize_parser
@@ -319,12 +319,10 @@ class ImzMLReader(BaseMSIReader):
         None,
         None,
     ]:
-        """Iterate through spectra with progress monitoring and batch
-        processing.
+        """Iterate through spectra with progress monitoring and batch processing.
 
         Maps m/z values to the common mass axis using searchsorted for
-        accurate
-        representation in the output data structures.
+        accurate representation in the output data structures.
 
         Args:
             batch_size: Number of spectra to process in each batch (None for

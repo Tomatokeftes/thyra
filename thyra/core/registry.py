@@ -12,6 +12,7 @@ class MSIRegistry:
     """Minimal thread-safe registry with extension-based format detection."""
 
     def __init__(self):
+        """Initialize the MSI registry."""
         self._lock = RLock()
         self._readers: Dict[str, Type[BaseMSIReader]] = {}
         self._converters: Dict[str, Type[BaseMSIConverter]] = {}
@@ -104,14 +105,38 @@ _registry = MSIRegistry()
 
 # Simple public interface
 def detect_format(input_path: Path) -> str:
+    """Detect MSI format from input path.
+
+    Args:
+        input_path: Path to MSI data file or directory
+
+    Returns:
+        Format name ('imzml' or 'bruker')
+    """
     return _registry.detect_format(input_path)
 
 
 def get_reader_class(format_name: str) -> Type[BaseMSIReader]:
+    """Get reader class for format.
+
+    Args:
+        format_name: MSI format name
+
+    Returns:
+        Reader class for the format
+    """
     return _registry.get_reader_class(format_name)
 
 
 def get_converter_class(format_name: str) -> Type[BaseMSIConverter]:
+    """Get converter class for format.
+
+    Args:
+        format_name: MSI format name
+
+    Returns:
+        Converter class for the format
+    """
     return _registry.get_converter_class(format_name)
 
 

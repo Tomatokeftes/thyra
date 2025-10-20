@@ -18,8 +18,7 @@ if SPATIALDATA_AVAILABLE:
 
 
 class SpatialData2DConverter(BaseSpatialDataConverter):
-    """Converter for MSI data to SpatialData format treating 3D data as
-    separate 2D slices."""
+    """Converter for MSI data to SpatialData format treating 3D data as separate 2D slices."""
 
     def __init__(self, *args, **kwargs):
         """Initialize 2D converter with handle_3d=False."""
@@ -27,8 +26,7 @@ class SpatialData2DConverter(BaseSpatialDataConverter):
         super().__init__(*args, **kwargs)
 
     def _create_data_structures(self) -> Dict[str, Any]:
-        """
-        Create data structures for 2D slices format.
+        """Create data structures for 2D slices format.
 
         Returns:
             Dict containing tables, shapes, images, and data arrays for
@@ -69,8 +67,7 @@ class SpatialData2DConverter(BaseSpatialDataConverter):
         }
 
     def _create_sparse_matrix_for_slice(self, z_value: int) -> Dict[str, Any]:
-        """
-        Create COO arrays for a single slice.
+        """Create COO arrays for a single slice.
 
         Args:
             z_value: Z-index of the slice
@@ -107,8 +104,7 @@ class SpatialData2DConverter(BaseSpatialDataConverter):
         }
 
     def _create_coordinates_dataframe_for_slice(self, z_value: int) -> pd.DataFrame:
-        """
-        Create a coordinates dataframe for a single Z-slice.
+        """Create a coordinates dataframe for a single Z-slice.
 
         Args:
             z_value: Z-index of the slice
@@ -154,8 +150,8 @@ class SpatialData2DConverter(BaseSpatialDataConverter):
         mzs: NDArray[np.float64],
         intensities: NDArray[np.float64],
     ) -> None:
-        """
-        Process a single spectrum for 2D slices format.
+        """Process a single spectrum for 2D slices format.
+
         Delegates to parent's resampling-aware processing.
 
         Args:
@@ -174,8 +170,7 @@ class SpatialData2DConverter(BaseSpatialDataConverter):
         mz_indices: NDArray[np.int_],
         intensities: NDArray[np.float64],
     ) -> None:
-        """
-        Process a spectrum with resampled intensities for 2D slices format.
+        """Process a spectrum with resampled intensities for 2D slices format.
 
         Args:
             data_structures: Data structures for storing processed data
@@ -212,8 +207,7 @@ class SpatialData2DConverter(BaseSpatialDataConverter):
             )
 
     def _finalize_data(self, data_structures: Dict[str, Any]) -> None:
-        """
-        Finalize 2D slices data by creating tables, shapes, and images.
+        """Finalize 2D slices data by creating tables, shapes, and images.
 
         Args:
             data_structures: Data structures containing processed data

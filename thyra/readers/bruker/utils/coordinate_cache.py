@@ -1,5 +1,4 @@
-"""
-Coordinate caching system for efficient spatial data access.
+"""Coordinate caching system for efficient spatial data access.
 
 This module provides intelligent caching of coordinate data to minimize
 database queries and improve performance for spatial operations.
@@ -26,16 +25,14 @@ class CoordinateInfo:
 
 
 class CoordinateCache:
-    """
-    Efficient coordinate caching system with lazy loading.
+    """Efficient coordinate caching system with lazy loading.
 
-    This class provides fast coordinate lookups with minimal memory usage
-    by implementing intelligent caching strategies.
+    This class provides fast coordinate lookups with minimal memory
+    usage by implementing intelligent caching strategies.
     """
 
     def __init__(self, db_path: Path, preload_all: bool = False):
-        """
-        Initialize the coordinate cache.
+        """Initialize the coordinate cache.
 
         Args:
             db_path: Path to the SQLite database file
@@ -161,8 +158,7 @@ class CoordinateCache:
             self._coordinates.clear()
 
     def _load_coordinate_range(self, start_frame: int, end_frame: int) -> None:
-        """
-        Load coordinates for a specific frame range.
+        """Load coordinates for a specific frame range.
 
         Args:
             start_frame: Starting frame ID (inclusive)
@@ -218,8 +214,7 @@ class CoordinateCache:
             logger.error(f"Error loading coordinate range: {e}")
 
     def get_coordinate(self, frame_id: int) -> Optional[Tuple[int, int, int]]:
-        """
-        Get coordinates for a specific frame ID.
+        """Get coordinates for a specific frame ID.
 
         Args:
             frame_id: Frame ID to look up
@@ -248,8 +243,7 @@ class CoordinateCache:
         return None
 
     def _normalize_coordinate(self, x: int, y: int, z: int) -> Tuple[int, int, int]:
-        """
-        Normalize coordinates to 0-based indexing.
+        """Normalize coordinates to 0-based indexing.
 
         Args:
             x, y, z: Raw coordinates from database
@@ -266,8 +260,7 @@ class CoordinateCache:
     def get_coordinates_batch(
         self, frame_ids: List[int]
     ) -> Dict[int, Tuple[int, int, int]]:
-        """
-        Get coordinates for multiple frame IDs efficiently.
+        """Get coordinates for multiple frame IDs efficiently.
 
         Args:
             frame_ids: List of frame IDs to look up
@@ -321,8 +314,7 @@ class CoordinateCache:
         return result
 
     def get_dimensions(self) -> Tuple[int, int, int]:
-        """
-        Calculate dataset dimensions from coordinate data.
+        """Calculate dataset dimensions from coordinate data.
 
         Returns:
             Tuple of (x_size, y_size, z_size)
@@ -404,8 +396,7 @@ class CoordinateCache:
         logger.info("Cleared coordinate cache")
 
     def optimize_cache(self, keep_recent: int = 1000) -> None:
-        """
-        Optimize cache by keeping only recently accessed coordinates.
+        """Optimize cache by keeping only recently accessed coordinates.
 
         Args:
             keep_recent: Number of recent coordinates to keep

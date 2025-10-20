@@ -15,6 +15,7 @@ class ImzMLOntologyValidator:
     """Validate ontology terms in imzML files."""
 
     def __init__(self):
+        """Initialize the ontology validator."""
         self.found_terms: Dict[str, int] = {}
         self.unknown_terms: Dict[str, List[str]] = {}
 

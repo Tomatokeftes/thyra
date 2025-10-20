@@ -48,9 +48,7 @@ except (ImportError, NotImplementedError) as e:
 
 
 class BaseSpatialDataConverter(BaseMSIConverter, ABC):
-    """Base converter for MSI data to SpatialData format with shared
-    functionality.
-    """
+    """Base converter for MSI data to SpatialData format with shared functionality."""
 
     def __init__(
         self,
@@ -413,7 +411,9 @@ class BaseSpatialDataConverter(BaseMSIConverter, ABC):
         self._common_mass_axis = mass_axis.mz_values
 
         # Cache the mass axis indices array to avoid repeated np.arange() calls
-        self._cached_mass_axis_indices = np.arange(len(self._common_mass_axis), dtype=np.int_)
+        self._cached_mass_axis_indices = np.arange(
+            len(self._common_mass_axis), dtype=np.int_
+        )
 
         # Calculate bin sizes for informative logging
         bin_widths = np.diff(self._common_mass_axis)
@@ -526,8 +526,7 @@ class BaseSpatialDataConverter(BaseMSIConverter, ABC):
     def _resample_spectrum_to_indices(
         self, mzs: NDArray[np.float64]
     ) -> NDArray[np.int_]:
-        """Map spectrum m/z values to resampled mass axis indices using
-        interpolation."""
+        """Map spectrum m/z values to resampled mass axis indices using interpolation."""
         # For resampled data, we want to return ALL indices in the resampled
         # axis. The actual resampling/interpolation will be handled in the
         # processing
@@ -549,9 +548,14 @@ class BaseSpatialDataConverter(BaseMSIConverter, ABC):
 
         if self._resampling_config:
             # OPTIMIZATION: Use sparse resampling directly for nearest_neighbor
-            if hasattr(self, "_resampling_method") and self._resampling_method == ResamplingMethod.NEAREST_NEIGHBOR:
+            if (
+                hasattr(self, "_resampling_method")
+                and self._resampling_method == ResamplingMethod.NEAREST_NEIGHBOR
+            ):
                 # Sparse path - much faster, no dense array allocation
-                mz_indices, resampled_intensities = self._nearest_neighbor_resample(mzs, intensities)
+                mz_indices, resampled_intensities = self._nearest_neighbor_resample(
+                    mzs, intensities
+                )
                 logging.debug(
                     f"Resampled (sparse): {len(resampled_intensities)} non-zero bins, "
                     f"sum: {np.sum(resampled_intensities):.2e}"
@@ -635,9 +639,7 @@ class BaseSpatialDataConverter(BaseMSIConverter, ABC):
             # Use left if it's closer
             use_left = np.abs(mz_values_left - mz_query) < np.abs(mz_values - mz_query)
             indices_clipped[check_left] = np.where(
-                use_left,
-                indices_clipped[check_left] - 1,
-                indices_clipped[check_left]
+                use_left, indices_clipped[check_left] - 1, indices_clipped[check_left]
             )
 
         # OPTIMIZATION: Use pandas-style groupby or bincount for accumulation
@@ -687,8 +689,7 @@ class BaseSpatialDataConverter(BaseMSIConverter, ABC):
         mz_indices: NDArray[np.int_],
         intensities: NDArray[np.float64],
     ) -> None:
-        """Process a spectrum with resampled intensities - to be overridden
-        by subclasses."""
+        """Process a spectrum with resampled intensities - to be overridden by subclasses."""
         # This method should be overridden by specific converters (2D/3D)
         pass
 

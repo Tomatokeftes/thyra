@@ -14,12 +14,10 @@ logger = logging.getLogger(__name__)
 
 
 class ImzMLMetadataExtractor(MetadataExtractor):
-    """ImzML-specific metadata extractor with optimized two-phase
-    extraction."""
+    """ImzML-specific metadata extractor with optimized two-phase extraction."""
 
     def __init__(self, parser: ImzMLParser, imzml_path: Path):
-        """
-        Initialize ImzML metadata extractor.
+        """Initialize ImzML metadata extractor.
 
         Args:
             parser: Initialized ImzML parser
@@ -115,7 +113,9 @@ class ImzMLMetadataExtractor(MetadataExtractor):
             Tuple of ((min_mass, max_mass), total_peaks)
         """
         try:
-            logger.info("Scanning ALL spectra for complete mass range and peak count...")
+            logger.info(
+                "Scanning ALL spectra for complete mass range and peak count..."
+            )
 
             n_spectra = len(self.parser.coordinates)
             min_mass = float("inf")
@@ -125,7 +125,9 @@ class ImzMLMetadataExtractor(MetadataExtractor):
             from tqdm import tqdm
 
             with tqdm(
-                total=n_spectra, desc="Scanning mass range and counting peaks", unit="spectrum"
+                total=n_spectra,
+                desc="Scanning mass range and counting peaks",
+                unit="spectrum",
             ) as pbar:
                 for idx in range(n_spectra):
                     try:
@@ -154,8 +156,8 @@ class ImzMLMetadataExtractor(MetadataExtractor):
     def get_mass_range_for_resampling(self) -> Tuple[float, float]:
         """Get accurate mass range required for resampling.
 
-        This performs a complete scan of all spectra to ensure no m/z values
-        are missed when building the resampled axis.
+        This performs a complete scan of all spectra to ensure no m/z
+        values are missed when building the resampled axis.
         """
         mass_range, _ = self._get_mass_range_complete()
         return mass_range
@@ -351,8 +353,7 @@ class ImzMLMetadataExtractor(MetadataExtractor):
             return ET
 
     def _check_parser_metadata_for_centroid(self) -> Optional[str]:
-        """Check parser metadata for processed flag indicating centroid
-        data."""
+        """Check parser metadata for processed flag indicating centroid data."""
         if not (hasattr(self.parser, "metadata") and self.parser.metadata):
             return None
 

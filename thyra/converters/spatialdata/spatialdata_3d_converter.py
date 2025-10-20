@@ -16,8 +16,7 @@ if SPATIALDATA_AVAILABLE:
 
 
 class SpatialData3DConverter(BaseSpatialDataConverter):
-    """Converter for MSI data to SpatialData format as true 3D volume or
-    single 2D slice."""
+    """Converter for MSI data to SpatialData format as true 3D volume or single 2D slice."""
 
     def __init__(self, *args, **kwargs):
         """Initialize 3D converter with handle_3d=True."""
@@ -25,8 +24,7 @@ class SpatialData3DConverter(BaseSpatialDataConverter):
         super().__init__(*args, **kwargs)
 
     def _create_data_structures(self) -> Dict[str, Any]:
-        """
-        Create data structures for 3D volume format.
+        """Create data structures for 3D volume format.
 
         Returns:
             Dict containing tables, shapes, images, and data arrays for
@@ -64,8 +62,8 @@ class SpatialData3DConverter(BaseSpatialDataConverter):
         mzs: NDArray[np.float64],
         intensities: NDArray[np.float64],
     ) -> None:
-        """
-        Process a single spectrum for 3D volume format.
+        """Process a single spectrum for 3D volume format.
+
         Delegates to parent's resampling-aware processing.
 
         Args:
@@ -84,8 +82,7 @@ class SpatialData3DConverter(BaseSpatialDataConverter):
         mz_indices: NDArray[np.int_],
         intensities: NDArray[np.float64],
     ) -> None:
-        """
-        Process a spectrum with resampled intensities for 3D volume format.
+        """Process a spectrum with resampled intensities for 3D volume format.
 
         Args:
             data_structures: Data structures for storing processed data
@@ -133,8 +130,7 @@ class SpatialData3DConverter(BaseSpatialDataConverter):
         self._non_empty_pixel_count += 1
 
     def _finalize_data(self, data_structures: Dict[str, Any]) -> None:
-        """
-        Finalize 3D volume data by creating tables, shapes, and images.
+        """Finalize 3D volume data by creating tables, shapes, and images.
 
         Args:
             data_structures: Data structures containing processed data
@@ -215,8 +211,7 @@ class SpatialData3DConverter(BaseSpatialDataConverter):
             raise
 
     def _create_tic_image(self, data_structures: Dict[str, Any]) -> None:
-        """
-        Create TIC image for 3D volume or 2D slice.
+        """Create TIC image for 3D volume or 2D slice.
 
         Args:
             data_structures: Data structures containing TIC values

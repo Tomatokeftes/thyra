@@ -1,5 +1,4 @@
-"""
-Mass axis builder for efficient common mass axis construction.
+"""Mass axis builder for efficient common mass axis construction.
 
 This module provides optimized methods for building common mass axes
 from large datasets with memory efficiency and progress tracking.
@@ -15,11 +14,10 @@ logger = logging.getLogger(__name__)
 
 
 class MassAxisBuilder:
-    """
-    Efficient builder for common mass axes across multiple spectra.
+    """Efficient builder for common mass axes across multiple spectra.
 
-    This class provides multiple strategies for building mass axes depending
-    on dataset size and memory constraints.
+    This class provides multiple strategies for building mass axes
+    depending on dataset size and memory constraints.
     """
 
     def __init__(
@@ -28,8 +26,7 @@ class MassAxisBuilder:
         memory_limit_mb: float = 1024,
         progress_callback: Optional[callable] = None,
     ):
-        """
-        Initialize the mass axis builder.
+        """Initialize the mass axis builder.
 
         Args:
             strategy: Building strategy ('auto', 'memory_efficient',
@@ -54,8 +51,7 @@ class MassAxisBuilder:
     def build_from_spectra_iterator(
         self, spectra_iterator: Iterator, total_spectra: Optional[int] = None
     ) -> np.ndarray:
-        """
-        Build common mass axis from a spectra iterator.
+        """Build common mass axis from a spectra iterator.
 
         Args:
             spectra_iterator: Iterator yielding (coords, mzs, intensities)
@@ -83,8 +79,7 @@ class MassAxisBuilder:
             raise ValueError(f"Unknown strategy: {strategy}")
 
     def _determine_optimal_strategy(self, total_spectra: Optional[int]) -> str:
-        """
-        Automatically determine the optimal strategy based on dataset size.
+        """Automatically determine the optimal strategy based on dataset size.
 
         Args:
             total_spectra: Total number of spectra
@@ -112,8 +107,7 @@ class MassAxisBuilder:
     def _build_fast(
         self, spectra_iterator: Iterator, total_spectra: Optional[int]
     ) -> np.ndarray:
-        """
-        Fast mass axis building by collecting all m/z values in memory.
+        """Fast mass axis building by collecting all m/z values in memory.
 
         This is the fastest method but uses the most memory.
         """
@@ -165,8 +159,7 @@ class MassAxisBuilder:
     def _build_memory_efficient(
         self, spectra_iterator: Iterator, total_spectra: Optional[int]
     ) -> np.ndarray:
-        """
-        Memory-efficient mass axis building using chunked processing.
+        """Memory-efficient mass axis building using chunked processing.
 
         This method processes spectra in chunks to limit memory usage.
         """
@@ -230,8 +223,7 @@ class MassAxisBuilder:
     def _build_streaming(
         self, spectra_iterator: Iterator, total_spectra: Optional[int]
     ) -> np.ndarray:
-        """
-        Streaming mass axis building using set-based accumulation.
+        """Streaming mass axis building using set-based accumulation.
 
         This method uses a set to accumulate unique m/z values without
         storing all raw data in memory.
@@ -290,8 +282,7 @@ class MassAxisBuilder:
         return unique_mzs
 
     def _process_mz_chunk(self, mz_list: List[np.ndarray]) -> np.ndarray:
-        """
-        Process a chunk of m/z arrays to find unique values.
+        """Process a chunk of m/z arrays to find unique values.
 
         Args:
             mz_list: List of m/z arrays
@@ -315,8 +306,7 @@ class MassAxisBuilder:
         tolerance_ppm: float = 5.0,
         total_spectra: Optional[int] = None,
     ) -> np.ndarray:
-        """
-        Build mass axis with m/z tolerance for peak consolidation.
+        """Build mass axis with m/z tolerance for peak consolidation.
 
         Args:
             spectra_iterator: Iterator yielding (coords, mzs, intensities)
@@ -347,8 +337,7 @@ class MassAxisBuilder:
     def _consolidate_with_tolerance(
         self, mzs: np.ndarray, tolerance_ppm: float
     ) -> np.ndarray:
-        """
-        Consolidate m/z values within specified tolerance.
+        """Consolidate m/z values within specified tolerance.
 
         Args:
             mzs: Array of m/z values

@@ -12,8 +12,7 @@ def optimize_zarr_chunks(
     chunks: Optional[Tuple[int, ...]] = None,
     compressor=None,
 ) -> bool:
-    """
-    Optimize the chunking of a Zarr array.
+    """Optimize the chunking of a Zarr array.
 
     Parameters:
     -----------

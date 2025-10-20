@@ -1,7 +1,8 @@
 """Platform detection and SDK library path discovery.
 
-This module provides robust platform detection and automatic discovery of
-Bruker SDK libraries across different operating systems and installation paths.
+This module provides robust platform detection and automatic discovery
+of Bruker SDK libraries across different operating systems and
+installation paths.
 """
 
 import logging

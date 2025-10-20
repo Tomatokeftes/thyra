@@ -6,8 +6,7 @@ from ..config import LOG_BACKUP_COUNT, LOG_FILE_MAX_SIZE_MB, MB_TO_BYTES
 
 
 def setup_logging(log_level=logging.INFO, log_file=None):
-    """
-    Set up logging for the application.
+    """Set up logging for the application.
 
     Args:
         log_level (int): The minimum logging level to display.

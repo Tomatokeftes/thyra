@@ -1,8 +1,7 @@
-"""
-Nearest neighbor resampling strategy for centroid data.
+"""Nearest neighbor resampling strategy for centroid data.
 
-This strategy is optimal for centroid data (e.g., from timsTOF instruments)
-where each peak represents a discrete mass value.
+This strategy is optimal for centroid data (e.g., from timsTOF
+instruments) where each peak represents a discrete mass value.
 """
 
 from typing import Any
@@ -19,8 +18,7 @@ class NearestNeighborStrategy(ResamplingStrategy):
     def resample(
         self, spectrum: Spectrum, target_axis: npt.NDArray[np.floating[Any]]
     ) -> Spectrum:
-        """
-        Resample spectrum using nearest neighbor interpolation.
+        """Resample spectrum using nearest neighbor interpolation.
 
         For each target m/z value, finds the nearest original m/z value
         and assigns its intensity. This preserves the discrete nature

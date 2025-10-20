@@ -49,9 +49,8 @@ class BaseMSIReader(ABC):
     def get_common_mass_axis(self) -> NDArray[np.float64]:
         """Return the common mass axis for all spectra.
 
-        This method must always return a valid array.
-        If no common mass axis can be created, implementations should raise
-        an exception.
+        This method must always return a valid array. If no common mass
+        axis can be created, implementations should raise an exception.
         """
         pass
 
@@ -82,8 +81,7 @@ class BaseMSIReader(ABC):
         intensities: NDArray[np.float64],
         common_axis: NDArray[np.float64],
     ) -> Tuple[NDArray[np.int_], NDArray[np.float64]]:
-        """Map m/z values to indices in the common mass axis with high
-        accuracy.
+        """Map m/z values to indices in the common mass axis with high accuracy.
 
         This method ensures exact mapping of m/z values to the common mass axis
         without interpolation, preserving the original intensity values.

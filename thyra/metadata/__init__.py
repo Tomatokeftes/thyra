@@ -1,5 +1,4 @@
-"""
-Metadata handling for MSI data formats.
+"""Metadata handling for MSI data formats.
 
 This module provides a comprehensive metadata system for mass spectrometry
 imaging (MSI) data,
@@ -76,8 +75,7 @@ __metadata_api_version__ = "2.0"
 
 
 def create_extractor(format_name: str, *args, **kwargs):
-    """
-    Factory function to create a metadata extractor for a given format.
+    """Factory function to create a metadata extractor for a given format.
 
     This is a convenience function that combines format detection with
     extractor creation.
@@ -109,8 +107,7 @@ def create_extractor(format_name: str, *args, **kwargs):
 
 
 def get_metadata_summary(extractor) -> dict:
-    """
-    Get a summary of metadata information for quick inspection.
+    """Get a summary of metadata information for quick inspection.
 
     This function provides a convenient way to get key metadata information
     without needing to access individual properties.
