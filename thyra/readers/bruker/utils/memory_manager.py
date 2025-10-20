@@ -64,6 +64,14 @@ class BufferPool:
                 return buffer
 
     def get_float32_buffer(self, size: int) -> np.ndarray:
+        """Get a float32 buffer of the specified size.
+
+        Args:
+            size: Required buffer size
+
+        Returns:
+            numpy array buffer
+        """
         with self._lock:
             buffers = self._float32_buffers.get(size, [])
             if buffers:
@@ -76,6 +84,14 @@ class BufferPool:
                 return buffer
 
     def get_uint32_buffer(self, size: int) -> np.ndarray:
+        """Get a uint32 buffer of the specified size.
+
+        Args:
+            size: Required buffer size
+
+        Returns:
+            numpy array buffer
+        """
         with self._lock:
             buffers = self._uint32_buffers.get(size, [])
             if buffers:
@@ -88,6 +104,11 @@ class BufferPool:
                 return buffer
 
     def return_float64_buffer(self, buffer: np.ndarray) -> None:
+        """Return a float64 buffer to the pool.
+
+        Args:
+            buffer: Buffer to return to the pool
+        """
         if buffer.dtype != np.float64:
             return
 
@@ -132,6 +153,7 @@ class BufferPool:
                 logger.debug(f"Returned uint32 buffer of size {size} to pool")
 
     def clear(self) -> None:
+        """Clear all buffers from the pool."""
         with self._lock:
             self._float64_buffers.clear()
             self._float32_buffers.clear()

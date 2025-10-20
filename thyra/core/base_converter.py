@@ -241,12 +241,11 @@ class BaseMSIConverter(ABC):
     ) -> None:
         """Process a single spectrum.
 
-        Parameters:
-        -----------
-        data_structures: Format-specific data containers
-        coords: (x, y, z) coordinates
-        mzs: m/z values
-        intensities: Intensity values
+        Args:
+            data_structures: Format-specific data containers
+            coords: (x, y, z) coordinates
+            mzs: m/z values
+            intensities: Intensity values
         """
         # Default implementation - to be overridden by subclasses if needed
         pass
@@ -254,9 +253,8 @@ class BaseMSIConverter(ABC):
     def _finalize_data(self, data_structures: Any) -> None:
         """Perform any final processing on the data structures before saving.
 
-        Parameters:
-        -----------
-        data_structures: Format-specific data containers
+        Args:
+            data_structures: Format-specific data containers
         """
         # Default implementation - to be overridden by subclasses if needed
         pass
@@ -275,13 +273,11 @@ class BaseMSIConverter(ABC):
     def _save_output(self, data_structures: Any) -> bool:
         """Save the processed data to the output format.
 
-        Parameters:
-        -----------
-        data_structures: Format-specific data containers
+        Args:
+            data_structures: Format-specific data containers
 
         Returns:
-        --------
-        bool: True if saving was successful, False otherwise
+            True if saving was successful, False otherwise
         """
         pass
 
@@ -291,9 +287,8 @@ class BaseMSIConverter(ABC):
         Base implementation provides common metadata structure.
         Subclasses should override to add format-specific metadata storage.
 
-        Parameters:
-        -----------
-        metadata: Any object that can store metadata
+        Args:
+            metadata: Any object that can store metadata
         """
         # Get comprehensive metadata for complete information
         comprehensive_metadata = self.reader.get_comprehensive_metadata()
@@ -429,13 +424,13 @@ class BaseMSIConverter(ABC):
     def _get_pixel_index(self, x: int, y: int, z: int) -> int:
         """Convert 3D coordinates to a flat array index.
 
-        Parameters:
-        -----------
-        x, y, z: Pixel coordinates
+        Args:
+            x: X coordinate
+            y: Y coordinate
+            z: Z coordinate
 
         Returns:
-        --------
-        int: Flat index
+            Flat index
         """
         if self._dimensions is None:
             raise ValueError("Dimensions are not initialized.")
@@ -443,16 +438,13 @@ class BaseMSIConverter(ABC):
         return z * (n_y * n_x) + y * n_x + x
 
     def _map_mass_to_indices(self, mzs: NDArray[np.float64]) -> NDArray[np.int_]:
-        """Map m/z values to indices in the common mass axis with high
-        accuracy.
+        """Map m/z values to indices in the common mass axis with high accuracy.
 
-        Parameters:
-        -----------
-        mzs: Array of m/z values
+        Args:
+            mzs: Array of m/z values
 
         Returns:
-        --------
-        NDArray[np.int_]: Array of indices in common mass axis
+            Array of indices in common mass axis
         """
         if self._common_mass_axis is None:
             raise ValueError("Common mass axis is not initialized.")
@@ -482,12 +474,11 @@ class BaseMSIConverter(ABC):
     ) -> None:
         """Add intensity values to a sparse matrix efficiently.
 
-        Parameters:
-        -----------
-        sparse_matrix: Target sparse matrix
-        pixel_idx: Flat pixel index
-        mz_indices: Indices in common mass axis
-        intensities: Intensity values
+        Args:
+            sparse_matrix: Target sparse matrix
+            pixel_idx: Flat pixel index
+            mz_indices: Indices in common mass axis
+            intensities: Intensity values
         """
         if self._common_mass_axis is None:
             raise ValueError("Common mass axis is not initialized.")

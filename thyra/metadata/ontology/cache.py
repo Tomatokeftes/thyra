@@ -15,6 +15,7 @@ class OntologyCache:
     """Local cache for MS/IMS/UO ontology terms."""
 
     def __init__(self):
+        """Initialize the ontology cache by loading all term definitions."""
         self.terms: Dict[str, Tuple[str, Optional[str]]] = {}
         self.unknown_terms: Set[str] = set()
 

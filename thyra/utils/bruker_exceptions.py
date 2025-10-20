@@ -15,6 +15,12 @@ class SDKError(BrukerReaderError):
     """Exception raised when there are issues with the Bruker SDK."""
 
     def __init__(self, message: str, sdk_error_code: int = None):
+        """Initialize SDK error.
+
+        Args:
+            message: Error message describing the SDK issue
+            sdk_error_code: Optional SDK-specific error code from the library
+        """
         super().__init__(message)
         self.sdk_error_code = sdk_error_code
 
