@@ -160,6 +160,59 @@ def find_python_files(root_dir: Path) -> List[Path]:
     return python_files
 
 
+def get_changed_files() -> List[Path]:
+    """Get list of changed Python files from git diff.
+
+    Compares current branch against origin/main to find modified files.
+    Falls back to comparing against HEAD~1 if origin/main doesn't exist.
+    Returns empty list if git operations fail.
+
+    Returns:
+        List of Path objects for changed Python files that exist
+    """
+    import subprocess
+
+    try:
+        # Try comparing against origin/main first
+        result = subprocess.run(
+            ["git", "diff", "--name-only", "origin/main...HEAD"],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=5,
+        )
+
+        if result.returncode != 0 or not result.stdout.strip():
+            # Fallback: compare against HEAD~1
+            result = subprocess.run(
+                ["git", "diff", "--name-only", "HEAD~1", "HEAD"],
+                capture_output=True,
+                text=True,
+                check=True,
+                timeout=5,
+            )
+
+        files = result.stdout.strip().split("\n")
+        python_files = []
+
+        for f in files:
+            if f and f.endswith(".py"):
+                file_path = Path(f)
+                if file_path.exists():
+                    python_files.append(file_path)
+
+        return python_files
+
+    except (
+        subprocess.CalledProcessError,
+        subprocess.TimeoutExpired,
+        FileNotFoundError,
+    ) as e:
+        print(f"Warning: Could not detect changed files via git: {e}")
+        print("Falling back to analyzing all files")
+        return []
+
+
 def generate_report(results: List[ComplexityResult], threshold: int) -> Dict:
     """Generate complexity report."""
     violations = [r for r in results if r.complexity > threshold]
@@ -235,6 +288,11 @@ def main():
     parser.add_argument(
         "--quiet", action="store_true", help="Suppress output except violations"
     )
+    parser.add_argument(
+        "--files-changed",
+        action="store_true",
+        help="Only analyze files changed compared to main branch (speeds up PR checks)",
+    )
 
     args = parser.parse_args()
 
@@ -245,6 +303,21 @@ def main():
         python_files = find_python_files(root_dir / "thyra")
     else:
         python_files = find_python_files(root_dir)
+
+    # Filter to only changed files if requested
+    if args.files_changed:
+        changed_files = get_changed_files()
+        if changed_files:
+            # Filter python_files to only include changed files
+            changed_files_set = set(changed_files)
+            python_files = [f for f in python_files if f in changed_files_set]
+            if not args.quiet:
+                print(
+                    f"Analyzing {len(python_files)} changed files (--files-changed mode)"
+                )
+        else:
+            if not args.quiet:
+                print("Warning: Could not detect changed files, analyzing all files")
 
     if not python_files:
         if not args.quiet:
@@ -274,7 +347,7 @@ def main():
 
             print("\nTop violations:")
             for i, func in enumerate(report["high_complexity_functions"][:5], 1):
-                func_info = func['function']
+                func_info = func["function"]
                 print(
                     f"  {i}. {func['file']}:{func['line']} - "
                     f"{func_info} ({func['complexity']})"

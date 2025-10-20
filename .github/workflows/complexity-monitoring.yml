@@ -56,14 +56,26 @@ jobs:
         echo "Starting complexity monitoring..."
         echo "Current directory: $(pwd)"
         echo "Python version: $(poetry run python --version)"
-        echo "Files in scripts/: $(ls -la scripts/)"
+        echo "Event: ${{ github.event_name }}"
 
         echo "Running complexity monitor..."
         set +e  # Don't exit on error so we can capture the exit code
-        poetry run python scripts/complexity_monitor.py \
-          --threshold 10 \
-          --save \
-          --trends
+
+        # Use different modes based on event type
+        if [ "${{ github.event_name }}" = "pull_request" ]; then
+          echo "PR detected: Analyzing changed files only (fast mode)"
+          poetry run python scripts/complexity_monitor.py \
+            --threshold 10 \
+            --files-changed \
+            --save
+        else
+          echo "Main branch or scheduled run: Full analysis with trends"
+          poetry run python scripts/complexity_monitor.py \
+            --threshold 10 \
+            --save \
+            --trends
+        fi
+
         COMPLEXITY_EXIT_CODE=$?
         echo "Complexity monitor exit code: $COMPLEXITY_EXIT_CODE"
 
