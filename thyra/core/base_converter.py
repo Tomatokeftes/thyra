@@ -98,8 +98,7 @@ class BaseMSIConverter(ABC):
             self.reader.close()
 
     def _initialize_conversion(self) -> None:
-        """Initialize conversion by loading essential metadata first, then
-        other data."""
+        """Initialize conversion by loading essential metadata first, then other data."""
         logging.info("Loading essential dataset information...")
         try:
             # Load essential metadata first (fast, single query for Bruker)
@@ -165,8 +164,7 @@ class BaseMSIConverter(ABC):
         pass
 
     def _process_spectra(self, data_structures: Any) -> None:
-        """Process all spectra from the reader and integrate into data
-        structures.
+        """Process all spectra from the reader and integrate into data structures.
 
         Parameters:
         -----------

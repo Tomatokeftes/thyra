@@ -176,8 +176,7 @@ class SDKFunctions:
         frame_id: int,
         buffer_size_hint: Optional[int] = None,
     ) -> Tuple[np.ndarray, np.ndarray]:
-        """Read a spectrum from the file with optional buffer size
-        optimization.
+        """Read a spectrum from the file with optional buffer size optimization.
 
         Args:
             handle: File handle

@@ -14,8 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 class ImzMLMetadataExtractor(MetadataExtractor):
-    """ImzML-specific metadata extractor with optimized two-phase
-    extraction."""
+    """ImzML-specific metadata extractor with optimized two-phase extraction."""
 
     def __init__(self, parser: ImzMLParser, imzml_path: Path):
         """Initialize ImzML metadata extractor.
@@ -350,8 +349,7 @@ class ImzMLMetadataExtractor(MetadataExtractor):
             return ET
 
     def _check_parser_metadata_for_centroid(self) -> Optional[str]:
-        """Check parser metadata for processed flag indicating centroid
-        data."""
+        """Check parser metadata for processed flag indicating centroid data."""
         if not (hasattr(self.parser, "metadata") and self.parser.metadata):
             return None
 

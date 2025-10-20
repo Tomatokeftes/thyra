@@ -10,8 +10,7 @@ from .base_generator import BaseAxisGenerator
 
 
 class ReflectorTOFAxisGenerator(BaseAxisGenerator):
-    """Mass axis generator for Reflector Time-of-Flight analyzers (like
-    timsTOF).
+    """Mass axis generator for Reflector Time-of-Flight analyzers (like timsTOF).
 
     Reflector TOF has bin size ∝ m/z, providing constant relative
     resolution (R = m/Δm). This is optimal for most MS applications as

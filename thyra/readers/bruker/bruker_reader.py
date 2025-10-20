@@ -1,5 +1,4 @@
-"""Bruker reader implementation combining best features from all
-implementations.
+"""Bruker reader implementation combining best features from all implementations.
 
 This module provides a high-performance, memory-efficient reader for
 Bruker TSF/TDF data formats with lazy loading, intelligent caching, and
@@ -467,8 +466,7 @@ class BrukerReader(BaseMSIReader):
         frame_id: int,
         coordinate_offsets: Optional[Tuple[int, int, int]] = None,
     ) -> Optional[Tuple[int, int, int]]:
-        """Get normalized coordinates for a specific frame using persistent
-        connection.
+        """Get normalized coordinates for a specific frame using persistent connection.
 
         This avoids opening new SQLite connections for every frame.
 

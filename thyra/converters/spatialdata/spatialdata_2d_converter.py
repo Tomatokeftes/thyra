@@ -18,8 +18,7 @@ if SPATIALDATA_AVAILABLE:
 
 
 class SpatialData2DConverter(BaseSpatialDataConverter):
-    """Converter for MSI data to SpatialData format treating 3D data as
-    separate 2D slices."""
+    """Converter for MSI data to SpatialData format treating 3D data as separate 2D slices."""
 
     def __init__(self, *args, **kwargs):
         """Initialize 2D converter with handle_3d=False."""
@@ -151,8 +150,9 @@ class SpatialData2DConverter(BaseSpatialDataConverter):
         mzs: NDArray[np.float64],
         intensities: NDArray[np.float64],
     ) -> None:
-        """Process a single spectrum for 2D slices format. Delegates to
-        parent's resampling-aware processing.
+        """Process a single spectrum for 2D slices format.
+
+        Delegates to parent's resampling-aware processing.
 
         Args:
             data_structures: Data structures for storing processed data

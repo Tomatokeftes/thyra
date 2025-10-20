@@ -10,8 +10,7 @@ from .base_generator import BaseAxisGenerator
 
 
 class FTICRAxisGenerator(BaseAxisGenerator):
-    """Mass axis generator for FT-ICR (Fourier Transform Ion Cyclotron
-    Resonance) analyzers.
+    """Mass axis generator for FT-ICR (Fourier Transform Ion Cyclotron Resonance) analyzers.
 
     FT-ICR has bin size ∝ m/z^2, meaning spacing increases quadratically
     with mass. This reflects FT-ICR's cyclotron frequency detection

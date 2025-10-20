@@ -205,8 +205,23 @@ def convert_msi(
     resampling_config: Optional[Dict[str, Any]] = None,
     **kwargs: Any,
 ) -> bool:
-    """Convert MSI data to the specified format with enhanced error handling
-    and automatic pixel size detection."""
+    """Convert MSI data to the specified format with enhanced error handling.
+
+    Provides automatic pixel size detection from metadata or accepts user-specified values.
+
+    Args:
+        input_path: Path to input MSI data file or directory
+        output_path: Path for output file
+        format_type: Output format type (default: "spatialdata")
+        dataset_id: Identifier for the dataset (default: "msi_dataset")
+        pixel_size_um: Pixel size in micrometers (None for auto-detection)
+        handle_3d: Whether to process as 3D data (default: False)
+        resampling_config: Optional resampling configuration
+        **kwargs: Additional keyword arguments
+
+    Returns:
+        True if conversion was successful, False otherwise
+    """
     # Validate input parameters
     if not _validate_input_parameters(
         input_path,

@@ -319,12 +319,10 @@ class ImzMLReader(BaseMSIReader):
         None,
         None,
     ]:
-        """Iterate through spectra with progress monitoring and batch
-        processing.
+        """Iterate through spectra with progress monitoring and batch processing.
 
         Maps m/z values to the common mass axis using searchsorted for
-        accurate
-        representation in the output data structures.
+        accurate representation in the output data structures.
 
         Args:
             batch_size: Number of spectra to process in each batch (None for

@@ -16,8 +16,7 @@ if SPATIALDATA_AVAILABLE:
 
 
 class SpatialData3DConverter(BaseSpatialDataConverter):
-    """Converter for MSI data to SpatialData format as true 3D volume or single
-    2D slice."""
+    """Converter for MSI data to SpatialData format as true 3D volume or single 2D slice."""
 
     def __init__(self, *args, **kwargs):
         """Initialize 3D converter with handle_3d=True."""
@@ -63,8 +62,9 @@ class SpatialData3DConverter(BaseSpatialDataConverter):
         mzs: NDArray[np.float64],
         intensities: NDArray[np.float64],
     ) -> None:
-        """Process a single spectrum for 3D volume format. Delegates to
-        parent's resampling-aware processing.
+        """Process a single spectrum for 3D volume format.
+
+        Delegates to parent's resampling-aware processing.
 
         Args:
             data_structures: Data structures for storing processed data

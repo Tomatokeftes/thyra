@@ -59,8 +59,7 @@ class CoordinateCache:
         )
 
     def _detect_maldi_format(self) -> None:
-        """Detect if this is a MALDI dataset by checking for MaldiFrameInfo
-        table."""
+        """Detect if this is a MALDI dataset by checking for MaldiFrameInfo table."""
         try:
             with sqlite3.connect(str(self.db_path)) as conn:
                 cursor = conn.cursor()

@@ -29,8 +29,7 @@ class SpatialDataConverter:
         resampling_config: Optional[Dict[str, Any]] = None,
         **kwargs: Any,
     ):
-        """Create appropriate converter based on handle_3d parameter and data
-        dimensions.
+        """Create appropriate converter based on handle_3d parameter and data dimensions.
 
         Args:
             reader: MSI data reader

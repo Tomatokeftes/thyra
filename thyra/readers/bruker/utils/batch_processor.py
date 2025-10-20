@@ -272,8 +272,7 @@ class BatchProcessor:
         processor_func: Callable,
         initial_batch_size: Optional[int] = None,
     ) -> Iterator[Any]:
-        """Adaptive batch processing that adjusts batch size based on
-        performance.
+        """Adaptive batch processing that adjusts batch size based on performance.
 
         Args:
             spectrum_iterator: Iterator yielding spectrum data

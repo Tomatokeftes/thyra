@@ -40,8 +40,7 @@ class BaseAxisGenerator(ABC):
         width_da: float,
         reference_mz: float = 500.0,
     ) -> npt.NDArray[np.floating[Any]]:
-        """Generate axis based on mass width at reference m/z using analyzer
-        physics.
+        """Generate axis based on mass width at reference m/z using analyzer physics.
 
         Parameters
         ----------

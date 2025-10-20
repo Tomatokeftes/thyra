@@ -11,8 +11,7 @@ logger = logging.getLogger(__name__)
 
 
 class BrukerMetadataExtractor(MetadataExtractor):
-    """Bruker-specific metadata extractor with optimized single-query
-    extraction."""
+    """Bruker-specific metadata extractor with optimized single-query extraction."""
 
     def __init__(self, conn: sqlite3.Connection, data_path: Path):
         """Initialize Bruker metadata extractor.

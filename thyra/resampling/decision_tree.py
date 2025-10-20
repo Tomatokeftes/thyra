@@ -9,14 +9,12 @@ logger = logging.getLogger(__name__)
 
 
 class ResamplingDecisionTree:
-    """Implements decision tree for resampling strategy selection based on
-    instrument metadata."""
+    """Implements decision tree for resampling strategy selection based on instrument metadata."""
 
     def select_strategy(
         self, metadata: Optional[Dict[str, Any]] = None
     ) -> ResamplingMethod:
-        """Automatically select appropriate resampling method based on
-        instrument metadata.
+        """Automatically select appropriate resampling method based on instrument metadata.
 
         Currently implemented:
         - Bruker timsTOF detection -> NEAREST_NEIGHBOR (optimal for
@@ -79,8 +77,7 @@ class ResamplingDecisionTree:
             )
 
     def select_axis_type(self, metadata: Optional[Dict[str, Any]] = None) -> AxisType:
-        """Automatically select appropriate mass axis type based on instrument
-        metadata.
+        """Automatically select appropriate mass axis type based on instrument metadata.
 
         Parameters
         ----------
