@@ -14,8 +14,8 @@ from .spatialdata_3d_converter import SpatialData3DConverter
 class SpatialDataConverter:
     """Factory converter for MSI data to SpatialData format.
 
-    Creates appropriate 2D or 3D converter based on handle_3d parameter and
-    data dimensions.
+    Creates appropriate 2D or 3D converter based on handle_3d parameter
+    and data dimensions.
     """
 
     def __new__(
@@ -29,8 +29,8 @@ class SpatialDataConverter:
         resampling_config: Optional[Dict[str, Any]] = None,
         **kwargs: Any,
     ):
-        """Create appropriate converter based on handle_3d parameter and
-        data dimensions.
+        """Create appropriate converter based on handle_3d parameter and data
+        dimensions.
 
         Args:
             reader: MSI data reader

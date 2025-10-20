@@ -15,8 +15,7 @@ class BrukerMetadataExtractor(MetadataExtractor):
     extraction."""
 
     def __init__(self, conn: sqlite3.Connection, data_path: Path):
-        """
-        Initialize Bruker metadata extractor.
+        """Initialize Bruker metadata extractor.
 
         Args:
             conn: Active SQLite database connection

@@ -18,8 +18,7 @@ class ImzMLMetadataExtractor(MetadataExtractor):
     extraction."""
 
     def __init__(self, parser: ImzMLParser, imzml_path: Path):
-        """
-        Initialize ImzML metadata extractor.
+        """Initialize ImzML metadata extractor.
 
         Args:
             parser: Initialized ImzML parser
@@ -154,8 +153,8 @@ class ImzMLMetadataExtractor(MetadataExtractor):
     def get_mass_range_for_resampling(self) -> Tuple[float, float]:
         """Get accurate mass range required for resampling.
 
-        This performs a complete scan of all spectra to ensure no m/z values
-        are missed when building the resampled axis.
+        This performs a complete scan of all spectra to ensure no m/z
+        values are missed when building the resampled axis.
         """
         mass_range, _ = self._get_mass_range_complete()
         return mass_range

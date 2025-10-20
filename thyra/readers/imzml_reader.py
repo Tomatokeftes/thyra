@@ -127,8 +127,8 @@ class ImzMLReader(BaseMSIReader):
     def _cache_all_coordinates(self) -> None:
         """Cache all coordinates for faster access.
 
-        Converts 1-based coordinates from imzML to 0-based coordinates for
-        internal use.
+        Converts 1-based coordinates from imzML to 0-based coordinates
+        for internal use.
         """
         # Parser should already be initialized when this is called from
         # _initialize_parser

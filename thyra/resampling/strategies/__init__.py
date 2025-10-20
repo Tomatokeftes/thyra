@@ -1,6 +1,4 @@
-"""
-Resampling strategies for different data types and instruments.
-"""
+"""Resampling strategies for different data types and instruments."""
 
 from .base import ResamplingStrategy
 from .nearest_neighbor import NearestNeighborStrategy

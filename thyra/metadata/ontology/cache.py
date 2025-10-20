@@ -74,9 +74,7 @@ class OntologyCache:
         return "\n".join(report)
 
     def validate_against_online(self, accession: str) -> Optional[str]:
-        """
-        Get URL to validate a term online.
-        """
+        """Get URL to validate a term online."""
         prefix = accession.split(":")[0] if ":" in accession else None
 
         urls = {

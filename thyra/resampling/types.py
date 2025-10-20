@@ -1,6 +1,4 @@
-"""
-Data types and enums for the resampling module.
-"""
+"""Data types and enums for the resampling module."""
 
 from dataclasses import dataclass
 from enum import Enum

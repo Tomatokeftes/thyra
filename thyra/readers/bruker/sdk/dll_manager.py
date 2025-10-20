@@ -1,8 +1,7 @@
-"""
-DLL/Library manager for Bruker SDK integration.
+"""DLL/Library manager for Bruker SDK integration.
 
-This module provides robust loading and management of the Bruker SDK libraries
-with comprehensive error handling and fallback mechanisms.
+This module provides robust loading and management of the Bruker SDK
+libraries with comprehensive error handling and fallback mechanisms.
 """
 
 import logging
@@ -24,11 +23,10 @@ logger = logging.getLogger(__name__)
 
 
 class DLLManager:
-    """
-    Manages loading and access to Bruker SDK libraries.
+    """Manages loading and access to Bruker SDK libraries.
 
-    This class provides a singleton-like interface for managing the SDK library
-    with automatic discovery, validation, and error handling.
+    This class provides a singleton-like interface for managing the SDK
+    library with automatic discovery, validation, and error handling.
     """
 
     _instance: Optional["DLLManager"] = None
@@ -38,8 +36,7 @@ class DLLManager:
     def __new__(
         cls, data_directory: Optional[Path] = None, force_reload: bool = False
     ) -> "DLLManager":
-        """
-        Create or return existing DLLManager instance.
+        """Create or return existing DLLManager instance.
 
         Args:
             data_directory: Optional data directory for local library discovery
@@ -53,8 +50,7 @@ class DLLManager:
     def _initialize(
         self, data_directory: Optional[Path] = None, force_reload: bool = False
     ) -> None:
-        """
-        Initialize the DLL manager and load the library.
+        """Initialize the DLL manager and load the library.
 
         Args:
             data_directory: Optional data directory for local library discovery
@@ -66,8 +62,7 @@ class DLLManager:
         self._load_library(data_directory)
 
     def _load_library(self, data_directory: Optional[Path] = None) -> None:
-        """
-        Load the Bruker SDK library with fallback mechanisms.
+        """Load the Bruker SDK library with fallback mechanisms.
 
         Args:
             data_directory: Optional data directory for local library discovery
@@ -136,8 +131,7 @@ class DLLManager:
         raise SDKError(error_msg)
 
     def _load_library_at_path(self, lib_path: Path) -> CDLL:
-        """
-        Load library from a specific path.
+        """Load library from a specific path.
 
         Args:
             lib_path: Path to the library file
@@ -156,8 +150,7 @@ class DLLManager:
             return cdll.LoadLibrary(str(lib_path))
 
     def _load_library_by_name(self, lib_name: str) -> CDLL:
-        """
-        Load library by name (using system PATH).
+        """Load library by name (using system PATH).
 
         Args:
             lib_name: Name of the library (without extension)
@@ -177,8 +170,7 @@ class DLLManager:
 
     @property
     def dll(self) -> CDLL:
-        """
-        Get the loaded DLL object.
+        """Get the loaded DLL object.
 
         Returns:
             Loaded CDLL object
@@ -201,8 +193,7 @@ class DLLManager:
         return self._dll is not None
 
     def reload(self, data_directory: Optional[Path] = None) -> None:
-        """
-        Force reload of the library.
+        """Force reload of the library.
 
         Args:
             data_directory: Optional data directory for local library discovery
@@ -212,8 +203,7 @@ class DLLManager:
         self._load_library(data_directory)
 
     def get_function(self, function_name: str) -> Any:
-        """
-        Get a function from the loaded library.
+        """Get a function from the loaded library.
 
         Args:
             function_name: Name of the function to retrieve

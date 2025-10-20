@@ -10,8 +10,7 @@ from .base_generator import BaseAxisGenerator
 
 
 class LinearTOFAxisGenerator(BaseAxisGenerator):
-    """
-    Mass axis generator for Linear Time-of-Flight analyzers.
+    """Mass axis generator for Linear Time-of-Flight analyzers.
 
     Linear TOF has bin size ∝ √m/z, meaning spacing increases with the square root of mass.
     This reflects the fundamental TOF equation: t ∝ √(m/z), so equal time bins
@@ -26,8 +25,7 @@ class LinearTOFAxisGenerator(BaseAxisGenerator):
         reference_mz: float = 500.0,
         reference_width: float = 0.1,
     ) -> MassAxis:
-        """
-        Generate Linear TOF mass axis with √m/z spacing.
+        """Generate Linear TOF mass axis with √m/z spacing.
 
         Parameters
         ----------
@@ -79,8 +77,7 @@ class LinearTOFAxisGenerator(BaseAxisGenerator):
         reference_mz: float = 500.0,
         reference_width: float = 0.1,
     ) -> float:
-        """
-        Calculate expected bin width at given m/z for Linear TOF.
+        """Calculate expected bin width at given m/z for Linear TOF.
 
         Parameters
         ----------

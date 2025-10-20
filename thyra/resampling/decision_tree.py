@@ -79,8 +79,8 @@ class ResamplingDecisionTree:
             )
 
     def select_axis_type(self, metadata: Optional[Dict[str, Any]] = None) -> AxisType:
-        """Automatically select appropriate mass axis type based on
-        instrument metadata.
+        """Automatically select appropriate mass axis type based on instrument
+        metadata.
 
         Parameters
         ----------

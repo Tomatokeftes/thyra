@@ -1,8 +1,7 @@
-"""
-Batch processing utilities for efficient handling of large datasets.
+"""Batch processing utilities for efficient handling of large datasets.
 
-This module provides utilities for processing large datasets in manageable
-batches with progress tracking and memory management.
+This module provides utilities for processing large datasets in
+manageable batches with progress tracking and memory management.
 """
 
 import logging
@@ -27,8 +26,7 @@ class BatchInfo:
 
 
 class BatchProcessor:
-    """
-    Efficient batch processor for large spectrum datasets.
+    """Efficient batch processor for large spectrum datasets.
 
     This class provides intelligent batching strategies based on memory
     constraints and processing requirements.
@@ -41,8 +39,7 @@ class BatchProcessor:
         max_batch_size: int = 1000,
         progress_callback: Optional[Callable] = None,
     ):
-        """
-        Initialize the batch processor.
+        """Initialize the batch processor.
 
         Args:
             target_memory_mb: Target memory usage per batch
@@ -72,8 +69,7 @@ class BatchProcessor:
     def calculate_optimal_batch_size(
         self, total_items: int, avg_item_size_bytes: float
     ) -> int:
-        """
-        Calculate optimal batch size based on memory constraints.
+        """Calculate optimal batch size based on memory constraints.
 
         Args:
             total_items: Total number of items to process
@@ -105,8 +101,7 @@ class BatchProcessor:
     def create_batches(
         self, total_items: int, batch_size: Optional[int] = None
     ) -> List[BatchInfo]:
-        """
-        Create batch information for processing.
+        """Create batch information for processing.
 
         Args:
             total_items: Total number of items to process
@@ -154,8 +149,7 @@ class BatchProcessor:
         processor_func: Callable,
         batch_size: Optional[int] = None,
     ) -> Iterator[Any]:
-        """
-        Process spectra in batches with progress tracking.
+        """Process spectra in batches with progress tracking.
 
         Args:
             spectrum_iterator: Iterator yielding spectrum data
@@ -278,8 +272,8 @@ class BatchProcessor:
         processor_func: Callable,
         initial_batch_size: Optional[int] = None,
     ) -> Iterator[Any]:
-        """
-        Adaptive batch processing that adjusts batch size based on performance.
+        """Adaptive batch processing that adjusts batch size based on
+        performance.
 
         Args:
             spectrum_iterator: Iterator yielding spectrum data
@@ -354,8 +348,7 @@ class BatchProcessor:
         processor_func: Callable,
         memory_limit_mb: float = None,
     ) -> Iterator[Any]:
-        """
-        Process items with memory monitoring and adaptive batch sizing.
+        """Process items with memory monitoring and adaptive batch sizing.
 
         Args:
             items: List of items to process

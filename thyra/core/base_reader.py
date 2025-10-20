@@ -49,9 +49,8 @@ class BaseMSIReader(ABC):
     def get_common_mass_axis(self) -> NDArray[np.float64]:
         """Return the common mass axis for all spectra.
 
-        This method must always return a valid array.
-        If no common mass axis can be created, implementations should raise
-        an exception.
+        This method must always return a valid array. If no common mass
+        axis can be created, implementations should raise an exception.
         """
         pass
 

@@ -1,9 +1,8 @@
-"""
-Configuration constants for MSIConverter.
+"""Configuration constants for MSIConverter.
 
-This module centralizes all configuration values, magic numbers, and default
-settings used throughout the codebase to improve maintainability and allow
-easier tuning for different use cases.
+This module centralizes all configuration values, magic numbers, and
+default settings used throughout the codebase to improve maintainability
+and allow easier tuning for different use cases.
 """
 
 # Memory and performance settings

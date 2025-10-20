@@ -49,8 +49,7 @@ except (ImportError, NotImplementedError) as e:
 
 class BaseSpatialDataConverter(BaseMSIConverter, ABC):
     """Base converter for MSI data to SpatialData format with shared
-    functionality.
-    """
+    functionality."""
 
     def __init__(
         self,
@@ -187,7 +186,8 @@ class BaseSpatialDataConverter(BaseMSIConverter, ABC):
             self._reference_mz = self._resampling_config.get("reference_mz", 1000.0)
 
     def _get_cached_metadata_for_resampling(self) -> Dict[str, Any]:
-        """Get cached metadata for resampling decision tree to avoid multiple reader calls."""
+        """Get cached metadata for resampling decision tree to avoid multiple
+        reader calls."""
         if hasattr(self, "_resampling_metadata_cached"):
             return self._resampling_metadata_cached
 
@@ -282,7 +282,8 @@ class BaseSpatialDataConverter(BaseMSIConverter, ABC):
     def _calculate_bins_from_width(
         self, min_mz: float, max_mz: float, axis_type
     ) -> int:
-        """Calculate optimal number of bins from desired width at reference m/z.
+        """Calculate optimal number of bins from desired width at reference
+        m/z.
 
         Args:
             min_mz: Minimum m/z of the mass range
@@ -540,7 +541,8 @@ class BaseSpatialDataConverter(BaseMSIConverter, ABC):
         mzs: NDArray[np.float64],
         intensities: NDArray[np.float64],
     ) -> None:
-        """Override spectrum processing to handle resampling with sparse optimization."""
+        """Override spectrum processing to handle resampling with sparse
+        optimization."""
         # Only log detailed per-spectrum info at DEBUG level
         logging.debug(
             f"Processing spectrum at {coords}: {len(mzs)} peaks, "
@@ -584,7 +586,8 @@ class BaseSpatialDataConverter(BaseMSIConverter, ABC):
     def _resample_spectrum(
         self, mzs: NDArray[np.float64], intensities: NDArray[np.float64]
     ) -> NDArray[np.float64]:
-        """Resample a single spectrum onto the common mass axis using TIC-preserving method.
+        """Resample a single spectrum onto the common mass axis using TIC-
+        preserving method.
 
         Note: Nearest neighbor resampling is handled directly in _process_single_spectrum
         for performance optimization (returns sparse data).

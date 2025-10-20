@@ -1,5 +1,4 @@
-"""
-Custom exceptions for the Bruker reader.
+"""Custom exceptions for the Bruker reader.
 
 This module provides specific exception types for better error handling
 and debugging throughout the reader implementation.

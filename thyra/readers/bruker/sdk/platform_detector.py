@@ -1,8 +1,8 @@
-"""
-Platform detection and SDK library path discovery.
+"""Platform detection and SDK library path discovery.
 
-This module provides robust platform detection and automatic discovery of
-Bruker SDK libraries across different operating systems and installation paths.
+This module provides robust platform detection and automatic discovery
+of Bruker SDK libraries across different operating systems and
+installation paths.
 """
 
 import logging
@@ -18,8 +18,7 @@ class PlatformDetector:
 
     @staticmethod
     def get_platform() -> str:
-        """
-        Get normalized platform identifier.
+        """Get normalized platform identifier.
 
         Returns:
             Platform string: 'windows', 'linux', or 'macos'
@@ -204,8 +203,7 @@ def _get_macos_paths(lib_name: str, data_directory: Optional[Path]) -> List[Path
 
 
 def get_dll_paths(data_directory: Optional[Path] = None) -> List[Path]:
-    """
-    Get list of potential DLL/SO library paths for the current platform.
+    """Get list of potential DLL/SO library paths for the current platform.
 
     This combines the best path detection logic from timsconvert and imzy
     implementations to provide comprehensive coverage.
@@ -266,8 +264,7 @@ def get_dll_paths(data_directory: Optional[Path] = None) -> List[Path]:
 
 
 def get_library_name() -> str:
-    """
-    Get the appropriate library name for the current platform.
+    """Get the appropriate library name for the current platform.
 
     Returns:
         Library filename (e.g., 'timsdata.dll', 'libtimsdata.so')
@@ -285,8 +282,7 @@ def get_library_name() -> str:
 
 
 def validate_library_path(library_path: Path) -> bool:
-    """
-    Validate that a library path is accessible and loadable.
+    """Validate that a library path is accessible and loadable.
 
     Args:
         library_path: Path to the library file

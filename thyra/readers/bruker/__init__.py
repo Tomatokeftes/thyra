@@ -1,10 +1,9 @@
-"""
-Bruker reader implementation combining best features from all implementations.
+"""Bruker reader implementation combining best features from all
+implementations.
 
 This module provides a high-performance, memory-efficient reader for
-Bruker TSF/TDF
-data formats with lazy loading, intelligent caching, and comprehensive
-error handling.
+Bruker TSF/TDF data formats with lazy loading, intelligent caching, and
+comprehensive error handling.
 """
 
 from ...utils.bruker_exceptions import (

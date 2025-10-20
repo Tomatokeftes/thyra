@@ -1,8 +1,7 @@
-"""
-Utility functions and classes for MSI data processing.
+"""Utility functions and classes for MSI data processing.
 
-This module provides common utilities including data processing functions,
-logging configuration, and custom exception classes.
+This module provides common utilities including data processing
+functions, logging configuration, and custom exception classes.
 """
 
 from .bruker_exceptions import (

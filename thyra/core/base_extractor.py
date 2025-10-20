@@ -10,8 +10,7 @@ class MetadataExtractor(ABC):
     """Abstract base class for format-specific metadata extractors."""
 
     def __init__(self, data_source: Any):
-        """
-        Initialize metadata extractor with data source.
+        """Initialize metadata extractor with data source.
 
         Args:
             data_source: Format-specific data source (parser, connection, etc.)
@@ -22,8 +21,7 @@ class MetadataExtractor(ABC):
 
     @abstractmethod
     def _extract_essential_impl(self) -> EssentialMetadata:
-        """
-        Format-specific implementation of essential metadata extraction.
+        """Format-specific implementation of essential metadata extraction.
 
         This method should be optimized for speed and extract only the minimum
         metadata needed for processing decisions and interpolation setup.
@@ -35,8 +33,7 @@ class MetadataExtractor(ABC):
 
     @abstractmethod
     def _extract_comprehensive_impl(self) -> ComprehensiveMetadata:
-        """
-        Format-specific implementation of comprehensive metadata extraction.
+        """Format-specific implementation of comprehensive metadata extraction.
 
         This method can be slower and should extract all available metadata
         including format-specific details, acquisition parameters, etc.
@@ -48,8 +45,7 @@ class MetadataExtractor(ABC):
         pass
 
     def get_essential(self) -> EssentialMetadata:
-        """
-        Get essential metadata (cached after first call).
+        """Get essential metadata (cached after first call).
 
         Returns:
             EssentialMetadata: Critical metadata for processing
@@ -65,8 +61,7 @@ class MetadataExtractor(ABC):
         return self._essential_cache
 
     def get_comprehensive(self) -> ComprehensiveMetadata:
-        """
-        Get comprehensive metadata (cached after first call).
+        """Get comprehensive metadata (cached after first call).
 
         Returns:
             ComprehensiveMetadata: Complete metadata including

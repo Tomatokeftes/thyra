@@ -1,6 +1,4 @@
-"""
-Common axis builder for creating unified mass axes.
-"""
+"""Common axis builder for creating unified mass axes."""
 
 import numpy as np
 
@@ -20,8 +18,7 @@ class CommonAxisBuilder:
     def build_uniform_axis(
         self, min_mz: float, max_mz: float, num_bins: int
     ) -> MassAxis:
-        """
-        Create uniform (equidistant) mass axis.
+        """Create uniform (equidistant) mass axis.
 
         This is a placeholder implementation that will be expanded
         in Phase 4.
@@ -59,8 +56,7 @@ class CommonAxisBuilder:
         reference_mz: float = 500.0,
         reference_width: float = 0.1,
     ) -> MassAxis:
-        """
-        Create physics-based mass axis for specific analyzer types.
+        """Create physics-based mass axis for specific analyzer types.
 
         Parameters
         ----------

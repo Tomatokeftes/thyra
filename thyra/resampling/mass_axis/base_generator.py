@@ -1,6 +1,4 @@
-"""
-Abstract base class for mass axis generators.
-"""
+"""Abstract base class for mass axis generators."""
 
 from abc import ABC, abstractmethod
 from typing import Any
@@ -16,8 +14,7 @@ class BaseAxisGenerator(ABC):
     def generate_axis_bins(
         self, min_mz: float, max_mz: float, num_bins: int
     ) -> npt.NDArray[np.floating[Any]]:
-        """
-        Generate axis with fixed number of bins.
+        """Generate axis with fixed number of bins.
 
         Parameters
         ----------
@@ -43,8 +40,8 @@ class BaseAxisGenerator(ABC):
         width_da: float,
         reference_mz: float = 500.0,
     ) -> npt.NDArray[np.floating[Any]]:
-        """
-        Generate axis based on mass width at reference m/z using analyzer physics.
+        """Generate axis based on mass width at reference m/z using analyzer
+        physics.
 
         Parameters
         ----------

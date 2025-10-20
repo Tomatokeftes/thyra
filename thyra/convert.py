@@ -205,10 +205,8 @@ def convert_msi(
     resampling_config: Optional[Dict[str, Any]] = None,
     **kwargs: Any,
 ) -> bool:
-    """
-    Convert MSI data to the specified format with enhanced error handling and
-    automatic pixel size detection.
-    """
+    """Convert MSI data to the specified format with enhanced error handling
+    and automatic pixel size detection."""
     # Validate input parameters
     if not _validate_input_parameters(
         input_path,
