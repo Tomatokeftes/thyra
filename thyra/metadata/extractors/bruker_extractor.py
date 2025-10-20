@@ -60,7 +60,9 @@ class BrukerMetadataExtractor(MetadataExtractor):
     def _query_total_peaks(self, cursor):
         """Query total peaks across all frames from NumPeaks column."""
         try:
-            cursor.execute("SELECT SUM(NumPeaks) FROM Frames WHERE NumPeaks IS NOT NULL AND NumPeaks > 0")
+            cursor.execute(
+                "SELECT SUM(NumPeaks) FROM Frames WHERE NumPeaks IS NOT NULL AND NumPeaks > 0"
+            )
             result = cursor.fetchone()
             if result and result[0]:
                 return int(result[0])

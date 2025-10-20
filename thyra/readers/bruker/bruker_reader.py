@@ -364,10 +364,12 @@ class BrukerReader(BaseMSIReader):
                 yield coords, mzs, intensities
 
         # Build raw mass axis using simplified function (returns mass_axis and total_peaks)
-        mass_axis, total_peaks = build_raw_mass_axis(mz_iterator(), self.progress_callback)
+        mass_axis, total_peaks = build_raw_mass_axis(
+            mz_iterator(), self.progress_callback
+        )
 
         # Cache total_peaks for later retrieval (if not already set from NumPeaks cache)
-        if not hasattr(self, '_total_peaks_from_mass_axis'):
+        if not hasattr(self, "_total_peaks_from_mass_axis"):
             self._total_peaks_from_mass_axis = total_peaks
 
         if len(mass_axis) == 0:

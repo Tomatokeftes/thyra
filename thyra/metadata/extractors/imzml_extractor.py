@@ -113,7 +113,9 @@ class ImzMLMetadataExtractor(MetadataExtractor):
             Tuple of ((min_mass, max_mass), total_peaks)
         """
         try:
-            logger.info("Scanning ALL spectra for complete mass range and peak count...")
+            logger.info(
+                "Scanning ALL spectra for complete mass range and peak count..."
+            )
 
             n_spectra = len(self.parser.coordinates)
             min_mass = float("inf")
@@ -123,7 +125,9 @@ class ImzMLMetadataExtractor(MetadataExtractor):
             from tqdm import tqdm
 
             with tqdm(
-                total=n_spectra, desc="Scanning mass range and counting peaks", unit="spectrum"
+                total=n_spectra,
+                desc="Scanning mass range and counting peaks",
+                unit="spectrum",
             ) as pbar:
                 for idx in range(n_spectra):
                     try:
