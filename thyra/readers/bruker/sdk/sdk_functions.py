@@ -1,5 +1,4 @@
-"""
-SDK function definitions and wrappers for Bruker data access.
+"""SDK function definitions and wrappers for Bruker data access.
 
 This module defines all the Bruker SDK functions with proper type annotations
 and provides a clean interface for data access operations.
@@ -28,16 +27,14 @@ logger = logging.getLogger(__name__)
 
 
 class SDKFunctions:
-    """
-    Wrapper class for all Bruker SDK functions.
+    """Wrapper class for all Bruker SDK functions.
 
     This class provides a clean, type-safe interface to the Bruker SDK
     with proper error handling and data conversion.
     """
 
     def __init__(self, dll_manager: DLLManager, file_type: str):
-        """
-        Initialize SDK functions for a specific file type.
+        """Initialize SDK functions for a specific file type.
 
         Args:
             dll_manager: Initialized DLL manager
@@ -126,8 +123,7 @@ class SDKFunctions:
         dll.tims_index_to_mz.restype = c_uint32
 
     def open_file(self, file_path: str, use_recalibrated: bool = False) -> int:
-        """
-        Open a Bruker data file.
+        """Open a Bruker data file.
 
         Args:
             file_path: Path to the data directory
@@ -160,8 +156,7 @@ class SDKFunctions:
         return handle
 
     def close_file(self, handle: int) -> None:
-        """
-        Close a Bruker data file.
+        """Close a Bruker data file.
 
         Args:
             handle: File handle to close
@@ -181,8 +176,7 @@ class SDKFunctions:
         frame_id: int,
         buffer_size_hint: Optional[int] = None,
     ) -> Tuple[np.ndarray, np.ndarray]:
-        """
-        Read a spectrum from the file with optional buffer size optimization.
+        """Read a spectrum from the file with optional buffer size optimization.
 
         Args:
             handle: File handle
@@ -214,8 +208,7 @@ class SDKFunctions:
         buffer_size: int,
         is_optimized: bool = False,
     ) -> Tuple[np.ndarray, np.ndarray]:
-        """
-        Read spectrum from TSF file with optional optimization.
+        """Read spectrum from TSF file with optional optimization.
 
         Args:
             handle: File handle
