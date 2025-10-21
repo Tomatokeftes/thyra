@@ -138,8 +138,10 @@ class BaseSpatialDataConverter(BaseMSIConverter, ABC):
         # Check for ResamplingConfig dataclass first (more specific)
         if isinstance(self._resampling_config, ResamplingConfig):
             method = self._resampling_config.method
+            axis_type = self._resampling_config.axis_type
         elif isinstance(self._resampling_config, dict):
             method = self._resampling_config.get("method", "auto")
+            axis_type = self._resampling_config.get("axis_type", "auto")
             # Convert string to enum if needed
             if isinstance(method, str):
                 method_map = {
@@ -147,8 +149,21 @@ class BaseSpatialDataConverter(BaseMSIConverter, ABC):
                     "tic_preserving": ResamplingMethod.TIC_PRESERVING,
                 }
                 method = method_map.get(method, None)
+            # Convert axis_type string to enum if needed
+            if isinstance(axis_type, str):
+                from ...resampling.types import AxisType
+
+                axis_type_map = {
+                    "constant": AxisType.CONSTANT,
+                    "linear_tof": AxisType.LINEAR_TOF,
+                    "reflector_tof": AxisType.REFLECTOR_TOF,
+                    "orbitrap": AxisType.ORBITRAP,
+                    "fticr": AxisType.FTICR,
+                }
+                axis_type = axis_type_map.get(axis_type, None)
         else:
             method = self._resampling_config.method
+            axis_type = self._resampling_config.axis_type
 
         # If method is None or "auto", use DecisionTree to determine strategy
         if method is None:
@@ -168,6 +183,9 @@ class BaseSpatialDataConverter(BaseMSIConverter, ABC):
             self._resampling_method = method
 
         logging.info(f"Using resampling method: {self._resampling_method}")
+
+        # Store axis_type override if provided (will be used in _build_resampled_mass_axis)
+        self._manual_axis_type = axis_type
 
         # Store resampling parameters - handle both dict and dataclass
         if isinstance(self._resampling_config, ResamplingConfig):
@@ -354,10 +372,16 @@ class BaseSpatialDataConverter(BaseMSIConverter, ABC):
         min_mz = mass_range[0] if self._min_mz is None else self._min_mz
         max_mz = mass_range[1] if self._max_mz is None else self._max_mz
 
-        # Get metadata for axis type selection (minimize reader calls)
-        metadata = self._get_cached_metadata_for_resampling()
-        tree = ResamplingDecisionTree()
-        axis_type = tree.select_axis_type(metadata)
+        # Check if manual axis type override was provided
+        if hasattr(self, "_manual_axis_type") and self._manual_axis_type is not None:
+            axis_type = self._manual_axis_type
+            logging.info(f"Using manually specified axis type: {axis_type}")
+        else:
+            # Get metadata for axis type selection (minimize reader calls)
+            metadata = self._get_cached_metadata_for_resampling()
+            tree = ResamplingDecisionTree()
+            axis_type = tree.select_axis_type(metadata)
+            logging.info(f"Auto-detected axis type: {axis_type}")
 
         # Calculate bins based on width if specified OR if no bins were specified (default)
         if self._width_at_mz is not None or self._target_bins is None:
@@ -371,8 +395,6 @@ class BaseSpatialDataConverter(BaseMSIConverter, ABC):
             f"Building resampled mass axis: {min_mz:.2f} - {max_mz:.2f} m/z, "
             f"{target_bins} bins"
         )
-
-        logging.info(f"Selected axis type: {axis_type}")
 
         # Build the physics-based axis
         builder = CommonAxisBuilder()

@@ -57,6 +57,7 @@ class ResamplingConfig:
     """Configuration for resampling operations."""
 
     method: Optional[ResamplingMethod] = None  # Auto-detect from instrument
+    axis_type: Optional[AxisType] = None  # Auto-detect from instrument
     target_bins: Optional[int] = None  # Number of target bins
     mass_width_da: Optional[float] = None  # Mass width in Da at reference
     reference_mz: float = 500.0  # Reference m/z for width spec
