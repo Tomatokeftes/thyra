@@ -43,6 +43,23 @@ class TestBasicImports:
         assert config.target_bins == 300000
         assert config.reference_mz == 500.0  # default
 
+    def test_resampling_config_with_axis_type(self):
+        """Test ResamplingConfig can be created with axis_type field."""
+        # Test with explicit axis_type
+        config = ResamplingConfig(
+            method=ResamplingMethod.NEAREST_NEIGHBOR,
+            axis_type=AxisType.REFLECTOR_TOF,
+            target_bins=1000,
+        )
+        assert config.method == ResamplingMethod.NEAREST_NEIGHBOR
+        assert config.axis_type == AxisType.REFLECTOR_TOF
+        assert config.target_bins == 1000
+
+        # Test without axis_type (should be None by default)
+        config_no_axis = ResamplingConfig(method=ResamplingMethod.NEAREST_NEIGHBOR)
+        assert config_no_axis.method == ResamplingMethod.NEAREST_NEIGHBOR
+        assert config_no_axis.axis_type is None
+
 
 class TestBasicFunctionality:
     """Test basic functionality works."""
