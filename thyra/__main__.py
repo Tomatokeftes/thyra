@@ -121,6 +121,22 @@ def _create_argument_parser() -> argparse.ArgumentParser:
         help="Reference m/z for width specification (default: 1000.0). "
         "Used with --resample-width-at-mz.",
     )
+    parser.add_argument(
+        "--mass-axis-type",
+        choices=[
+            "auto",
+            "constant",
+            "linear_tof",
+            "reflector_tof",
+            "orbitrap",
+            "fticr",
+        ],
+        default="auto",
+        help="Mass axis spacing type: auto (detect from metadata), "
+        "constant (uniform spacing), linear_tof (sqrt spacing), "
+        "reflector_tof (logarithmic spacing), orbitrap (1/sqrt spacing), "
+        "fticr (quadratic spacing). Only used with --resample.",
+    )
 
     return parser
 
@@ -254,6 +270,7 @@ def _perform_conversion(args) -> bool:
     if args.resample:
         resampling_config = {
             "method": args.resample_method,
+            "axis_type": args.mass_axis_type,
             "target_bins": args.resample_bins,
             "min_mz": args.resample_min_mz,
             "max_mz": args.resample_max_mz,
