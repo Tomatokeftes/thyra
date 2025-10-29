@@ -51,7 +51,7 @@ def _get_windows_paths(lib_name: str, data_directory: Optional[Path]) -> List[Pa
     # Repository DLL folder (HIGHEST PRIORITY)
     repository_dll_folder = Path(__file__).parent / "dll" / lib_name
     paths.append(repository_dll_folder)
-    logger.info(f"Checking repository DLL folder: {repository_dll_folder}")
+    logger.debug(f"Checking repository DLL folder: {repository_dll_folder}")
 
     # Current working directory and script location
     paths.extend(
@@ -133,7 +133,7 @@ def _get_linux_paths(lib_name: str, data_directory: Optional[Path]) -> List[Path
     # Repository DLL folder (HIGHEST PRIORITY)
     repository_dll_folder = Path(__file__).parent / "dll" / lib_name
     paths.append(repository_dll_folder)
-    logger.info(f"Checking repository DLL folder: {repository_dll_folder}")
+    logger.debug(f"Checking repository DLL folder: {repository_dll_folder}")
 
     # Standard library paths
     paths.extend(
@@ -172,7 +172,7 @@ def _get_macos_paths(lib_name: str, data_directory: Optional[Path]) -> List[Path
     # Repository DLL folder (HIGHEST PRIORITY)
     repository_dll_folder = Path(__file__).parent / "dll" / lib_name
     paths.append(repository_dll_folder)
-    logger.info(f"Checking repository DLL folder: {repository_dll_folder}")
+    logger.debug(f"Checking repository DLL folder: {repository_dll_folder}")
 
     # Standard library paths
     paths.extend(
@@ -246,12 +246,12 @@ def get_dll_paths(data_directory: Optional[Path] = None) -> List[Path]:
         checked_count += 1
         if path.exists():
             existing_paths.append(path)
-            logger.info(f"Found SDK library: {path}")
+            logger.debug(f"Found SDK library: {path}")
         else:
             logger.debug(f"SDK library not found at: {path}")
 
     if existing_paths:
-        logger.info(
+        logger.debug(
             f"Found {len(existing_paths)} SDK libraries out of {checked_count} checked paths"
         )
     else:

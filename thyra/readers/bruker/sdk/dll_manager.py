@@ -85,7 +85,7 @@ class DLLManager:
             try:
                 self._dll = self._load_library_at_path(lib_path)
                 self._library_path = lib_path
-                logger.info(f"Successfully loaded Bruker SDK from: {lib_path}")
+                logger.debug(f"Successfully loaded Bruker SDK from: {lib_path}")
                 return
             except Exception as e:
                 logger.debug(f"Failed to load library from {lib_path}: {e}")
