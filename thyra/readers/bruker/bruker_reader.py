@@ -295,7 +295,7 @@ class BrukerReader(BaseMSIReader):
                 str(self.data_path), self.use_recalibrated_state
             )
 
-            logger.info(f"Successfully initialized {self.file_type.upper()} SDK")
+            logger.debug(f"Successfully initialized {self.file_type.upper()} SDK")
 
         except Exception as e:
             logger.error(f"Failed to initialize SDK: {e}")
@@ -512,6 +512,78 @@ class BrukerReader(BaseMSIReader):
             logger.warning(f"Error getting coordinates for frame {frame_id}: {e}")
             return None
 
+    def get_frame_id_by_coordinates(
+        self, x: int, y: int, z: int = 0
+    ) -> Optional[int]:
+        """Get frame ID for given coordinates.
+
+        Args:
+            x: X coordinate (0-based)
+            y: Y coordinate (0-based)
+            z: Z coordinate (0-based, default 0 for 2D data)
+
+        Returns:
+            Frame ID if found, None otherwise
+        """
+        try:
+            # Adjust coordinates by offsets if needed
+            offsets = self._get_coordinate_offsets()
+            if offsets:
+                x_offset, y_offset, z_offset = offsets
+                x += x_offset
+                y += y_offset
+                z += z_offset
+
+            with sqlite3.connect(str(self.db_path)) as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    "SELECT Frame FROM MaldiFrameInfo WHERE "
+                    "XIndexPos = ? AND YIndexPos = ?",
+                    (x, y),
+                )
+                result = cursor.fetchone()
+                if result:
+                    return result[0]
+                return None
+
+        except Exception as e:
+            logger.warning(f"Error getting frame ID for coordinates ({x}, {y}, {z}): {e}")
+            return None
+
+    def get_spectrum_by_coordinates(
+        self, x: int, y: int, z: int = 0
+    ) -> Optional[Tuple[NDArray[np.float64], NDArray[np.float64]]]:
+        """Get spectrum data for given coordinates.
+
+        Args:
+            x: X coordinate (0-based)
+            y: Y coordinate (0-based)
+            z: Z coordinate (0-based, default 0 for 2D data)
+
+        Returns:
+            Tuple of (mz_array, intensity_array) if found, None otherwise
+        """
+        frame_id = self.get_frame_id_by_coordinates(x, y, z)
+        if frame_id is None:
+            return None
+
+        try:
+            # Get buffer size hint from cache
+            buffer_size_hint = self._num_peaks_cache.get(frame_id)
+
+            # Read spectrum
+            mzs, intensities = self.sdk.read_spectrum(
+                self.handle, frame_id, buffer_size_hint=buffer_size_hint
+            )
+
+            if mzs.size > 0 and intensities.size > 0:
+                return mzs, intensities
+            return None
+
+        except Exception as e:
+            logger.warning(f"Error reading spectrum for frame {frame_id}: {e}")
+            return None
+
     def _preload_frame_num_peaks(self) -> Dict[int, int]:
         """Preload NumPeaks values for all frames at initialization.
 
@@ -549,7 +621,7 @@ class BrukerReader(BaseMSIReader):
                     )
 
                 memory_mb = len(num_peaks_cache) * 2 / (1024 * 1024)  # uint16 = 2 bytes
-                logger.info(
+                logger.debug(
                     f"Cached NumPeaks for {len(num_peaks_cache)} frames "
                     f"({memory_mb:.1f}MB)"
                 )
@@ -562,7 +634,7 @@ class BrukerReader(BaseMSIReader):
 
     def close(self) -> None:
         """Close all resources and connections."""
-        logger.info("Closing Bruker reader")
+        logger.debug("Closing Bruker reader")
 
         try:
             # Close SDK handle
