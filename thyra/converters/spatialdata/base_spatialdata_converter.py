@@ -152,7 +152,6 @@ class BaseSpatialDataConverter(BaseMSIConverter, ABC):
             # Convert axis_type string to enum if needed
             if isinstance(axis_type, str):
                 from ...resampling.types import AxisType
-
                 axis_type_map = {
                     "constant": AxisType.CONSTANT,
                     "linear_tof": AxisType.LINEAR_TOF,

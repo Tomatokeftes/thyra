@@ -31,38 +31,17 @@ class DatasetConfig:
 
 
 # Dataset registry - using real test data
+# NOTE: Using only Xenium dataset for fair comparison across formats
+# (same dataset in different formats: ImzML, Bruker .d, and SpatialData/Zarr)
 DATASETS = {
-    # ImzML test data
-    "pea_imzml": DatasetConfig(
-        name="pea_imzml",
-        path=Path("test_data/pea.imzML"),
+    # Xenium dataset (18GB) - for publication-quality benchmarks
+    # ImzML version was resampled by SCILS
+    # Pre-converted Zarr exists at benchmarks/converted/xenium.zarr
+    "xenium": DatasetConfig(
+        name="xenium",
+        path=Path("test_data/20240826_xenium_0041899.imzML"),
         format_type="imzml",
-        description="PEA ImzML dataset",
-    ),
-    # 'bellini_imzml': DatasetConfig(
-    #     name='bellini_imzml',
-    #     path=Path('test_data/bellini.imzML'),
-    #     format_type='imzml',
-    #     description='Bellini ImzML dataset'
-    # ),
-    # Bruker data - raw (no resampling, preserves all unique m/z ~78M bins)
-    "bruker_pea_raw": DatasetConfig(
-        name="bruker_pea_raw",
-        path=Path("test_data/20231109_PEA_NEDC.d"),
-        format_type="bruker",
-        description="Bruker PEA raw data (no interpolation, ~78M m/z bins)",
-        resampling_config=None,  # No resampling - preserves all unique m/z
-    ),
-    # Bruker data - resampled to 300k bins (industry standard)
-    "bruker_pea_300k": DatasetConfig(
-        name="bruker_pea_300k",
-        path=Path("test_data/20231109_PEA_NEDC.d"),
-        format_type="bruker",
-        description="Bruker PEA resampled to 300k bins",
-        resampling_config={
-            "method": "bin_width_at_mz",
-            "params": {"target_bins": 300000},
-        },
+        description="Xenium 18GB dataset (ImzML resampled by SCILS)",
     ),
 }
 
@@ -95,6 +74,9 @@ class BenchmarkConfig:
 
     # Parallel processing
     WORKER_COUNTS = [1, 2, 4, 8]
+
+    # Statistical rigor - number of repeated runs for each benchmark
+    N_BENCHMARK_RUNS = 1  # Set to 1 for testing, 5 for production
 
     # Plot styling
     PLOT_DPI = 300
