@@ -41,6 +41,10 @@ Archive/
 temp_*
 test_output*/
 
+# Benchmark results and logs
+benchmarks/results/*.log
+benchmarks/results/*.csv
+
 # Claude Code files - should not be committed
 .claude/
 CLAUDE.md
