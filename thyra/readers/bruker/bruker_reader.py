@@ -226,6 +226,7 @@ class BrukerReader(BaseMSIReader):
         self._common_mass_axis: Optional[np.ndarray] = None
         self._frame_count: Optional[int] = None
         self._coordinate_offsets: Optional[Tuple[int, int, int]] = None
+        self._closed: bool = False  # Track if resources have been closed
 
         # Preload NumPeaks cache for buffer size optimization
         self._num_peaks_cache: Dict[int, int] = self._preload_frame_num_peaks()
@@ -633,7 +634,15 @@ class BrukerReader(BaseMSIReader):
             return {}  # Empty cache triggers fallback behavior
 
     def close(self) -> None:
-        """Close all resources and connections."""
+        """Close all resources and connections.
+
+        This method is idempotent - safe to call multiple times.
+        """
+        # Skip if already closed
+        if getattr(self, "_closed", False):
+            logger.debug("Resources already closed, skipping")
+            return
+
         logger.debug("Closing Bruker reader")
 
         try:
@@ -647,12 +656,15 @@ class BrukerReader(BaseMSIReader):
                 self.conn.close()
                 self.conn = None
 
-            # No caches to clear anymore
+            # Mark as closed
+            self._closed = True
 
             logger.info("Successfully closed all resources")
 
         except Exception as e:
             logger.error(f"Error during cleanup: {e}")
+            # Even if there's an error, mark as closed to prevent repeated attempts
+            self._closed = True
 
     @property
     def shape(self) -> Tuple[int, int, int]:
