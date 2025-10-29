@@ -123,14 +123,7 @@ def _create_argument_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--mass-axis-type",
-        choices=[
-            "auto",
-            "constant",
-            "linear_tof",
-            "reflector_tof",
-            "orbitrap",
-            "fticr",
-        ],
+        choices=["auto", "constant", "linear_tof", "reflector_tof", "orbitrap", "fticr"],
         default="auto",
         help="Mass axis spacing type: auto (detect from metadata), "
         "constant (uniform spacing), linear_tof (sqrt spacing), "
