@@ -16,6 +16,9 @@ def setup_logging(log_level=logging.INFO, log_file=None):
     logger = logging.getLogger("thyra")
     logger.setLevel(log_level)
 
+    # Prevent propagation to root logger to avoid duplicate messages
+    logger.propagate = False
+
     # Remove all existing handlers to avoid duplicates
     if logger.hasHandlers():
         logger.handlers.clear()
