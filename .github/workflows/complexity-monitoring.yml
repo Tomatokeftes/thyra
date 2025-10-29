@@ -64,13 +64,13 @@ jobs:
         # Use different modes based on event type
         if [ "${{ github.event_name }}" = "pull_request" ]; then
           echo "PR detected: Analyzing changed files only (fast mode)"
-          poetry run python scripts/complexity_monitor.py \
+          poetry run python .github/scripts/complexity_monitor.py \
             --threshold 10 \
             --files-changed \
             --save
         else
           echo "Main branch or scheduled run: Full analysis with trends"
-          poetry run python scripts/complexity_monitor.py \
+          poetry run python .github/scripts/complexity_monitor.py \
             --threshold 10 \
             --save \
             --trends
@@ -187,7 +187,7 @@ jobs:
         echo ""
         echo "DIRECT COMPLEXITY CHECK (for debugging):"
         echo "================================="
-        poetry run python scripts/complexity_monitor.py --threshold 10 --no-save --quiet || true
+        poetry run python .github/scripts/complexity_monitor.py --threshold 10 --no-save --quiet || true
 
     - name: Set complexity check status
       run: |
