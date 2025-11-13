@@ -13,16 +13,23 @@ logger = logging.getLogger(__name__)
 class BrukerMetadataExtractor(MetadataExtractor):
     """Bruker-specific metadata extractor with optimized single-query extraction."""
 
-    def __init__(self, conn: sqlite3.Connection, data_path: Path):
+    def __init__(
+        self,
+        conn: sqlite3.Connection,
+        data_path: Path,
+        calibration_metadata: Optional[Dict[str, Any]] = None,
+    ):
         """Initialize Bruker metadata extractor.
 
         Args:
             conn: Active SQLite database connection
             data_path: Path to the Bruker .d directory
+            calibration_metadata: Optional calibration metadata from BrukerReader
         """
         super().__init__(conn)
         self.conn = conn
         self.data_path = data_path
+        self.calibration_metadata = calibration_metadata
 
     def _query_imaging_bounds(self, cursor):
         """Query imaging area bounds from GlobalMetadata."""
@@ -221,6 +228,10 @@ class BrukerMetadataExtractor(MetadataExtractor):
             format_specific["binary_file"] = str(self.data_path / "analysis.tdf")
         elif (self.data_path / "analysis.tsf").exists():
             format_specific["binary_file"] = str(self.data_path / "analysis.tsf")
+
+        # Add calibration metadata if available
+        if self.calibration_metadata:
+            format_specific["calibration"] = self.calibration_metadata
 
         return format_specific
 
