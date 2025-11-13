@@ -1,11 +1,14 @@
 # thyra/__main__.py
 
 # Configure dependencies to suppress warnings BEFORE any imports
-import argparse  # noqa: E402
 import logging  # noqa: E402
 import os  # noqa: E402
+import sqlite3  # noqa: E402
 import warnings  # noqa: E402
 from pathlib import Path  # noqa: E402
+from typing import Optional  # noqa: E402
+
+import click  # noqa: E402
 
 from thyra.convert import convert_msi  # noqa: E402
 from thyra.utils.data_processors import optimize_zarr_chunks  # noqa: E402
@@ -27,294 +30,375 @@ warnings.filterwarnings(
 )
 
 
-def _create_argument_parser() -> argparse.ArgumentParser:
-    """Create and configure the argument parser."""
-    parser = argparse.ArgumentParser(
-        description="Convert MSI data to SpatialData format"
-    )
+def _get_calibration_states(bruker_path: Path) -> list[dict]:
+    """Read calibration states from calibration.sqlite.
 
-    parser.add_argument("input", help="Path to input MSI file or directory")
-    parser.add_argument("output", help="Path for output file")
-    parser.add_argument(
-        "--format",
-        choices=["spatialdata"],
-        default="spatialdata",
-        help="Output format type: spatialdata (full SpatialData format)",
-    )
-    parser.add_argument(
-        "--dataset-id",
-        default="msi_dataset",
-        help="Identifier for the dataset",
-    )
-    parser.add_argument(
-        "--pixel-size",
-        type=float,
-        default=None,
-        help="Pixel size in micrometers. If not specified, automatic "
-        "detection from metadata will be attempted. Required if fails.",
-    )
-    parser.add_argument(
-        "--handle-3d",
-        action="store_true",
-        help="Process as 3D data (default: treat as 2D slices)",
-    )
-    parser.add_argument(
-        "--optimize-chunks",
-        action="store_true",
-        help="Optimize Zarr chunks after conversion",
-    )
-    parser.add_argument(
-        "--log-level",
-        choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
-        default="INFO",
-        help="Set the logging level",
-    )
-    parser.add_argument("--log-file", default=None, help="Path to the log file")
+    Args:
+        bruker_path: Path to Bruker .d directory
 
-    # Resampling arguments
-    parser.add_argument(
-        "--resample",
-        action="store_true",
-        help="Enable mass axis resampling/harmonization",
-    )
-    parser.add_argument(
-        "--resample-method",
-        choices=["auto", "nearest_neighbor", "tic_preserving"],
-        default="auto",
-        help="Resampling method: auto (detect from metadata), "
-        "nearest_neighbor (centroid data), tic_preserving (profile data)",
-    )
-    parser.add_argument(
-        "--resample-bins",
-        type=int,
-        default=None,
-        help="Number of bins for resampled mass axis. "
-        "If not specified, uses physics-based width calculation (5 mDa @ m/z 1000). "
-        "Mutually exclusive with --resample-width-at-mz.",
-    )
-    parser.add_argument(
-        "--resample-min-mz",
-        type=float,
-        default=None,
-        help="Minimum m/z for resampled axis (default: auto-detect from data)",
-    )
-    parser.add_argument(
-        "--resample-max-mz",
-        type=float,
-        default=None,
-        help="Maximum m/z for resampled axis (default: auto-detect from data)",
-    )
-    parser.add_argument(
-        "--resample-width-at-mz",
-        type=float,
-        nargs="?",
-        const=0.005,
-        default=None,
-        help="Mass width (in Da) at reference m/z for physics-based binning. "
-        "Use flag alone for default (0.005 Da), or specify custom value. "
-        "Default: 0.005 Da at m/z 1000. Mutually exclusive with --resample-bins.",
-    )
-    parser.add_argument(
-        "--resample-reference-mz",
-        type=float,
-        default=1000.0,
-        help="Reference m/z for width specification (default: 1000.0). "
-        "Used with --resample-width-at-mz.",
-    )
-    parser.add_argument(
-        "--mass-axis-type",
-        choices=["auto", "constant", "linear_tof", "reflector_tof", "orbitrap", "fticr"],
-        default="auto",
-        help="Mass axis spacing type: auto (detect from metadata), "
-        "constant (uniform spacing), linear_tof (sqrt spacing), "
-        "reflector_tof (logarithmic spacing), orbitrap (1/sqrt spacing), "
-        "fticr (quadratic spacing). Only used with --resample.",
-    )
+    Returns:
+        List of calibration state dictionaries with id, datetime, and version info
+    """
+    cal_file = bruker_path / "calibration.sqlite"
+    if not cal_file.exists():
+        return []
 
-    return parser
+    try:
+        conn = sqlite3.connect(str(cal_file))
+        cursor = conn.cursor()
 
+        # Query calibration states
+        cursor.execute(
+            """
+            SELECT cs.Id, ci.DateTime
+            FROM CalibrationState cs
+            LEFT JOIN CalibrationInfo ci ON cs.Id = ci.StateId
+            ORDER BY cs.Id
+            """
+        )
 
-def _validate_basic_arguments(parser: argparse.ArgumentParser, args) -> None:
-    """Validate basic arguments."""
-    if args.pixel_size is not None and args.pixel_size <= 0:
-        parser.error("Pixel size must be positive (got: {})".format(args.pixel_size))
-
-    if not args.dataset_id.strip():
-        parser.error("Dataset ID cannot be empty")
-
-
-def _validate_resampling_bins(parser: argparse.ArgumentParser, args) -> None:
-    """Validate resampling bin arguments."""
-    if args.resample_bins is not None and args.resample_bins <= 0:
-        parser.error(
-            "Number of resampling bins must be positive (got: {})".format(
-                args.resample_bins
+        states = []
+        for row in cursor.fetchall():
+            state_id, datetime_str = row
+            states.append(
+                {
+                    "id": state_id,
+                    "datetime": datetime_str or "Unknown",
+                    "version": state_id,
+                }
             )
+
+        conn.close()
+        return states
+
+    except Exception:
+        return []
+
+
+def _validate_basic_params(pixel_size: Optional[float], dataset_id: str) -> None:
+    """Validate basic conversion parameters."""
+    if pixel_size is not None and pixel_size <= 0:
+        raise click.BadParameter("Pixel size must be positive", param_hint="pixel_size")
+    if not dataset_id.strip():
+        raise click.BadParameter("Dataset ID cannot be empty", param_hint="dataset_id")
+
+
+def _validate_resampling_params(
+    resample_bins: Optional[int],
+    resample_min_mz: Optional[float],
+    resample_max_mz: Optional[float],
+    resample_width_at_mz: Optional[float],
+    resample_reference_mz: float,
+) -> None:
+    """Validate resampling parameters."""
+    if resample_bins is not None and resample_bins <= 0:
+        raise click.BadParameter(
+            "Number of resampling bins must be positive", param_hint="resample_bins"
         )
-
-
-def _validate_resampling_ranges(parser: argparse.ArgumentParser, args) -> None:
-    """Validate resampling m/z range arguments."""
-    if args.resample_min_mz is not None and args.resample_min_mz <= 0:
-        parser.error(
-            "Minimum m/z must be positive (got: {})".format(args.resample_min_mz)
+    if resample_min_mz is not None and resample_min_mz <= 0:
+        raise click.BadParameter(
+            "Minimum m/z must be positive", param_hint="resample_min_mz"
         )
-
-    if args.resample_max_mz is not None and args.resample_max_mz <= 0:
-        parser.error(
-            "Maximum m/z must be positive (got: {})".format(args.resample_max_mz)
+    if resample_max_mz is not None and resample_max_mz <= 0:
+        raise click.BadParameter(
+            "Maximum m/z must be positive", param_hint="resample_max_mz"
         )
-
     if (
-        args.resample_min_mz is not None
-        and args.resample_max_mz is not None
-        and args.resample_min_mz >= args.resample_max_mz
+        resample_min_mz is not None
+        and resample_max_mz is not None
+        and resample_min_mz >= resample_max_mz
     ):
-        parser.error("Minimum m/z must be less than maximum m/z")
-
-
-def _validate_resampling_mutual_exclusivity(
-    parser: argparse.ArgumentParser, args
-) -> None:
-    """Validate mutual exclusivity of resampling parameters."""
-    # Check if both bin count AND width were explicitly specified
-    bins_specified = args.resample_bins is not None
-    width_specified = args.resample_width_at_mz is not None
-
-    if bins_specified and width_specified:
-        parser.error(
-            "--resample-bins and --resample-width-at-mz are mutually exclusive. "
-            "Use either --resample-bins for fixed bin count or --resample-width-at-mz "
-            "for physics-based binning with target resolution."
+        raise click.BadParameter("Minimum m/z must be less than maximum m/z")
+    if resample_bins is not None and resample_width_at_mz is not None:
+        raise click.BadParameter(
+            "--resample-bins and --resample-width-at-mz are mutually exclusive"
+        )
+    if resample_width_at_mz is not None and resample_width_at_mz <= 0:
+        raise click.BadParameter(
+            "Mass width must be positive", param_hint="resample_width_at_mz"
+        )
+    if resample_reference_mz <= 0:
+        raise click.BadParameter(
+            "Reference m/z must be positive", param_hint="resample_reference_mz"
         )
 
 
-def _validate_resampling_width_params(parser: argparse.ArgumentParser, args) -> None:
-    """Validate width-based resampling parameters."""
-    if args.resample_width_at_mz is not None and args.resample_width_at_mz <= 0:
-        parser.error(
-            "Mass width must be positive (got: {})".format(args.resample_width_at_mz)
-        )
-
-    if args.resample_reference_mz <= 0:
-        parser.error(
-            "Reference m/z must be positive (got: {})".format(
-                args.resample_reference_mz
-            )
-        )
-
-
-def _validate_arguments(parser: argparse.ArgumentParser, args) -> None:
-    """Validate command line arguments."""
-    _validate_basic_arguments(parser, args)
-    _validate_resampling_bins(parser, args)
-    _validate_resampling_ranges(parser, args)
-    _validate_resampling_mutual_exclusivity(parser, args)
-    _validate_resampling_width_params(parser, args)
-
-
-def _check_imzml_requirements(
-    parser: argparse.ArgumentParser, input_path: Path
-) -> None:
-    """Check ImzML format requirements."""
-    ibd_path = input_path.with_suffix(".ibd")
-    if not ibd_path.exists():
-        parser.error(
-            f"ImzML file requires corresponding .ibd file, "
-            f"but not found: {ibd_path}"
-        )
-
-
-def _check_bruker_requirements(
-    parser: argparse.ArgumentParser, input_path: Path
-) -> None:
-    """Check Bruker format requirements."""
-    if (
-        not (input_path / "analysis.tsf").exists()
-        and not (input_path / "analysis.tdf").exists()
-    ):
-        parser.error(
-            f"Bruker .d directory requires analysis.tsf or analysis.tdf file: "
-            f"{input_path}"
-        )
-
-
-def _validate_input_path(parser: argparse.ArgumentParser, input_path: Path) -> None:
+def _validate_input_path(input: Path) -> None:
     """Validate input path and format requirements."""
-    if not input_path.exists():
-        parser.error(f"Input path does not exist: {input_path}")
+    if not input.exists():
+        raise click.BadParameter(f"Input path does not exist: {input}")
 
-    if input_path.is_file() and input_path.suffix.lower() == ".imzml":
-        _check_imzml_requirements(parser, input_path)
-    elif input_path.is_dir() and input_path.suffix.lower() == ".d":
-        _check_bruker_requirements(parser, input_path)
+    if input.is_file() and input.suffix.lower() == ".imzml":
+        ibd_path = input.with_suffix(".ibd")
+        if not ibd_path.exists():
+            raise click.BadParameter(
+                f"ImzML file requires corresponding .ibd file, but not found: {ibd_path}"
+            )
+    elif input.is_dir() and input.suffix.lower() == ".d":
+        if (
+            not (input / "analysis.tsf").exists()
+            and not (input / "analysis.tdf").exists()
+        ):
+            raise click.BadParameter(
+                f"Bruker .d directory requires analysis.tsf or analysis.tdf file: {input}"
+            )
 
 
-def _validate_output_path(parser: argparse.ArgumentParser, output_path: Path) -> None:
+def _validate_output_path(output: Path) -> None:
     """Validate output path."""
-    if output_path.exists():
-        parser.error(f"Output path already exists: {output_path}")
+    if output.exists():
+        raise click.BadParameter(f"Output path already exists: {output}")
 
 
-def _perform_conversion(args) -> bool:
-    """Perform the MSI data conversion."""
+def _display_calibration_info(input: Path, use_recalibrated: bool) -> None:
+    """Display calibration information for Bruker datasets.
+
+    Note: This is informational only. Full interactive selection
+    will be implemented in the future (see GitHub issue #54).
+    """
+    states = _get_calibration_states(input)
+    if not states:
+        return
+
+    click.echo("\n" + "=" * 60)
+    click.echo("Calibration Information (Display Only)")
+    click.echo("=" * 60)
+    for state in states:
+        is_active = state["id"] == max(s["id"] for s in states)
+        active_marker = " (active/will be used)" if is_active else ""
+        recal_info = (
+            f" - recalibrated {state['version'] - 1} times"
+            if state["version"] > 1
+            else ""
+        )
+        click.echo(
+            f"  State {state['id']}: {state['datetime']}{recal_info}{active_marker}"
+        )
+
+    if use_recalibrated:
+        click.echo(
+            f"\nUsing active calibration state (State {max(s['id'] for s in states)})"
+        )
+    else:
+        click.echo("\nUsing original calibration (--no-recalibrated flag set)")
+
+    click.echo("\nNote: Interactive selection not yet available. See GitHub issue #54.")
+    click.echo("=" * 60 + "\n")
+
+
+def _build_resampling_config(
+    resample_method: str,
+    mass_axis_type: str,
+    resample_bins: Optional[int],
+    resample_min_mz: Optional[float],
+    resample_max_mz: Optional[float],
+    resample_width_at_mz: Optional[float],
+    resample_reference_mz: float,
+) -> dict:
+    """Build resampling configuration dictionary."""
+    return {
+        "method": resample_method,
+        "axis_type": mass_axis_type,
+        "target_bins": resample_bins,
+        "min_mz": resample_min_mz,
+        "max_mz": resample_max_mz,
+        "width_at_mz": resample_width_at_mz,
+        "reference_mz": resample_reference_mz,
+    }
+
+
+@click.command()
+@click.argument("input", type=click.Path(exists=True, path_type=Path))
+@click.argument("output", type=click.Path(path_type=Path))
+# Basic conversion options
+@click.option(
+    "--format",
+    type=click.Choice(["spatialdata"]),
+    default="spatialdata",
+    help="Output format type: spatialdata (full SpatialData format)",
+)
+@click.option(
+    "--dataset-id",
+    default="msi_dataset",
+    help="Identifier for the dataset",
+)
+@click.option(
+    "--pixel-size",
+    type=float,
+    default=None,
+    help="Pixel size in micrometers. If not specified, automatic detection "
+    "from metadata will be attempted.",
+)
+@click.option(
+    "--handle-3d",
+    is_flag=True,
+    help="Process as 3D data (default: treat as 2D slices)",
+)
+@click.option(
+    "--optimize-chunks",
+    is_flag=True,
+    help="Optimize Zarr chunks after conversion",
+)
+# Logging options
+@click.option(
+    "--log-level",
+    type=click.Choice(["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]),
+    default="INFO",
+    help="Set the logging level",
+)
+@click.option(
+    "--log-file",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Path to the log file",
+)
+# Bruker calibration options
+@click.option(
+    "--use-recalibrated/--no-recalibrated",
+    default=True,
+    help="Use recalibrated state (default: True)",
+)
+@click.option(
+    "--interactive-calibration",
+    is_flag=True,
+    help="Display Bruker calibration states (informational only, see issue #54)",
+)
+# Resampling options
+@click.option(
+    "--resample",
+    is_flag=True,
+    help="Enable mass axis resampling/harmonization",
+)
+@click.option(
+    "--resample-method",
+    type=click.Choice(["auto", "nearest_neighbor", "tic_preserving"]),
+    default="auto",
+    help="Resampling method: auto (detect from metadata), "
+    "nearest_neighbor (centroid data), tic_preserving (profile data)",
+)
+@click.option(
+    "--resample-bins",
+    type=int,
+    default=None,
+    help="Number of bins for resampled mass axis. "
+    "If not specified, uses physics-based width calculation (5 mDa @ m/z 1000). "
+    "Mutually exclusive with --resample-width-at-mz.",
+)
+@click.option(
+    "--resample-min-mz",
+    type=float,
+    default=None,
+    help="Minimum m/z for resampled axis (default: auto-detect from data)",
+)
+@click.option(
+    "--resample-max-mz",
+    type=float,
+    default=None,
+    help="Maximum m/z for resampled axis (default: auto-detect from data)",
+)
+@click.option(
+    "--resample-width-at-mz",
+    type=float,
+    default=None,
+    help="Mass width (in Da) at reference m/z for physics-based binning. "
+    "Default: 0.005 Da at m/z 1000. Mutually exclusive with --resample-bins.",
+)
+@click.option(
+    "--resample-reference-mz",
+    type=float,
+    default=1000.0,
+    help="Reference m/z for width specification (default: 1000.0). "
+    "Used with --resample-width-at-mz.",
+)
+@click.option(
+    "--mass-axis-type",
+    type=click.Choice(
+        ["auto", "constant", "linear_tof", "reflector_tof", "orbitrap", "fticr"]
+    ),
+    default="auto",
+    help="Mass axis spacing type: auto (detect from metadata), "
+    "constant (uniform spacing), linear_tof (sqrt spacing), "
+    "reflector_tof (logarithmic spacing), orbitrap (1/sqrt spacing), "
+    "fticr (quadratic spacing). Only used with --resample.",
+)
+def main(
+    input: Path,
+    output: Path,
+    format: str,
+    dataset_id: str,
+    pixel_size: Optional[float],
+    handle_3d: bool,
+    optimize_chunks: bool,
+    log_level: str,
+    log_file: Optional[Path],
+    use_recalibrated: bool,
+    interactive_calibration: bool,
+    resample: bool,
+    resample_method: str,
+    resample_bins: Optional[int],
+    resample_min_mz: Optional[float],
+    resample_max_mz: Optional[float],
+    resample_width_at_mz: Optional[float],
+    resample_reference_mz: float,
+    mass_axis_type: str,
+):
+    """Convert MSI data to SpatialData format.
+
+    INPUT: Path to input MSI file or directory
+    OUTPUT: Path for output file
+    """
+    # Validate all parameters
+    _validate_basic_params(pixel_size, dataset_id)
+    _validate_resampling_params(
+        resample_bins,
+        resample_min_mz,
+        resample_max_mz,
+        resample_width_at_mz,
+        resample_reference_mz,
+    )
+    _validate_input_path(input)
+    _validate_output_path(output)
+
+    # Configure logging
+    setup_logging(log_level=getattr(logging, log_level), log_file=log_file)
+
+    # Display calibration info if requested (Bruker datasets only)
+    if interactive_calibration and input.is_dir() and input.suffix.lower() == ".d":
+        _display_calibration_info(input, use_recalibrated)
+
     # Build resampling config if enabled
-    resampling_config = None
-    if args.resample:
-        resampling_config = {
-            "method": args.resample_method,
-            "axis_type": args.mass_axis_type,
-            "target_bins": args.resample_bins,
-            "min_mz": args.resample_min_mz,
-            "max_mz": args.resample_max_mz,
-            "width_at_mz": args.resample_width_at_mz,
-            "reference_mz": args.resample_reference_mz,
-        }
+    resampling_config = (
+        _build_resampling_config(
+            resample_method,
+            mass_axis_type,
+            resample_bins,
+            resample_min_mz,
+            resample_max_mz,
+            resample_width_at_mz,
+            resample_reference_mz,
+        )
+        if resample
+        else None
+    )
 
-    return convert_msi(
-        args.input,
-        args.output,
-        format_type=args.format,
-        dataset_id=args.dataset_id,
-        pixel_size_um=args.pixel_size,
-        handle_3d=args.handle_3d,
+    # Perform conversion
+    success = convert_msi(
+        str(input),
+        str(output),
+        format_type=format,
+        dataset_id=dataset_id,
+        pixel_size_um=pixel_size,
+        handle_3d=handle_3d,
         resampling_config=resampling_config,
     )
 
-
-def _optimize_output(args) -> None:
-    """Optimize output chunks if requested."""
-    if args.format == "spatialdata":
-        optimize_zarr_chunks(args.output, f"tables/{args.dataset_id}/X")
-
-
-def main() -> None:
-    """Main entry point for the CLI."""
-    parser = _create_argument_parser()
-    args = parser.parse_args()
-
-    # Validate arguments and paths
-    _validate_arguments(parser, args)
-    input_path = Path(args.input)
-    output_path = Path(args.output)
-    _validate_input_path(parser, input_path)
-    _validate_output_path(parser, output_path)
-
-    # Configure logging
-    setup_logging(log_level=getattr(logging, args.log_level), log_file=args.log_file)
-
-    # Perform conversion
-    success = _perform_conversion(args)
-
     # Optimize chunks if requested and conversion succeeded
-    if success and args.optimize_chunks:
-        _optimize_output(args)
+    if success and optimize_chunks and format == "spatialdata":
+        optimize_zarr_chunks(str(output), f"tables/{dataset_id}/X")
 
     # Log final result
     if success:
-        logging.info(
-            f"Conversion completed successfully. Output stored at " f"{args.output}"
-        )
+        logging.info(f"Conversion completed successfully. Output stored at {output}")
     else:
         logging.error("Conversion failed.")
 

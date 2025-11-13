@@ -189,7 +189,7 @@ class BrukerReader(BaseMSIReader):
     def __init__(
         self,
         data_path: Path,
-        use_recalibrated_state: bool = False,
+        use_recalibrated_state: bool = True,
         cache_coordinates: bool = True,
         memory_limit_gb: Optional[float] = None,
         batch_size: Optional[int] = None,
@@ -200,7 +200,9 @@ class BrukerReader(BaseMSIReader):
 
         Args:
             data_path: Path to Bruker .d directory
-            use_recalibrated_state: Whether to use recalibrated data
+            use_recalibrated_state: Whether to use recalibrated/active calibration state.
+                Defaults to True (use active calibration). Set to False to use original
+                calibration from data acquisition.
             cache_coordinates: Ignored, maintained for compatibility
             memory_limit_gb: Ignored, maintained for compatibility
             batch_size: Ignored, maintained for compatibility
@@ -214,6 +216,9 @@ class BrukerReader(BaseMSIReader):
         # Validate and setup paths
         self._validate_data_path()
         self._detect_file_type()
+
+        # Read calibration metadata
+        self._calibration_metadata = self._read_calibration_metadata()
 
         # Initialize components
         self._setup_components(cache_coordinates, memory_limit_gb, batch_size)
@@ -280,6 +285,107 @@ class BrukerReader(BaseMSIReader):
         # No more coordinate cache - using direct database access
         pass
 
+    def _read_calibration_metadata(self) -> Optional[Dict]:
+        """Read calibration metadata from calibration.sqlite.
+
+        Returns:
+            Dictionary containing calibration metadata, or None if unavailable.
+            Keys include:
+            - calibration_id: ID of active calibration state
+            - calibration_uuid: Unique identifier for this calibration
+            - calibration_datetime: When calibration was performed
+            - calibration_source: Software that created calibration
+            - num_calibration_versions: Total number of calibration states
+            - recalibrated: Whether data has been recalibrated after acquisition
+            - original_calibration_datetime: Original calibration datetime (if recalibrated)
+        """
+        cal_file = self.data_path / "calibration.sqlite"
+
+        if not cal_file.exists():
+            logger.warning(f"No calibration.sqlite found in {self.data_path}")
+            return None
+
+        try:
+            conn = sqlite3.connect(cal_file)
+            cursor = conn.cursor()
+
+            # Count total calibration versions
+            cursor.execute("SELECT COUNT(*) FROM CalibrationState")
+            num_versions = cursor.fetchone()[0]
+
+            # Get ACTIVE calibration (highest ID = most recent)
+            cursor.execute(
+                """
+                SELECT Id, Key, DateTime, Source
+                FROM CalibrationState
+                ORDER BY Id DESC LIMIT 1
+            """
+            )
+            cal_id, cal_uuid, cal_datetime, cal_source = cursor.fetchone()
+
+            # Get original calibration if recalibrated
+            original_datetime = None
+            if num_versions > 1:
+                cursor.execute(
+                    """
+                    SELECT DateTime FROM CalibrationState
+                    ORDER BY Id ASC LIMIT 1
+                """
+                )
+                original_datetime = cursor.fetchone()[0]
+
+            # Get additional metadata from CalibrationInfo
+            cursor.execute(
+                """
+                SELECT KeyName, Value
+                FROM CalibrationInfo
+                WHERE CalibrationState = ?
+                AND KeyName IN ('CalibrationSoftwareVersion', 'CalibrationUser')
+            """,
+                (cal_id,),
+            )
+
+            extra_info = dict(cursor.fetchall())
+
+            conn.close()
+
+            metadata = {
+                "calibration_id": cal_id,
+                "calibration_uuid": cal_uuid,
+                "calibration_datetime": cal_datetime,
+                "calibration_source": cal_source,
+                "calibration_software_version": extra_info.get(
+                    "CalibrationSoftwareVersion"
+                ),
+                "calibration_user": extra_info.get("CalibrationUser"),
+                "num_calibration_versions": num_versions,
+                "recalibrated": num_versions > 1,
+                "original_calibration_datetime": original_datetime,
+                "calibration_file_size": cal_file.stat().st_size,
+            }
+
+            # Log which calibration is being used
+            if self.use_recalibrated_state:
+                recal_info = (
+                    f" (recalibrated {num_versions} times)" if num_versions > 1 else ""
+                )
+                logger.info(
+                    f"Using active calibration state {cal_id} from {cal_datetime}"
+                    f"{recal_info}"
+                )
+            else:
+                active_info = f", active state is {cal_id}" if num_versions > 1 else ""
+                logger.info(
+                    f"Using original calibration (use_recalibrated_state=False)"
+                    f"{active_info}"
+                )
+
+            return metadata
+
+        except Exception as e:
+            logger.error(f"Failed to read calibration metadata: {e}")
+            return None
+
     def _initialize_sdk(self) -> None:
         """Initialize the Bruker SDK with error handling."""
         try:
@@ -342,7 +448,9 @@ class BrukerReader(BaseMSIReader):
         """Create Bruker metadata extractor."""
         if not hasattr(self, "conn") or self.conn is None:
             raise ValueError("Database connection not available")
-        return BrukerMetadataExtractor(self.conn, self.data_path)
+        return BrukerMetadataExtractor(
+            self.conn, self.data_path, self._calibration_metadata
+        )
 
     def get_common_mass_axis(self) -> NDArray[np.float64]:
         """Return the common mass axis composed of all unique m/z values.
@@ -513,9 +621,7 @@ class BrukerReader(BaseMSIReader):
             logger.warning(f"Error getting coordinates for frame {frame_id}: {e}")
             return None
 
-    def get_frame_id_by_coordinates(
-        self, x: int, y: int, z: int = 0
-    ) -> Optional[int]:
+    def get_frame_id_by_coordinates(self, x: int, y: int, z: int = 0) -> Optional[int]:
         """Get frame ID for given coordinates.
 
         Args:
@@ -548,7 +654,9 @@ class BrukerReader(BaseMSIReader):
                 return None
 
         except Exception as e:
-            logger.warning(f"Error getting frame ID for coordinates ({x}, {y}, {z}): {e}")
+            logger.warning(
+                f"Error getting frame ID for coordinates ({x}, {y}, {z}): {e}"
+            )
             return None
 
     def get_spectrum_by_coordinates(
