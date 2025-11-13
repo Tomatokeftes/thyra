@@ -75,6 +75,138 @@ def _get_calibration_states(bruker_path: Path) -> list[dict]:
         return []
 
 
+def _validate_basic_params(pixel_size: Optional[float], dataset_id: str) -> None:
+    """Validate basic conversion parameters."""
+    if pixel_size is not None and pixel_size <= 0:
+        raise click.BadParameter("Pixel size must be positive", param_hint="pixel_size")
+    if not dataset_id.strip():
+        raise click.BadParameter("Dataset ID cannot be empty", param_hint="dataset_id")
+
+
+def _validate_resampling_params(
+    resample_bins: Optional[int],
+    resample_min_mz: Optional[float],
+    resample_max_mz: Optional[float],
+    resample_width_at_mz: Optional[float],
+    resample_reference_mz: float,
+) -> None:
+    """Validate resampling parameters."""
+    if resample_bins is not None and resample_bins <= 0:
+        raise click.BadParameter(
+            "Number of resampling bins must be positive", param_hint="resample_bins"
+        )
+    if resample_min_mz is not None and resample_min_mz <= 0:
+        raise click.BadParameter(
+            "Minimum m/z must be positive", param_hint="resample_min_mz"
+        )
+    if resample_max_mz is not None and resample_max_mz <= 0:
+        raise click.BadParameter(
+            "Maximum m/z must be positive", param_hint="resample_max_mz"
+        )
+    if (
+        resample_min_mz is not None
+        and resample_max_mz is not None
+        and resample_min_mz >= resample_max_mz
+    ):
+        raise click.BadParameter("Minimum m/z must be less than maximum m/z")
+    if resample_bins is not None and resample_width_at_mz is not None:
+        raise click.BadParameter(
+            "--resample-bins and --resample-width-at-mz are mutually exclusive"
+        )
+    if resample_width_at_mz is not None and resample_width_at_mz <= 0:
+        raise click.BadParameter(
+            "Mass width must be positive", param_hint="resample_width_at_mz"
+        )
+    if resample_reference_mz <= 0:
+        raise click.BadParameter(
+            "Reference m/z must be positive", param_hint="resample_reference_mz"
+        )
+
+
+def _validate_input_path(input: Path) -> None:
+    """Validate input path and format requirements."""
+    if not input.exists():
+        raise click.BadParameter(f"Input path does not exist: {input}")
+
+    if input.is_file() and input.suffix.lower() == ".imzml":
+        ibd_path = input.with_suffix(".ibd")
+        if not ibd_path.exists():
+            raise click.BadParameter(
+                f"ImzML file requires corresponding .ibd file, but not found: {ibd_path}"
+            )
+    elif input.is_dir() and input.suffix.lower() == ".d":
+        if (
+            not (input / "analysis.tsf").exists()
+            and not (input / "analysis.tdf").exists()
+        ):
+            raise click.BadParameter(
+                f"Bruker .d directory requires analysis.tsf or analysis.tdf file: {input}"
+            )
+
+
+def _validate_output_path(output: Path) -> None:
+    """Validate output path."""
+    if output.exists():
+        raise click.BadParameter(f"Output path already exists: {output}")
+
+
+def _display_calibration_info(input: Path, use_recalibrated: bool) -> None:
+    """Display calibration information for Bruker datasets.
+
+    Note: This is informational only. Full interactive selection
+    will be implemented in the future (see GitHub issue #54).
+    """
+    states = _get_calibration_states(input)
+    if not states:
+        return
+
+    click.echo("\n" + "=" * 60)
+    click.echo("Calibration Information (Display Only)")
+    click.echo("=" * 60)
+    for state in states:
+        is_active = state["id"] == max(s["id"] for s in states)
+        active_marker = " (active/will be used)" if is_active else ""
+        recal_info = (
+            f" - recalibrated {state['version'] - 1} times"
+            if state["version"] > 1
+            else ""
+        )
+        click.echo(
+            f"  State {state['id']}: {state['datetime']}{recal_info}{active_marker}"
+        )
+
+    if use_recalibrated:
+        click.echo(
+            f"\nUsing active calibration state (State {max(s['id'] for s in states)})"
+        )
+    else:
+        click.echo("\nUsing original calibration (--no-recalibrated flag set)")
+
+    click.echo("\nNote: Interactive selection not yet available. See GitHub issue #54.")
+    click.echo("=" * 60 + "\n")
+
+
+def _build_resampling_config(
+    resample_method: str,
+    mass_axis_type: str,
+    resample_bins: Optional[int],
+    resample_min_mz: Optional[float],
+    resample_max_mz: Optional[float],
+    resample_width_at_mz: Optional[float],
+    resample_reference_mz: float,
+) -> dict:
+    """Build resampling configuration dictionary."""
+    return {
+        "method": resample_method,
+        "axis_type": mass_axis_type,
+        "target_bins": resample_bins,
+        "min_mz": resample_min_mz,
+        "max_mz": resample_max_mz,
+        "width_at_mz": resample_width_at_mz,
+        "reference_mz": resample_reference_mz,
+    }
+
+
 @click.command()
 @click.argument("input", type=click.Path(exists=True, path_type=Path))
 @click.argument("output", type=click.Path(path_type=Path))
@@ -129,7 +261,7 @@ def _get_calibration_states(bruker_path: Path) -> list[dict]:
 @click.option(
     "--interactive-calibration",
     is_flag=True,
-    help="Interactively select Bruker calibration state",
+    help="Display Bruker calibration states (informational only, see issue #54)",
 )
 # Resampling options
 @click.option(
@@ -215,112 +347,39 @@ def main(
     INPUT: Path to input MSI file or directory
     OUTPUT: Path for output file
     """
-    # Validate basic arguments
-    if pixel_size is not None and pixel_size <= 0:
-        raise click.BadParameter("Pixel size must be positive", param_hint="pixel_size")
-
-    if not dataset_id.strip():
-        raise click.BadParameter("Dataset ID cannot be empty", param_hint="dataset_id")
-
-    # Validate resampling arguments
-    if resample_bins is not None and resample_bins <= 0:
-        raise click.BadParameter(
-            "Number of resampling bins must be positive", param_hint="resample_bins"
-        )
-
-    if resample_min_mz is not None and resample_min_mz <= 0:
-        raise click.BadParameter(
-            "Minimum m/z must be positive", param_hint="resample_min_mz"
-        )
-
-    if resample_max_mz is not None and resample_max_mz <= 0:
-        raise click.BadParameter(
-            "Maximum m/z must be positive", param_hint="resample_max_mz"
-        )
-
-    if (
-        resample_min_mz is not None
-        and resample_max_mz is not None
-        and resample_min_mz >= resample_max_mz
-    ):
-        raise click.BadParameter("Minimum m/z must be less than maximum m/z")
-
-    if resample_bins is not None and resample_width_at_mz is not None:
-        raise click.BadParameter(
-            "--resample-bins and --resample-width-at-mz are mutually exclusive"
-        )
-
-    if resample_width_at_mz is not None and resample_width_at_mz <= 0:
-        raise click.BadParameter(
-            "Mass width must be positive", param_hint="resample_width_at_mz"
-        )
-
-    if resample_reference_mz <= 0:
-        raise click.BadParameter(
-            "Reference m/z must be positive", param_hint="resample_reference_mz"
-        )
-
-    # Validate input path
-    if not input.exists():
-        raise click.BadParameter(f"Input path does not exist: {input}")
-
-    if input.is_file() and input.suffix.lower() == ".imzml":
-        ibd_path = input.with_suffix(".ibd")
-        if not ibd_path.exists():
-            raise click.BadParameter(
-                f"ImzML file requires corresponding .ibd file, but not found: {ibd_path}"
-            )
-    elif input.is_dir() and input.suffix.lower() == ".d":
-        if not (input / "analysis.tsf").exists() and not (
-            input / "analysis.tdf"
-        ).exists():
-            raise click.BadParameter(
-                f"Bruker .d directory requires analysis.tsf or analysis.tdf file: {input}"
-            )
-
-    # Validate output path
-    if output.exists():
-        raise click.BadParameter(f"Output path already exists: {output}")
+    # Validate all parameters
+    _validate_basic_params(pixel_size, dataset_id)
+    _validate_resampling_params(
+        resample_bins,
+        resample_min_mz,
+        resample_max_mz,
+        resample_width_at_mz,
+        resample_reference_mz,
+    )
+    _validate_input_path(input)
+    _validate_output_path(output)
 
     # Configure logging
     setup_logging(log_level=getattr(logging, log_level), log_file=log_file)
 
-    # Handle interactive calibration selection for Bruker datasets
-    # Note: Currently informational only - specific state selection not yet implemented
+    # Display calibration info if requested (Bruker datasets only)
     if interactive_calibration and input.is_dir() and input.suffix.lower() == ".d":
-        states = _get_calibration_states(input)
-        if states:
-            click.echo("\nCalibration information:")
-            for state in states:
-                is_active = state["id"] == max(s["id"] for s in states)
-                active_marker = " (active/will be used)" if is_active else ""
-                recal_info = (
-                    f" - recalibrated {state['version'] - 1} times"
-                    if state["version"] > 1
-                    else ""
-                )
-                click.echo(
-                    f"  State {state['id']}: {state['datetime']}{recal_info}{active_marker}"
-                )
-            if use_recalibrated:
-                click.echo(
-                    f"\nUsing active calibration state (State {max(s['id'] for s in states)})"
-                )
-            else:
-                click.echo("\nUsing original calibration (--no-recalibrated flag set)")
+        _display_calibration_info(input, use_recalibrated)
 
     # Build resampling config if enabled
-    resampling_config = None
-    if resample:
-        resampling_config = {
-            "method": resample_method,
-            "axis_type": mass_axis_type,
-            "target_bins": resample_bins,
-            "min_mz": resample_min_mz,
-            "max_mz": resample_max_mz,
-            "width_at_mz": resample_width_at_mz,
-            "reference_mz": resample_reference_mz,
-        }
+    resampling_config = (
+        _build_resampling_config(
+            resample_method,
+            mass_axis_type,
+            resample_bins,
+            resample_min_mz,
+            resample_max_mz,
+            resample_width_at_mz,
+            resample_reference_mz,
+        )
+        if resample
+        else None
+    )
 
     # Perform conversion
     success = convert_msi(
@@ -334,9 +393,8 @@ def main(
     )
 
     # Optimize chunks if requested and conversion succeeded
-    if success and optimize_chunks:
-        if format == "spatialdata":
-            optimize_zarr_chunks(str(output), f"tables/{dataset_id}/X")
+    if success and optimize_chunks and format == "spatialdata":
+        optimize_zarr_chunks(str(output), f"tables/{dataset_id}/X")
 
     # Log final result
     if success:
