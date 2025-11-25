@@ -381,6 +381,9 @@ def main(
         else None
     )
 
+    # Build reader options for format-specific settings (Bruker calibration)
+    reader_options = {"use_recalibrated_state": use_recalibrated}
+
     # Perform conversion
     success = convert_msi(
         str(input),
@@ -390,6 +393,7 @@ def main(
         pixel_size_um=pixel_size,
         handle_3d=handle_3d,
         resampling_config=resampling_config,
+        reader_options=reader_options,
     )
 
     # Optimize chunks if requested and conversion succeeded

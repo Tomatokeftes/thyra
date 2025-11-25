@@ -95,13 +95,26 @@ def _validate_paths(input_path: Path, output_path: Path) -> bool:
     return True
 
 
-def _create_reader(input_path: Path) -> Tuple[Any, str]:
-    """Create and return a reader for the input format."""
+def _create_reader(
+    input_path: Path, reader_options: Optional[Dict[str, Any]] = None
+) -> Tuple[Any, str]:
+    """Create and return a reader for the input format.
+
+    Args:
+        input_path: Path to the input MSI data
+        reader_options: Optional format-specific reader options (e.g., calibration settings)
+
+    Returns:
+        Tuple of (reader instance, detected format string)
+    """
     input_format = detect_format(input_path)
     logging.info(f"Detected format: {input_format}")
     reader_class = get_reader_class(input_format)
     logging.info(f"Using reader: {reader_class.__name__}")
-    return reader_class(input_path), input_format
+
+    # Pass reader options to the reader if provided
+    options = reader_options or {}
+    return reader_class(input_path, **options), input_format
 
 
 def _determine_pixel_size(
@@ -203,6 +216,7 @@ def convert_msi(
     pixel_size_um: Optional[float] = None,
     handle_3d: bool = False,
     resampling_config: Optional[Dict[str, Any]] = None,
+    reader_options: Optional[Dict[str, Any]] = None,
     **kwargs: Any,
 ) -> bool:
     """Convert MSI data to the specified format with enhanced error handling.
@@ -217,6 +231,8 @@ def convert_msi(
         pixel_size_um: Pixel size in micrometers (None for auto-detection)
         handle_3d: Whether to process as 3D data (default: False)
         resampling_config: Optional resampling configuration
+        reader_options: Optional format-specific reader options. For Bruker data:
+            - use_recalibrated_state: bool - Use active/recalibrated calibration (default True)
         **kwargs: Additional keyword arguments
 
     Returns:
@@ -242,8 +258,8 @@ def convert_msi(
         return False
 
     try:
-        # Create reader
-        reader, input_format = _create_reader(input_path)
+        # Create reader with format-specific options
+        reader, input_format = _create_reader(input_path, reader_options)
 
         # Determine pixel size
         final_pixel_size, pixel_size_source, pixel_size_detection_info = (
