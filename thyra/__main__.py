@@ -83,6 +83,28 @@ def _validate_basic_params(pixel_size: Optional[float], dataset_id: str) -> None
         raise click.BadParameter("Dataset ID cannot be empty", param_hint="dataset_id")
 
 
+def _validate_positive_int(value: Optional[int], param_name: str, label: str) -> None:
+    """Validate that an optional int parameter is positive if provided."""
+    if value is not None and value <= 0:
+        raise click.BadParameter(f"{label} must be positive", param_hint=param_name)
+
+
+def _validate_positive_float(
+    value: Optional[float], param_name: str, label: str
+) -> None:
+    """Validate that an optional float parameter is positive if provided."""
+    if value is not None and value <= 0:
+        raise click.BadParameter(f"{label} must be positive", param_hint=param_name)
+
+
+def _validate_mz_range(
+    min_mz: Optional[float], max_mz: Optional[float]
+) -> None:
+    """Validate that min_mz is less than max_mz when both are provided."""
+    if min_mz is not None and max_mz is not None and min_mz >= max_mz:
+        raise click.BadParameter("Minimum m/z must be less than maximum m/z")
+
+
 def _validate_resampling_params(
     resample_bins: Optional[int],
     resample_min_mz: Optional[float],
@@ -91,32 +113,18 @@ def _validate_resampling_params(
     resample_reference_mz: float,
 ) -> None:
     """Validate resampling parameters."""
-    if resample_bins is not None and resample_bins <= 0:
-        raise click.BadParameter(
-            "Number of resampling bins must be positive", param_hint="resample_bins"
-        )
-    if resample_min_mz is not None and resample_min_mz <= 0:
-        raise click.BadParameter(
-            "Minimum m/z must be positive", param_hint="resample_min_mz"
-        )
-    if resample_max_mz is not None and resample_max_mz <= 0:
-        raise click.BadParameter(
-            "Maximum m/z must be positive", param_hint="resample_max_mz"
-        )
-    if (
-        resample_min_mz is not None
-        and resample_max_mz is not None
-        and resample_min_mz >= resample_max_mz
-    ):
-        raise click.BadParameter("Minimum m/z must be less than maximum m/z")
+    _validate_positive_int(resample_bins, "resample_bins", "Number of resampling bins")
+    _validate_positive_float(resample_min_mz, "resample_min_mz", "Minimum m/z")
+    _validate_positive_float(resample_max_mz, "resample_max_mz", "Maximum m/z")
+    _validate_mz_range(resample_min_mz, resample_max_mz)
+
     if resample_bins is not None and resample_width_at_mz is not None:
         raise click.BadParameter(
             "--resample-bins and --resample-width-at-mz are mutually exclusive"
         )
-    if resample_width_at_mz is not None and resample_width_at_mz <= 0:
-        raise click.BadParameter(
-            "Mass width must be positive", param_hint="resample_width_at_mz"
-        )
+
+    _validate_positive_float(resample_width_at_mz, "resample_width_at_mz", "Mass width")
+
     if resample_reference_mz <= 0:
         raise click.BadParameter(
             "Reference m/z must be positive", param_hint="resample_reference_mz"
