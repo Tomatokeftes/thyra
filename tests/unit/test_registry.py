@@ -127,7 +127,7 @@ class TestRegistry:
         unknown_file = tmp_path / "test.xyz"
         unknown_file.touch()
 
-        with pytest.raises(ValueError, match="Unsupported file extension"):
+        with pytest.raises(ValueError, match="Unsupported format"):
             detect_format(unknown_file)
 
     def test_missing_ibd_file(self, tmp_path):
