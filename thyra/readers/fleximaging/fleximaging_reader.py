@@ -49,23 +49,16 @@ class FlexImagingMetadataExtractor(MetadataExtractor):
     def _extract_essential_impl(self) -> EssentialMetadata:
         """Extract essential metadata for processing."""
         info = self._reader.info_metadata
-        positions = self._reader._positions
+        header = self._reader._header
 
-        # Calculate dimensions from positions
-        if positions:
-            xs = [p["raster_x"] for p in positions]
-            ys = [p["raster_y"] for p in positions]
-            min_x, max_x = min(xs), max(xs)
-            min_y, max_y = min(ys), max(ys)
-            width = max_x - min_x + 1
-            height = max_y - min_y + 1
-            dimensions = (width, height, 1)
-            coord_bounds = (float(min_x), float(max_x), float(min_y), float(max_y))
-            coord_offsets = (min_x, min_y, 0)
-        else:
-            dimensions = (0, 0, 1)
-            coord_bounds = (0.0, 0.0, 0.0, 0.0)
-            coord_offsets = (0, 0, 0)
+        # Get dimensions from header (raster grid size)
+        width = header.get("raster_width", 0)
+        height = header.get("raster_height", 0)
+        dimensions = (width, height, 1)
+
+        # Coordinate bounds are 0-based (normalized)
+        coord_bounds = (0.0, float(width - 1), 0.0, float(height - 1))
+        coord_offsets = (0, 0, 0)
 
         # Get pixel size from raster info
         pixel_x = info.get("raster_x", 20.0)
@@ -413,17 +406,18 @@ class FlexImagingReader(BaseMSIReader):
             }
 
             # Read offset table
-            n_spots = len(self._positions)
-            if n_spots == 0:
-                # Try to infer from info metadata
-                n_spots = self._info_metadata.get("Number of Spots", 0)
+            # The offset table has one entry per raster position (width * height)
+            # NOT the number of acquired spots (which is what poslog has)
+            raster_width = self._header["raster_width"]
+            raster_height = self._header["raster_height"]
+            n_raster_positions = raster_width * raster_height
 
-            if n_spots > 0:
+            if n_raster_positions > 0:
                 self._offsets = np.frombuffer(
-                    f.read(n_spots * 4), dtype=np.uint32
+                    f.read(n_raster_positions * 4), dtype=np.uint32
                 ).copy()
             else:
-                raise ValueError("Could not determine number of spots")
+                raise ValueError("Invalid raster dimensions in header")
 
         logger.debug(
             f"Parsed .dat header: {self._header['n_datapoints']} datapoints, "
@@ -487,28 +481,27 @@ class FlexImagingReader(BaseMSIReader):
 
         return self._mz_axis
 
-    def _get_normalized_coordinates(self, idx: int) -> Tuple[int, int, int]:
-        """Get 0-based normalized coordinates for a spectrum index.
+    def _get_normalized_coordinates(self, raster_idx: int) -> Tuple[int, int, int]:
+        """Get 0-based normalized coordinates for a raster grid index.
+
+        The raster grid is stored row-major, so:
+        - raster_idx = (y - first_y) * width + (x - first_x)
+        - x = first_x + (raster_idx % width)
+        - y = first_y + (raster_idx // width)
+
+        We normalize to 0-based coordinates by subtracting first_x/first_y.
 
         Args:
-            idx: Index into the positions list
+            raster_idx: Index into the raster grid (offset table)
 
         Returns:
             Tuple of (x, y, z) coordinates, 0-based
         """
-        if idx >= len(self._positions):
-            raise IndexError(f"Position index out of range: {idx}")
+        raster_width = self._header.get("raster_width", 1)
 
-        pos = self._positions[idx]
-
-        # Find min raster coordinates for normalization
-        if not hasattr(self, "_coord_offsets"):
-            min_x = min(p["raster_x"] for p in self._positions)
-            min_y = min(p["raster_y"] for p in self._positions)
-            self._coord_offsets = (min_x, min_y)
-
-        x = pos["raster_x"] - self._coord_offsets[0]
-        y = pos["raster_y"] - self._coord_offsets[1]
+        # Calculate 0-based coordinates from raster index
+        x = raster_idx % raster_width
+        y = raster_idx // raster_width
 
         return (x, y, 0)
 
