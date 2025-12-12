@@ -285,6 +285,16 @@ class BaseSpatialDataConverter(BaseMSIConverter, ABC):
             metadata["instrument_info"] = comp_meta.instrument_info
             logging.debug(f"Extracted instrument_info: {comp_meta.instrument_info}")
 
+        # Extract format_specific for FlexImaging detection
+        if hasattr(comp_meta, "format_specific"):
+            metadata["format_specific"] = comp_meta.format_specific
+            logging.debug(f"Extracted format_specific: {comp_meta.format_specific}")
+
+        # Extract acquisition_params for additional detection
+        if hasattr(comp_meta, "acquisition_params"):
+            metadata["acquisition_params"] = comp_meta.acquisition_params
+            logging.debug(f"Extracted acquisition_params: {comp_meta.acquisition_params}")
+
     def _extract_spectrum_metadata(self, metadata: Dict[str, Any]) -> None:
         """Extract ImzML-specific spectrum metadata."""
         try:
@@ -340,11 +350,11 @@ class BaseSpatialDataConverter(BaseMSIConverter, ABC):
             bins = int(np.log(max_mz / min_mz) * relative_resolution)
 
         elif axis_name == "linear_tof":
-            # LINEAR_TOF: width ∝ sqrt(m/z)
-            # For sqrt spacing: bins ≈ (sqrt(max_mz) - sqrt(min_mz)) /
-            # sqrt(width_at_mz / reference_mz)
-            scaling_factor = width_at_mz / np.sqrt(reference_mz)
-            bins = int((np.sqrt(max_mz) - np.sqrt(min_mz)) / np.sqrt(scaling_factor))
+            # LINEAR_TOF: bin width = k * sqrt(m/z), where k = width_at_mz / sqrt(reference_mz)
+            # Number of bins: n = (2/k) * (sqrt(max_mz) - sqrt(min_mz))
+            # This matches SCiLS Lab's "Linear TOF" mass axis calculation
+            k = width_at_mz / np.sqrt(reference_mz)
+            bins = int((2.0 / k) * (np.sqrt(max_mz) - np.sqrt(min_mz)))
 
         elif axis_name == "orbitrap":
             # ORBITRAP: width ∝ m/z^1.5
