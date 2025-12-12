@@ -97,9 +97,7 @@ def _validate_positive_float(
         raise click.BadParameter(f"{label} must be positive", param_hint=param_name)
 
 
-def _validate_mz_range(
-    min_mz: Optional[float], max_mz: Optional[float]
-) -> None:
+def _validate_mz_range(min_mz: Optional[float], max_mz: Optional[float]) -> None:
     """Validate that min_mz is less than max_mz when both are provided."""
     if min_mz is not None and max_mz is not None and min_mz >= max_mz:
         raise click.BadParameter("Minimum m/z must be less than maximum m/z")
@@ -329,6 +327,14 @@ def _build_resampling_config(
     "reflector_tof (logarithmic spacing), orbitrap (1/sqrt spacing), "
     "fticr (quadratic spacing). Only used with --resample.",
 )
+@click.option(
+    "--sparse-format",
+    type=click.Choice(["csc", "csr"]),
+    default="csc",
+    help="Sparse matrix format for output: csc (Compressed Sparse Column, "
+    "default, better for column-wise operations like feature selection) or "
+    "csr (Compressed Sparse Row, better for row-wise operations).",
+)
 def main(
     input: Path,
     output: Path,
@@ -349,6 +355,7 @@ def main(
     resample_width_at_mz: Optional[float],
     resample_reference_mz: float,
     mass_axis_type: str,
+    sparse_format: str,
 ):
     """Convert MSI data to SpatialData format.
 
@@ -402,6 +409,7 @@ def main(
         handle_3d=handle_3d,
         resampling_config=resampling_config,
         reader_options=reader_options,
+        sparse_format=sparse_format,
     )
 
     # Optimize chunks if requested and conversion succeeded

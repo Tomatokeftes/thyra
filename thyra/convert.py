@@ -165,6 +165,7 @@ def _create_converter(
     handle_3d: bool,
     pixel_size_detection_info: Dict[str, Any],
     resampling_config: Optional[Dict[str, Any]] = None,
+    sparse_format: str = "csc",
     **kwargs: Any,
 ) -> Any:
     """Create and return a converter for the specified format."""
@@ -192,6 +193,7 @@ def _create_converter(
         handle_3d=handle_3d,
         pixel_size_detection_info=pixel_size_detection_info,
         resampling_config=resampling_config,
+        sparse_format=sparse_format,
         **kwargs,
     )
 
@@ -217,6 +219,7 @@ def convert_msi(
     handle_3d: bool = False,
     resampling_config: Optional[Dict[str, Any]] = None,
     reader_options: Optional[Dict[str, Any]] = None,
+    sparse_format: str = "csc",
     **kwargs: Any,
 ) -> bool:
     """Convert MSI data to the specified format with enhanced error handling.
@@ -233,6 +236,7 @@ def convert_msi(
         resampling_config: Optional resampling configuration
         reader_options: Optional format-specific reader options. For Bruker data:
             - use_recalibrated_state: bool - Use active/recalibrated calibration (default True)
+        sparse_format: Sparse matrix format for output ('csc' or 'csr', default: 'csc')
         **kwargs: Additional keyword arguments
 
     Returns:
@@ -277,6 +281,7 @@ def convert_msi(
             handle_3d,
             pixel_size_detection_info,
             resampling_config,
+            sparse_format,
             **kwargs,
         )
 

@@ -8,7 +8,6 @@ from typing import Any, Dict, Optional, Tuple, Union
 import numpy as np
 import pandas as pd
 from numpy.typing import NDArray
-from scipy import sparse
 
 from ...core.base_converter import BaseMSIConverter, PixelSizeSource
 from ...core.base_reader import BaseMSIReader
@@ -60,6 +59,7 @@ class BaseSpatialDataConverter(BaseMSIConverter, ABC):
         handle_3d: bool = False,
         pixel_size_detection_info: Optional[Dict[str, Any]] = None,
         resampling_config: Optional[Union[Dict[str, Any], ResamplingConfig]] = None,
+        sparse_format: str = "csc",
         **kwargs: Any,
     ) -> None:
         """Initialize the base SpatialData converter.
@@ -75,6 +75,7 @@ class BaseSpatialDataConverter(BaseMSIConverter, ABC):
             pixel_size_detection_info: Optional metadata about pixel size
                 detection
             resampling_config: Optional resampling configuration dict
+            sparse_format: Sparse matrix format ('csc' or 'csr', default: 'csc')
             **kwargs: Additional keyword arguments
 
         Raises:
@@ -119,6 +120,11 @@ class BaseSpatialDataConverter(BaseMSIConverter, ABC):
         self._non_empty_pixel_count: int = 0
         self._pixel_size_detection_info = pixel_size_detection_info
         self._resampling_config = resampling_config
+        self._sparse_format = sparse_format.lower()
+        if self._sparse_format not in ("csc", "csr"):
+            raise ValueError(
+                f"sparse_format must be 'csc' or 'csr', got '{sparse_format}'"
+            )
 
         # Set up resampling if enabled
         if self._resampling_config:
@@ -152,6 +158,7 @@ class BaseSpatialDataConverter(BaseMSIConverter, ABC):
             # Convert axis_type string to enum if needed
             if isinstance(axis_type, str):
                 from ...resampling.types import AxisType
+
                 axis_type_map = {
                     "constant": AxisType.CONSTANT,
                     "linear_tof": AxisType.LINEAR_TOF,
@@ -486,9 +493,8 @@ class BaseSpatialDataConverter(BaseMSIConverter, ABC):
                 )
 
             # Handle mass axis setup
-            logging.info(
-                f"Mass axis mode: resampling_config={'SET' if self._resampling_config else 'NOT SET'}"
-            )
+            config_status = "SET" if self._resampling_config else "NOT SET"
+            logging.info(f"Mass axis mode: resampling_config={config_status}")
             if self._resampling_config:
                 # Build resampled mass axis now that reader metadata is loaded
                 logging.info(

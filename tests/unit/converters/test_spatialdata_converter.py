@@ -6,7 +6,6 @@ from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pandas as pd
-from scipy import sparse
 
 from thyra.converters.spatialdata import SpatialDataConverter
 
@@ -683,3 +682,110 @@ class TestSpatialDataConverter:
         ).tocsr()
         assert csr1[pixel_idx1, mz_indices1[0]] == 150.0
         assert csr1[pixel_idx1, mz_indices1[1]] == 250.0
+
+
+class TestSparseFormat:
+    """Test sparse matrix format configuration (CSC vs CSR)."""
+
+    def test_default_sparse_format_is_csc(self, temp_dir):
+        """Test that the default sparse format is CSC."""
+        output_path = temp_dir / "test_output.zarr"
+        mock_reader = create_mock_reader_with_dimensions((3, 3, 1))
+
+        converter = SpatialDataConverter(
+            mock_reader,
+            output_path,
+            dataset_id="test_dataset",
+            pixel_size_um=2.5,
+        )
+
+        assert converter._sparse_format == "csc"
+
+    def test_sparse_format_csc(self, temp_dir):
+        """Test converter with explicit CSC sparse format."""
+        output_path = temp_dir / "test_output.zarr"
+        mock_reader = create_mock_reader_with_dimensions((3, 3, 1))
+
+        converter = SpatialDataConverter(
+            mock_reader,
+            output_path,
+            dataset_id="test_dataset",
+            pixel_size_um=2.5,
+            sparse_format="csc",
+        )
+
+        assert converter._sparse_format == "csc"
+
+    def test_sparse_format_csr(self, temp_dir):
+        """Test converter with CSR sparse format."""
+        output_path = temp_dir / "test_output.zarr"
+        mock_reader = create_mock_reader_with_dimensions((3, 3, 1))
+
+        converter = SpatialDataConverter(
+            mock_reader,
+            output_path,
+            dataset_id="test_dataset",
+            pixel_size_um=2.5,
+            sparse_format="csr",
+        )
+
+        assert converter._sparse_format == "csr"
+
+    def test_sparse_format_case_insensitive(self, temp_dir):
+        """Test that sparse format parameter is case-insensitive."""
+        output_path = temp_dir / "test_output.zarr"
+        mock_reader = create_mock_reader_with_dimensions((3, 3, 1))
+
+        converter = SpatialDataConverter(
+            mock_reader,
+            output_path,
+            dataset_id="test_dataset",
+            sparse_format="CSC",
+        )
+
+        assert converter._sparse_format == "csc"
+
+    def test_invalid_sparse_format_raises_error(self, temp_dir):
+        """Test that an invalid sparse format raises ValueError."""
+        import pytest
+
+        output_path = temp_dir / "test_output.zarr"
+        mock_reader = create_mock_reader_with_dimensions((3, 3, 1))
+
+        with pytest.raises(ValueError, match="sparse_format must be 'csc' or 'csr'"):
+            SpatialDataConverter(
+                mock_reader,
+                output_path,
+                dataset_id="test_dataset",
+                sparse_format="invalid",
+            )
+
+    def test_sparse_format_3d_converter(self, temp_dir):
+        """Test sparse format is passed to 3D converter."""
+        output_path = temp_dir / "test_output.zarr"
+        mock_reader = create_mock_reader_with_dimensions((3, 3, 2))
+
+        converter = SpatialDataConverter(
+            mock_reader,
+            output_path,
+            dataset_id="test_dataset",
+            handle_3d=True,
+            sparse_format="csr",
+        )
+
+        assert converter._sparse_format == "csr"
+
+    def test_sparse_format_2d_converter(self, temp_dir):
+        """Test sparse format is passed to 2D converter."""
+        output_path = temp_dir / "test_output.zarr"
+        mock_reader = create_mock_reader_with_dimensions((3, 3, 2))
+
+        converter = SpatialDataConverter(
+            mock_reader,
+            output_path,
+            dataset_id="test_dataset",
+            handle_3d=False,
+            sparse_format="csr",
+        )
+
+        assert converter._sparse_format == "csr"

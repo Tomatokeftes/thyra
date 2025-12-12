@@ -64,7 +64,7 @@ pandas = ">=2.0.0"
 pyimzML = ">=1.4.0"
 scipy = ">=1.7.0"
 Shapely = ">=1.8.0"
-spatialdata = {git = "https://github.com/scverse/spatialdata.git", rev = "main"} # Example: updated to a newer working version
+spatialdata = ">=0.2.0"
 tqdm = ">=4.50.0"
 zarr = ">=3.0.0"
 cryptography = "^45.0.5"

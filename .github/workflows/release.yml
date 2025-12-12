@@ -1,9 +1,7 @@
 # .github/workflows/release.yml
 
-name: Create Release
+name: Create Release & Publish to PyPI
 
-# This action will trigger on every push to the 'main' branch
-# This typically happens when you merge a Pull Request
 on:
   push:
     branches:
@@ -14,27 +12,28 @@ jobs:
     name: Create Release
     runs-on: ubuntu-latest
     permissions:
-      contents: write  # Required for creating releases
-      pull-requests: write  # Required for creating PRs (if needed)
+      contents: write
+      pull-requests: write
+    outputs:
+      released: ${{ steps.release.outputs.released }}
+      version: ${{ steps.release.outputs.version }}
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          # We need to fetch all history and tags for semantic-release
           fetch-depth: 0
-          # Use PAT for authenticated git operations
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.10' # Or your desired Python version
+          python-version: '3.11'
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install python-semantic-release poetry
+          pip install python-semantic-release
 
       - name: Configure Git
         run: |
@@ -42,23 +41,56 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
       - name: Create Release
-        # This command does all the magic:
-        # 1. Reads commit history since the last tag.
-        # 2. Determines the new version (PATCH, MINOR, or MAJOR).
-        # 3. Creates a new Git tag with the version number.
-        # 4. Updates your __init__.py file with the new version.
-        # 5. Generates a CHANGELOG.md from your commit messages.
-        # 6. Creates a GitHub Release with the tag and changelog.
-        # 7. Commits the changed files (like pyproject.toml and CHANGELOG.md) back to your repo.
-        run: semantic-release version --no-push
+        id: release
+        run: |
+          if semantic-release version --no-push; then
+            echo "released=true" >> $GITHUB_OUTPUT
+            echo "version=$(semantic-release version --print)" >> $GITHUB_OUTPUT
+          else
+            echo "released=false" >> $GITHUB_OUTPUT
+          fi
         env:
-          # This token is automatically provided by GitHub.
-          # It's needed to create releases and commit back to the repo.
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Push changes
+        if: steps.release.outputs.released == 'true'
         run: |
           git push origin main --follow-tags
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  publish:
+    name: Publish to PyPI
+    needs: release
+    if: needs.release.outputs.released == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write  # Required for Trusted Publishing
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Pull latest changes
+        run: git pull origin main
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install build tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install build
+
+      - name: Build package
+        run: python -m build
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        # No token needed - uses Trusted Publishing!
