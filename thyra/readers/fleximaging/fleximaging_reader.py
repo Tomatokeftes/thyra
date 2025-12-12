@@ -187,7 +187,16 @@ class FlexImagingReader(BaseMSIReader):
         self._parse_dat_header()
 
         # Compute valid spectra indices
-        self._valid_indices: NDArray[np.int64] = np.where(self._offsets > 0)[0]
+        # Offsets must be >= data_start (after header + offset table)
+        # Some files have small non-zero offsets that point into the offset table itself
+        header_size = 48
+        offset_table_size = (
+            self._header["raster_width"] * self._header["raster_height"] * 4
+        )
+        data_start = header_size + offset_table_size
+        self._valid_indices: NDArray[np.int64] = np.where(self._offsets >= data_start)[
+            0
+        ]
 
         # Compute m/z axis
         self._mz_axis: Optional[NDArray[np.float64]] = None
@@ -195,9 +204,10 @@ class FlexImagingReader(BaseMSIReader):
         # Track close state
         self._closed: bool = False
 
+        n_raster = self._header["raster_width"] * self._header["raster_height"]
         logger.info(
             f"Initialized FlexImagingReader: {self.n_spectra} valid spectra "
-            f"out of {len(self._positions)} positions"
+            f"out of {n_raster} raster positions"
         )
 
     def _find_data_files(self) -> None:
