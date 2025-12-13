@@ -328,14 +328,14 @@ class FlexImagingReader(BaseMSIReader):
 
         return metadata
 
-    def _extract_basic_elements(self, root: Element, metadata: Dict[str, Any]) -> None:
+    def _extract_basic_elements(self, root: "Element", metadata: Dict[str, Any]) -> None:
         """Extract basic text elements from .mis XML."""
         for elem_name in ["Method", "ImageFile", "OriginalImage", "BaseGeometry"]:
             elem = root.find(f".//{elem_name}")
             if elem is not None and elem.text:
                 metadata[elem_name] = elem.text
 
-    def _extract_teaching_points(self, root: Element, metadata: Dict[str, Any]) -> None:
+    def _extract_teaching_points(self, root: "Element", metadata: Dict[str, Any]) -> None:
         """Extract teaching point calibration data from .mis XML."""
         teaching_points = []
         for tp in root.findall(".//TeachPoint"):
@@ -349,7 +349,7 @@ class FlexImagingReader(BaseMSIReader):
         if teaching_points:
             metadata["teaching_points"] = teaching_points
 
-    def _extract_raster_info(self, root: Element, metadata: Dict[str, Any]) -> None:
+    def _extract_raster_info(self, root: "Element", metadata: Dict[str, Any]) -> None:
         """Extract raster dimensions from .mis XML."""
         raster_elem = root.find(".//Raster")
         if raster_elem is not None and raster_elem.text:
