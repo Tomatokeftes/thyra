@@ -383,6 +383,27 @@ class BaseSpatialDataConverter(BaseMSIConverter, ABC):
         logging.info(f"Calculated {bins} bins for {axis_name} axis type")
         return bins
 
+    def _get_reference_params(self, axis_type) -> Tuple[float, float]:
+        """Get reference width and m/z for the given axis type.
+
+        Returns axis-type-specific defaults if user didn't specify.
+        """
+        if self._width_at_mz is not None:
+            return self._width_at_mz, self._reference_mz
+
+        # Get axis name for default selection
+        if hasattr(axis_type, "value"):
+            axis_name = axis_type.value
+        else:
+            axis_name = str(axis_type).split(".")[-1].lower()
+
+        # Use axis-type-specific defaults
+        if axis_name == "linear_tof":
+            # LINEAR_TOF (FlexImaging): Use SCiLS-like default ~17 mDa at m/z 300
+            return 0.017, 300.0
+        # Default for other axis types: 5.0 mDa at m/z 1000
+        return 0.005, 1000.0
+
     def _build_resampled_mass_axis(self) -> None:
         """Build resampled mass axis using physics-based generators."""
         from ...resampling.common_axis import CommonAxisBuilder
@@ -425,25 +446,7 @@ class BaseSpatialDataConverter(BaseMSIConverter, ABC):
         builder = CommonAxisBuilder()
 
         # Determine reference parameters for physics generators
-        # Get axis name for default selection
-        if hasattr(axis_type, "value"):
-            axis_name = axis_type.value
-        else:
-            axis_name = str(axis_type).split(".")[-1].lower()
-
-        if self._width_at_mz is not None:
-            reference_width = self._width_at_mz
-            reference_mz = self._reference_mz
-        else:
-            # Use axis-type-specific defaults
-            if axis_name == "linear_tof":
-                # LINEAR_TOF (FlexImaging): Use SCiLS-like default ~17 mDa at m/z 300
-                reference_width = 0.017
-                reference_mz = 300.0
-            else:
-                # Default for other axis types: 5.0 mDa at m/z 1000
-                reference_width = 0.005
-                reference_mz = 1000.0
+        reference_width, reference_mz = self._get_reference_params(axis_type)
 
         if hasattr(axis_type, "value") and axis_type.value != "constant":
             # Use physics-based generator with reference parameters

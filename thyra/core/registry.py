@@ -75,6 +75,12 @@ class MSIRegistry:
         if not input_path.exists():
             raise ValueError(f"Input path does not exist: {input_path}")
 
+        format_name = self._detect_format_name(input_path)
+        self._validate_format(format_name, input_path)
+        return format_name
+
+    def _detect_format_name(self, input_path: Path) -> str:
+        """Detect format name from path extension or directory structure."""
         # Check extension-based formats first
         extension = input_path.suffix.lower()
         format_name = self._extension_to_format.get(extension)
@@ -92,8 +98,10 @@ class MSIRegistry:
                 f"Unsupported format for '{input_path}'. "
                 f"Supported: {', '.join(available)}"
             )
+        return format_name
 
-        # Format-specific validation
+    def _validate_format(self, format_name: str, input_path: Path) -> None:
+        """Validate format-specific requirements."""
         if format_name == "imzml":
             ibd_path = input_path.with_suffix(".ibd")
             if not ibd_path.exists():
@@ -101,22 +109,20 @@ class MSIRegistry:
                     f"ImzML file requires corresponding .ibd file: {ibd_path}"
                 )
         elif format_name == "bruker":
-            if not input_path.is_dir():
-                raise ValueError(
-                    f"Bruker format requires .d directory, got file: {input_path}"
-                )
-            if (
-                not (input_path / "analysis.tsf").exists()
-                and not (input_path / "analysis.tdf").exists()
-            ):
-                raise ValueError(
-                    f"Bruker .d directory missing analysis files: {input_path}"
-                )
-        elif format_name == "fleximaging":
-            # Already validated in _is_fleximaging_folder
-            pass
+            self._validate_bruker_format(input_path)
 
-        return format_name
+    def _validate_bruker_format(self, input_path: Path) -> None:
+        """Validate Bruker .d directory structure."""
+        if not input_path.is_dir():
+            raise ValueError(
+                f"Bruker format requires .d directory, got file: {input_path}"
+            )
+        has_tsf = (input_path / "analysis.tsf").exists()
+        has_tdf = (input_path / "analysis.tdf").exists()
+        if not has_tsf and not has_tdf:
+            raise ValueError(
+                f"Bruker .d directory missing analysis files: {input_path}"
+            )
 
     def get_reader_class(self, format_name: str) -> Type[BaseMSIReader]:
         """Get reader class."""

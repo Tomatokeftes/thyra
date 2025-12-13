@@ -231,37 +231,39 @@ class ResamplingDecisionTree:
 
         Detection methods:
         1. format_specific.format == "FlexImaging"
-        2. instrument_info.instrument_type == "MALDI-TOF"
-        3. essential_metadata.spectrum_type == "profile spectrum"
+        2. instrument_info.instrument_type == "MALDI-TOF" + manufacturer == "Bruker"
+        3. essential_metadata.spectrum_type == "profile spectrum" + MALDI acq params
         """
-        # Check format_specific for FlexImaging format
-        if "format_specific" in metadata:
-            format_specific = metadata["format_specific"]
-            if isinstance(format_specific, dict):
-                if format_specific.get("format") == "FlexImaging":
-                    return True
+        return (
+            self._check_fleximaging_format(metadata)
+            or self._check_bruker_maldi_tof(metadata)
+            or self._check_profile_with_maldi_params(metadata)
+        )
 
-        # Check instrument_info for MALDI-TOF with Bruker manufacturer
-        if "instrument_info" in metadata:
-            instrument_info = metadata["instrument_info"]
-            if isinstance(instrument_info, dict):
-                is_maldi_tof = instrument_info.get("instrument_type") == "MALDI-TOF"
-                is_bruker = instrument_info.get("manufacturer") == "Bruker"
-                if is_maldi_tof and is_bruker:
-                    return True
+    def _check_fleximaging_format(self, metadata: Dict[str, Any]) -> bool:
+        """Check if format_specific indicates FlexImaging."""
+        format_specific = metadata.get("format_specific", {})
+        if isinstance(format_specific, dict):
+            return format_specific.get("format") == "FlexImaging"
+        return False
 
-        # Check essential_metadata for profile spectrum type with MALDI indicators
-        if "essential_metadata" in metadata:
-            essential = metadata["essential_metadata"]
-            if isinstance(essential, dict):
-                spectrum_type = essential.get("spectrum_type", "")
-                if spectrum_type == "profile spectrum":
-                    # Additional check: look for FlexImaging-specific keys
-                    if "acquisition_params" in metadata:
-                        acq = metadata["acquisition_params"]
-                        if isinstance(acq, dict):
-                            # FlexImaging has shots_per_spot, laser_power
-                            if "shots_per_spot" in acq or "laser_power" in acq:
-                                return True
+    def _check_bruker_maldi_tof(self, metadata: Dict[str, Any]) -> bool:
+        """Check if instrument_info indicates Bruker MALDI-TOF."""
+        instrument_info = metadata.get("instrument_info", {})
+        if isinstance(instrument_info, dict):
+            is_maldi_tof = instrument_info.get("instrument_type") == "MALDI-TOF"
+            is_bruker = instrument_info.get("manufacturer") == "Bruker"
+            return is_maldi_tof and is_bruker
+        return False
 
+    def _check_profile_with_maldi_params(self, metadata: Dict[str, Any]) -> bool:
+        """Check for profile spectrum with FlexImaging-specific acquisition params."""
+        essential = metadata.get("essential_metadata", {})
+        if not isinstance(essential, dict):
+            return False
+        if essential.get("spectrum_type") != "profile spectrum":
+            return False
+        acq = metadata.get("acquisition_params", {})
+        if isinstance(acq, dict):
+            return "shots_per_spot" in acq or "laser_power" in acq
         return False

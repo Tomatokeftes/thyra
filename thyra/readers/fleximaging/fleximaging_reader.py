@@ -19,7 +19,10 @@ import logging
 import re
 import struct
 from pathlib import Path
-from typing import Any, Callable, Dict, Generator, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Callable, Dict, Generator, List, Optional, Tuple
+
+if TYPE_CHECKING:
+    from xml.etree.ElementTree import Element
 
 import defusedxml.ElementTree as ET
 import numpy as np
@@ -316,44 +319,43 @@ class FlexImagingReader(BaseMSIReader):
             tree = ET.parse(path)
             root = tree.getroot()
 
-            # Extract basic elements
-            for elem_name in [
-                "Method",
-                "ImageFile",
-                "OriginalImage",
-                "BaseGeometry",
-            ]:
-                elem = root.find(f".//{elem_name}")
-                if elem is not None and elem.text:
-                    metadata[elem_name] = elem.text
-
-            # Extract teaching points
-            teaching_points = []
-            for tp in root.findall(".//TeachPoint"):
-                if tp.text and ";" in tp.text:
-                    img_coords, stage_coords = tp.text.split(";")
-                    img_x, img_y = map(int, img_coords.split(","))
-                    stage_x, stage_y = map(int, stage_coords.split(","))
-                    teaching_points.append(
-                        {
-                            "image": (img_x, img_y),
-                            "stage": (stage_x, stage_y),
-                        }
-                    )
-            if teaching_points:
-                metadata["teaching_points"] = teaching_points
-
-            # Extract raster info
-            raster_elem = root.find(".//Raster")
-            if raster_elem is not None and raster_elem.text:
-                parts = raster_elem.text.split(",")
-                if len(parts) == 2:
-                    metadata["raster"] = (int(parts[0]), int(parts[1]))
+            self._extract_basic_elements(root, metadata)
+            self._extract_teaching_points(root, metadata)
+            self._extract_raster_info(root, metadata)
 
         except ET.ParseError as e:
             logger.warning(f"Failed to parse .mis file: {e}")
 
         return metadata
+
+    def _extract_basic_elements(self, root: Element, metadata: Dict[str, Any]) -> None:
+        """Extract basic text elements from .mis XML."""
+        for elem_name in ["Method", "ImageFile", "OriginalImage", "BaseGeometry"]:
+            elem = root.find(f".//{elem_name}")
+            if elem is not None and elem.text:
+                metadata[elem_name] = elem.text
+
+    def _extract_teaching_points(self, root: Element, metadata: Dict[str, Any]) -> None:
+        """Extract teaching point calibration data from .mis XML."""
+        teaching_points = []
+        for tp in root.findall(".//TeachPoint"):
+            if tp.text and ";" in tp.text:
+                img_coords, stage_coords = tp.text.split(";")
+                img_x, img_y = map(int, img_coords.split(","))
+                stage_x, stage_y = map(int, stage_coords.split(","))
+                teaching_points.append(
+                    {"image": (img_x, img_y), "stage": (stage_x, stage_y)}
+                )
+        if teaching_points:
+            metadata["teaching_points"] = teaching_points
+
+    def _extract_raster_info(self, root: Element, metadata: Dict[str, Any]) -> None:
+        """Extract raster dimensions from .mis XML."""
+        raster_elem = root.find(".//Raster")
+        if raster_elem is not None and raster_elem.text:
+            parts = raster_elem.text.split(",")
+            if len(parts) == 2:
+                metadata["raster"] = (int(parts[0]), int(parts[1]))
 
     def _parse_positions(self) -> None:
         """Parse coordinate information from _poslog.txt file."""
