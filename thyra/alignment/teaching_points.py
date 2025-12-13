@@ -108,6 +108,163 @@ class AlignmentResult:
     warnings: List[str] = field(default_factory=list)
 
 
+@dataclass
+class RegionMapping:
+    """Mapping for a single acquisition region to image coordinates.
+
+    The image coordinates use min/max bounds from the Area definition.
+    The p1/p2 points in an Area are two corners of a bounding box - their
+    order indicates scan direction but for coordinate mapping we use the
+    actual min/max values to ensure monotonic mapping:
+    - raster_min_x maps to image_min_x
+    - raster_max_x maps to image_max_x
+    - raster_min_y maps to image_min_y
+    - raster_max_y maps to image_max_y
+
+    Attributes:
+        region_id: Region number (0, 1, 2, ...)
+        name: Region name from Area definition
+        raster_min_x: Minimum raster X in this region
+        raster_max_x: Maximum raster X in this region
+        raster_min_y: Minimum raster Y in this region
+        raster_max_y: Maximum raster Y in this region
+        image_min_x: Minimum image X for this region
+        image_max_x: Maximum image X for this region
+        image_min_y: Minimum image Y for this region
+        image_max_y: Maximum image Y for this region
+    """
+
+    region_id: int
+    name: str
+    raster_min_x: int
+    raster_max_x: int
+    raster_min_y: int
+    raster_max_y: int
+    image_min_x: int
+    image_max_x: int
+    image_min_y: int
+    image_max_y: int
+
+    def raster_to_image(self, raster_x: int, raster_y: int) -> Tuple[float, float]:
+        """Convert raster coordinates to image coordinates within this region.
+
+        Args:
+            raster_x: Original raster X coordinate (not normalized)
+            raster_y: Original raster Y coordinate (not normalized)
+
+        Returns:
+            Tuple of (image_x, image_y) in pixels
+        """
+        # Linear interpolation within the region
+        # t=0 at raster_min maps to image_min, t=1 at raster_max maps to image_max
+        raster_width = max(1, self.raster_max_x - self.raster_min_x)
+        raster_height = max(1, self.raster_max_y - self.raster_min_y)
+
+        t_x = (raster_x - self.raster_min_x) / raster_width
+        t_y = (raster_y - self.raster_min_y) / raster_height
+
+        image_x = self.image_min_x + t_x * (self.image_max_x - self.image_min_x)
+        image_y = self.image_min_y + t_y * (self.image_max_y - self.image_min_y)
+
+        return image_x, image_y
+
+    def get_half_pixel_size(self) -> Tuple[float, float]:
+        """Get the half-pixel size for this region in image coordinates.
+
+        Returns:
+            Tuple of (half_pixel_x, half_pixel_y) in image pixels
+        """
+        raster_width = max(1, self.raster_max_x - self.raster_min_x)
+        raster_height = max(1, self.raster_max_y - self.raster_min_y)
+
+        image_width = self.image_max_x - self.image_min_x
+        image_height = self.image_max_y - self.image_min_y
+
+        scale_x = image_width / raster_width
+        scale_y = image_height / raster_height
+
+        return scale_x / 2, scale_y / 2
+
+
+@dataclass
+class AreaAlignmentResult:
+    """Result of area-based alignment computation.
+
+    This is the preferred alignment method when Area definitions are available
+    in the .mis file, as it provides direct region-to-image mapping.
+
+    Attributes:
+        region_mappings: List of RegionMapping objects for each region
+        first_raster_x: First raster X offset from header
+        first_raster_y: First raster Y offset from header
+        pos_to_region: Mapping from (raster_x, raster_y) to region_id
+    """
+
+    region_mappings: List[RegionMapping]
+    first_raster_x: int
+    first_raster_y: int
+    pos_to_region: Dict[Tuple[int, int], int] = field(default_factory=dict)
+
+    def transform_point(
+        self, norm_x: int, norm_y: int
+    ) -> Optional[Tuple[float, float]]:
+        """Transform normalized raster coordinates to image coordinates.
+
+        Args:
+            norm_x: Normalized (0-based) raster X coordinate
+            norm_y: Normalized (0-based) raster Y coordinate
+
+        Returns:
+            Tuple of (image_x, image_y) or None if no mapping exists
+        """
+        # Convert normalized to original raster coords
+        orig_x = norm_x + self.first_raster_x
+        orig_y = norm_y + self.first_raster_y
+
+        # Find which region this belongs to
+        region_id = self.pos_to_region.get((orig_x, orig_y))
+        if region_id is None:
+            return None
+
+        # Find the region mapping
+        for mapping in self.region_mappings:
+            if mapping.region_id == region_id:
+                return mapping.raster_to_image(orig_x, orig_y)
+
+        return None
+
+    def get_half_pixel_size(
+        self, norm_x: int, norm_y: int
+    ) -> Optional[Tuple[float, float]]:
+        """Get the half-pixel size for a given position.
+
+        Each region may have different X and Y scales, so the pixel size
+        depends on which region the position belongs to.
+
+        Args:
+            norm_x: Normalized (0-based) raster X coordinate
+            norm_y: Normalized (0-based) raster Y coordinate
+
+        Returns:
+            Tuple of (half_pixel_x, half_pixel_y) or None if no mapping exists
+        """
+        # Convert normalized to original raster coords
+        orig_x = norm_x + self.first_raster_x
+        orig_y = norm_y + self.first_raster_y
+
+        # Find which region this belongs to
+        region_id = self.pos_to_region.get((orig_x, orig_y))
+        if region_id is None:
+            return None
+
+        # Find the region mapping and get its half-pixel size
+        for mapping in self.region_mappings:
+            if mapping.region_id == region_id:
+                return mapping.get_half_pixel_size()
+
+        return None
+
+
 class TeachingPointAlignment:
     """Computes alignment between optical images and MSI data.
 
@@ -142,6 +299,8 @@ class TeachingPointAlignment:
         poslog_positions: Optional[List[Dict[str, Any]]] = None,
         raster_step: Tuple[float, float] = (20.0, 20.0),
         raster_offset: Tuple[int, int] = (0, 0),
+        flip_poslog_x: bool = False,
+        flip_poslog_y: bool = False,
     ) -> AlignmentResult:
         """Compute alignment transformations from teaching points.
 
@@ -152,6 +311,10 @@ class TeachingPointAlignment:
                 poslog parsing, used to estimate stage coordinate offset
             raster_step: (step_x, step_y) raster step size in micrometers
             raster_offset: (offset_x, offset_y) offset of first raster position
+            flip_poslog_x: If True, negate poslog X coordinates (for inverted
+                stage X-axis relative to teaching points)
+            flip_poslog_y: If True, negate poslog Y coordinates (for inverted
+                stage Y-axis relative to teaching points)
 
         Returns:
             AlignmentResult with computed transformations
@@ -191,8 +354,20 @@ class TeachingPointAlignment:
         image_to_msi = None
 
         if poslog_positions and len(poslog_positions) > 0:
+            # Apply coordinate flips to poslog positions if needed
+            flipped_positions = poslog_positions
+            if flip_poslog_x or flip_poslog_y:
+                flipped_positions = []
+                for pos in poslog_positions:
+                    flipped_pos = pos.copy()
+                    if flip_poslog_x:
+                        flipped_pos["phys_x"] = -pos["phys_x"]
+                    if flip_poslog_y:
+                        flipped_pos["phys_y"] = -pos["phys_y"]
+                    flipped_positions.append(flipped_pos)
+
             stage_offset = self._estimate_stage_offset(
-                points, poslog_positions, raster_step
+                points, flipped_positions, raster_step
             )
 
             if stage_offset is not None:
@@ -201,10 +376,10 @@ class TeachingPointAlignment:
                     f"{stage_offset[1]:.1f}) um"
                 )
 
-                # Get first physical position (at normalized raster 0,0)
+                # Get first physical position (using flipped coordinates)
                 first_phys = (
-                    float(poslog_positions[0]["phys_x"]),
-                    float(poslog_positions[0]["phys_y"]),
+                    float(flipped_positions[0]["phys_x"]),
+                    float(flipped_positions[0]["phys_y"]),
                 )
 
                 # Compute MSI <-> image transformations
@@ -214,6 +389,7 @@ class TeachingPointAlignment:
                     stage_offset,
                     raster_step,
                     first_phys,
+                    flip_poslog_x,
                 )
             else:
                 warnings.append(
@@ -316,6 +492,7 @@ class TeachingPointAlignment:
         stage_offset: Tuple[float, float],
         raster_step: Tuple[float, float],
         first_phys: Tuple[float, float],
+        flip_poslog_x: bool = False,
     ) -> Tuple[AffineTransform, AffineTransform]:
         """Compute transformations between MSI raster and image coordinates.
 
@@ -331,6 +508,7 @@ class TeachingPointAlignment:
             stage_offset: (offset_x, offset_y) where offset = poslog - teaching
             raster_step: (step_x, step_y) raster step in um (magnitudes)
             first_phys: (phys_x, phys_y) physical position at raster (0, 0)
+            flip_poslog_x: If True, negate X scale (poslog X is inverted)
 
         Returns:
             Tuple of (msi_to_image, image_to_msi) transforms
@@ -339,29 +517,34 @@ class TeachingPointAlignment:
         offset_x, offset_y = stage_offset
         first_phys_x, first_phys_y = first_phys
 
+        # Determine X scale sign based on flip
+        # If flip_poslog_x is True, the poslog coordinates were negated,
+        # so the raster step direction is also reversed
+        x_scale = -step_x if flip_poslog_x else step_x
+
         # Normalized raster (0-based) to teaching stage coordinates:
         # 1. normalized_raster -> physical:
-        #    phys_x = step_x * norm_x + first_phys_x
+        #    phys_x = x_scale * norm_x + first_phys_x
         #    phys_y = -step_y * norm_y + first_phys_y  (Y is inverted!)
         # 2. physical -> teaching:
         #    teaching = physical - offset
         #
         # Combined: normalized raster -> teaching stage
-        #    teaching_x = step_x * norm_x + first_phys_x - offset_x
+        #    teaching_x = x_scale * norm_x + first_phys_x - offset_x
         #    teaching_y = -step_y * norm_y + first_phys_y - offset_y
 
         tx = first_phys_x - offset_x
         ty = first_phys_y - offset_y
 
         logger.debug(
-            f"MSI transform: scale=({step_x}, {-step_y}), "
+            f"MSI transform: scale=({x_scale}, {-step_y}), "
             f"translation=({tx:.1f}, {ty:.1f})"
         )
 
         # Build MSI -> teaching stage transform
         # Note: step_y is negated because Y-axis is inverted in poslog
         msi_to_teaching = AffineTransform.from_scale_translate(
-            scale_x=step_x,
+            scale_x=x_scale,
             scale_y=-step_y,  # Negative because poslog Y is inverted
             tx=tx,
             ty=ty,
@@ -424,3 +607,97 @@ class TeachingPointAlignment:
                 )
 
         return warnings
+
+    def compute_area_alignment(
+        self,
+        areas: List[Dict[str, Any]],
+        poslog_positions: List[Dict[str, Any]],
+        first_raster_x: int,
+        first_raster_y: int,
+    ) -> AreaAlignmentResult:
+        """Compute alignment using Area definitions from .mis file.
+
+        This is the preferred alignment method when Area definitions are
+        available, as they provide direct image pixel coordinates for each
+        acquisition region without requiring coordinate system transformations.
+
+        Args:
+            areas: List of Area dictionaries with 'name', 'p1', 'p2' keys
+                where p1 and p2 are (x, y) tuples of image pixel coordinates
+            poslog_positions: List of position dictionaries from poslog parsing
+            first_raster_x: First raster X offset from header
+            first_raster_y: First raster Y offset from header
+
+        Returns:
+            AreaAlignmentResult with region mappings and coordinate transform
+        """
+        # Group positions by region
+        regions: Dict[int, Dict[str, Any]] = {}
+        for pos in poslog_positions:
+            r = pos["region"]
+            if r not in regions:
+                regions[r] = {
+                    "positions": [],
+                    "raster_xs": [],
+                    "raster_ys": [],
+                }
+            regions[r]["positions"].append(pos)
+            regions[r]["raster_xs"].append(pos["raster_x"])
+            regions[r]["raster_ys"].append(pos["raster_y"])
+
+        # Compute bounds for each region
+        for r in regions:
+            rx = regions[r]["raster_xs"]
+            ry = regions[r]["raster_ys"]
+            regions[r]["min_x"] = min(rx)
+            regions[r]["max_x"] = max(rx)
+            regions[r]["min_y"] = min(ry)
+            regions[r]["max_y"] = max(ry)
+
+        # Build position to region lookup
+        pos_to_region: Dict[Tuple[int, int], int] = {}
+        for r, data in regions.items():
+            for pos in data["positions"]:
+                pos_to_region[(pos["raster_x"], pos["raster_y"])] = r
+
+        # Match areas to regions by index (Area 01 = Region 0, etc.)
+        region_mappings: List[RegionMapping] = []
+        for i, area in enumerate(areas):
+            if i not in regions:
+                logger.warning(f"Area '{area['name']}' has no matching region {i}")
+                continue
+
+            # Area bounds in image pixels - use min/max of p1 and p2
+            # p1 and p2 are two corners of the bounding box, their order
+            # indicates scan direction but we use min/max for mapping
+            p1_x, p1_y = area["p1"]
+            p2_x, p2_y = area["p2"]
+
+            mapping = RegionMapping(
+                region_id=i,
+                name=area["name"],
+                raster_min_x=regions[i]["min_x"],
+                raster_max_x=regions[i]["max_x"],
+                raster_min_y=regions[i]["min_y"],
+                raster_max_y=regions[i]["max_y"],
+                image_min_x=min(p1_x, p2_x),
+                image_max_x=max(p1_x, p2_x),
+                image_min_y=min(p1_y, p2_y),
+                image_max_y=max(p1_y, p2_y),
+            )
+            region_mappings.append(mapping)
+
+            logger.info(
+                f"Region {i} -> Area '{area['name']}': "
+                f"raster ({mapping.raster_min_x}, {mapping.raster_min_y}) to "
+                f"({mapping.raster_max_x}, {mapping.raster_max_y}), "
+                f"image ({mapping.image_min_x}, {mapping.image_min_y}) to "
+                f"({mapping.image_max_x}, {mapping.image_max_y})"
+            )
+
+        return AreaAlignmentResult(
+            region_mappings=region_mappings,
+            first_raster_x=first_raster_x,
+            first_raster_y=first_raster_y,
+            pos_to_region=pos_to_region,
+        )
