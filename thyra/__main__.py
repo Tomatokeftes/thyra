@@ -287,7 +287,8 @@ def _build_resampling_config(
     type=int,
     default=None,
     help="Number of bins for resampled mass axis. "
-    "If not specified, uses physics-based width calculation (5 mDa @ m/z 1000). "
+    "If not specified, uses axis-type-specific defaults: "
+    "LINEAR_TOF uses 17 mDa @ m/z 300, others use 5 mDa @ m/z 1000. "
     "Mutually exclusive with --resample-width-at-mz.",
 )
 @click.option(
@@ -307,7 +308,8 @@ def _build_resampling_config(
     type=float,
     default=None,
     help="Mass width (in Da) at reference m/z for physics-based binning. "
-    "Default: 0.005 Da at m/z 1000. Mutually exclusive with --resample-bins.",
+    "Default: axis-type-specific (LINEAR_TOF: 17 mDa @ m/z 300, others: 5 mDa @ m/z 1000). "
+    "Mutually exclusive with --resample-bins.",
 )
 @click.option(
     "--resample-reference-mz",

@@ -293,7 +293,9 @@ class BaseSpatialDataConverter(BaseMSIConverter, ABC):
         # Extract acquisition_params for additional detection
         if hasattr(comp_meta, "acquisition_params"):
             metadata["acquisition_params"] = comp_meta.acquisition_params
-            logging.debug(f"Extracted acquisition_params: {comp_meta.acquisition_params}")
+            logging.debug(
+                f"Extracted acquisition_params: {comp_meta.acquisition_params}"
+            )
 
     def _extract_spectrum_metadata(self, metadata: Dict[str, Any]) -> None:
         """Extract ImzML-specific spectrum metadata."""
@@ -324,10 +326,23 @@ class BaseSpatialDataConverter(BaseMSIConverter, ABC):
         Returns:
             Calculated number of bins
         """
+        # Calculate bins based on axis type physics
+        if hasattr(axis_type, "value"):
+            axis_name = axis_type.value
+        else:
+            axis_name = str(axis_type).split(".")[-1].lower()
+
         if self._width_at_mz is None:
-            # Use default: 5.0 mDa at m/z 1000
-            width_at_mz = 0.005  # 5.0 mDa in Da
-            reference_mz = 1000.0
+            # Use axis-type-specific defaults for optimal resolution
+            if axis_name == "linear_tof":
+                # LINEAR_TOF (FlexImaging): Use SCiLS-like default ~17 mDa at m/z 300
+                # This matches typical MALDI-TOF resolution and gives ~30k bins
+                width_at_mz = 0.017  # 17.0 mDa in Da
+                reference_mz = 300.0
+            else:
+                # Default for other axis types: 5.0 mDa at m/z 1000
+                width_at_mz = 0.005  # 5.0 mDa in Da
+                reference_mz = 1000.0
         else:
             width_at_mz = self._width_at_mz
             reference_mz = self._reference_mz
@@ -335,12 +350,6 @@ class BaseSpatialDataConverter(BaseMSIConverter, ABC):
         logging.info(
             f"Calculating bins for {width_at_mz*1000:.1f} mDa width at m/z {reference_mz:.1f}"
         )
-
-        # Calculate bins based on axis type physics
-        if hasattr(axis_type, "value"):
-            axis_name = axis_type.value
-        else:
-            axis_name = str(axis_type).split(".")[-1].lower()
 
         if axis_name == "reflector_tof":
             # REFLECTOR_TOF: constant relative resolution (width ∝ m/z)
@@ -416,13 +425,25 @@ class BaseSpatialDataConverter(BaseMSIConverter, ABC):
         builder = CommonAxisBuilder()
 
         # Determine reference parameters for physics generators
+        # Get axis name for default selection
+        if hasattr(axis_type, "value"):
+            axis_name = axis_type.value
+        else:
+            axis_name = str(axis_type).split(".")[-1].lower()
+
         if self._width_at_mz is not None:
             reference_width = self._width_at_mz
             reference_mz = self._reference_mz
         else:
-            # Use default: 5.0 mDa at m/z 1000
-            reference_width = 0.005
-            reference_mz = 1000.0
+            # Use axis-type-specific defaults
+            if axis_name == "linear_tof":
+                # LINEAR_TOF (FlexImaging): Use SCiLS-like default ~17 mDa at m/z 300
+                reference_width = 0.017
+                reference_mz = 300.0
+            else:
+                # Default for other axis types: 5.0 mDa at m/z 1000
+                reference_width = 0.005
+                reference_mz = 1000.0
 
         if hasattr(axis_type, "value") and axis_type.value != "constant":
             # Use physics-based generator with reference parameters
