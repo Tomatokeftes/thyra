@@ -337,6 +337,12 @@ def _build_resampling_config(
     "default, better for column-wise operations like feature selection) or "
     "csr (Compressed Sparse Row, better for row-wise operations).",
 )
+# Optical image options
+@click.option(
+    "--include-optical/--no-optical",
+    default=True,
+    help="Include optical images (TIFF) in output (default: True)",
+)
 def main(
     input: Path,
     output: Path,
@@ -358,6 +364,7 @@ def main(
     resample_reference_mz: float,
     mass_axis_type: str,
     sparse_format: str,
+    include_optical: bool,
 ):
     """Convert MSI data to SpatialData format.
 
@@ -412,6 +419,7 @@ def main(
         resampling_config=resampling_config,
         reader_options=reader_options,
         sparse_format=sparse_format,
+        include_optical=include_optical,
     )
 
     # Optimize chunks if requested and conversion succeeded
