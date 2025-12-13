@@ -201,13 +201,19 @@ class TeachingPointAlignment:
                     f"{stage_offset[1]:.1f}) um"
                 )
 
+                # Get first physical position (at normalized raster 0,0)
+                first_phys = (
+                    float(poslog_positions[0]["phys_x"]),
+                    float(poslog_positions[0]["phys_y"]),
+                )
+
                 # Compute MSI <-> image transformations
                 msi_to_image, image_to_msi = self._compute_msi_transforms(
                     image_to_stage,
                     stage_to_image,
                     stage_offset,
                     raster_step,
-                    raster_offset,
+                    first_phys,
                 )
             else:
                 warnings.append(
@@ -247,12 +253,14 @@ class TeachingPointAlignment:
     ) -> Optional[Tuple[float, float]]:
         """Estimate offset between teaching stage and poslog stage coords.
 
-        This attempts to find the translation offset between the two
-        coordinate systems by analyzing the relationship between
-        raster positions and their physical coordinates.
+        This computes the translation offset between the two coordinate
+        systems by comparing their centers. The assumption is that the
+        MSI acquisition region is approximately centered on the optical
+        image region defined by the teaching points.
 
-        The poslog records: raster (x, y) -> physical stage (px, py)
-        The relationship should be: px = raster_x * step_x + offset_x
+        Coordinate relationship:
+        - teaching_stage = poslog_physical - offset
+        - poslog_physical = teaching_stage + offset
 
         Args:
             teaching_points: Teaching point data
@@ -265,46 +273,19 @@ class TeachingPointAlignment:
         if not poslog_positions:
             return None
 
-        # Extract poslog data
-        raster_x_vals = []
-        raster_y_vals = []
-        phys_x_vals = []
-        phys_y_vals = []
+        # Extract poslog physical coordinates
+        phys_x = np.array([pos["phys_x"] for pos in poslog_positions])
+        phys_y = np.array([pos["phys_y"] for pos in poslog_positions])
 
-        for pos in poslog_positions:
-            raster_x_vals.append(pos["raster_x"])
-            raster_y_vals.append(pos["raster_y"])
-            phys_x_vals.append(pos["phys_x"])
-            phys_y_vals.append(pos["phys_y"])
-
-        raster_x = np.array(raster_x_vals)
-        raster_y = np.array(raster_y_vals)
-        phys_x = np.array(phys_x_vals)
-        phys_y = np.array(phys_y_vals)
-
-        step_x, step_y = raster_step
-
-        # Estimate the origin offset for poslog coordinates
-        # phys = raster * step + poslog_origin
-        # poslog_origin_x = phys_x - raster_x * step_x
-        poslog_origin_x = float(np.median(phys_x - raster_x * step_x))
-        poslog_origin_y = float(np.median(phys_y - raster_y * step_y))
-
-        logger.debug(
-            f"Poslog coordinate origin: "
-            f"({poslog_origin_x:.1f}, {poslog_origin_y:.1f})"
-        )
-
-        # Get teaching point stage coordinate ranges
+        # Get teaching point stage coordinate center
         teaching_x = [p.stage_x for p in teaching_points]
         teaching_y = [p.stage_y for p in teaching_points]
+        teaching_center_x = float(np.mean(teaching_x))
+        teaching_center_y = float(np.mean(teaching_y))
 
-        teaching_center_x = np.mean(teaching_x)
-        teaching_center_y = np.mean(teaching_y)
-
-        # Get poslog physical coordinate ranges
-        poslog_center_x = np.mean(phys_x)
-        poslog_center_y = np.mean(phys_y)
+        # Get poslog physical coordinate center
+        poslog_center_x = float(np.mean(phys_x))
+        poslog_center_y = float(np.mean(phys_y))
 
         logger.debug(
             f"Teaching stage center: "
@@ -334,45 +315,56 @@ class TeachingPointAlignment:
         stage_to_image: AffineTransform,
         stage_offset: Tuple[float, float],
         raster_step: Tuple[float, float],
-        raster_offset: Tuple[int, int],
+        first_phys: Tuple[float, float],
     ) -> Tuple[AffineTransform, AffineTransform]:
         """Compute transformations between MSI raster and image coordinates.
 
         The chain of transformations:
-        MSI raster -> poslog stage -> teaching stage -> image
+        MSI raster (0-based) -> poslog physical -> teaching stage -> image
+
+        The poslog Y-axis is inverted: larger raster Y maps to smaller
+        physical Y (step_y is effectively negative).
 
         Args:
             image_to_stage: Transform from image pixels to teaching stage
             stage_to_image: Inverse transform
-            stage_offset: (offset_x, offset_y) between poslog and teaching
-            raster_step: (step_x, step_y) raster step in um
-            raster_offset: (offset_x, offset_y) of first raster position
+            stage_offset: (offset_x, offset_y) where offset = poslog - teaching
+            raster_step: (step_x, step_y) raster step in um (magnitudes)
+            first_phys: (phys_x, phys_y) physical position at raster (0, 0)
 
         Returns:
             Tuple of (msi_to_image, image_to_msi) transforms
         """
         step_x, step_y = raster_step
         offset_x, offset_y = stage_offset
+        first_phys_x, first_phys_y = first_phys
 
-        # MSI raster (0-based) to poslog stage coordinates
-        # poslog_x = (raster_x + raster_offset_x) * step_x + poslog_origin_x
-        # But we work with normalized 0-based raster coords, so:
-        # poslog_x = raster_x * step_x + origin_x (origin accounts for offset)
+        # Normalized raster (0-based) to teaching stage coordinates:
+        # 1. normalized_raster -> physical:
+        #    phys_x = step_x * norm_x + first_phys_x
+        #    phys_y = -step_y * norm_y + first_phys_y  (Y is inverted!)
+        # 2. physical -> teaching:
+        #    teaching = physical - offset
+        #
+        # Combined: normalized raster -> teaching stage
+        #    teaching_x = step_x * norm_x + first_phys_x - offset_x
+        #    teaching_y = -step_y * norm_y + first_phys_y - offset_y
 
-        # To go from poslog stage to teaching stage:
-        # teaching_x = poslog_x - offset_x
+        tx = first_phys_x - offset_x
+        ty = first_phys_y - offset_y
 
-        # Combined: MSI raster -> teaching stage
-        # teaching_x = raster_x * step_x + origin_x - offset_x
-        # teaching_y = raster_y * step_y + origin_y - offset_y
+        logger.debug(
+            f"MSI transform: scale=({step_x}, {-step_y}), "
+            f"translation=({tx:.1f}, {ty:.1f})"
+        )
 
         # Build MSI -> teaching stage transform
-        # (using 0-based raster coordinates)
+        # Note: step_y is negated because Y-axis is inverted in poslog
         msi_to_teaching = AffineTransform.from_scale_translate(
             scale_x=step_x,
-            scale_y=step_y,
-            tx=-offset_x,  # Translate from poslog to teaching space
-            ty=-offset_y,
+            scale_y=-step_y,  # Negative because poslog Y is inverted
+            tx=tx,
+            ty=ty,
         )
 
         # Chain: MSI -> teaching stage -> image
