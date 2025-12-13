@@ -326,3 +326,6 @@ class SpatialData2DConverter(BaseSpatialDataConverter):
 
                 logging.debug(f"Detailed traceback:\n{traceback.format_exc()}")
                 raise
+
+        # Add optical images if available
+        self._add_optical_images(data_structures)

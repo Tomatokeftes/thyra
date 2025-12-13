@@ -166,6 +166,7 @@ def _create_converter(
     pixel_size_detection_info: Dict[str, Any],
     resampling_config: Optional[Dict[str, Any]] = None,
     sparse_format: str = "csc",
+    include_optical: bool = True,
     **kwargs: Any,
 ) -> Any:
     """Create and return a converter for the specified format."""
@@ -194,6 +195,7 @@ def _create_converter(
         pixel_size_detection_info=pixel_size_detection_info,
         resampling_config=resampling_config,
         sparse_format=sparse_format,
+        include_optical=include_optical,
         **kwargs,
     )
 
@@ -220,6 +222,7 @@ def convert_msi(
     resampling_config: Optional[Dict[str, Any]] = None,
     reader_options: Optional[Dict[str, Any]] = None,
     sparse_format: str = "csc",
+    include_optical: bool = True,
     **kwargs: Any,
 ) -> bool:
     """Convert MSI data to the specified format with enhanced error handling.
@@ -237,6 +240,7 @@ def convert_msi(
         reader_options: Optional format-specific reader options. For Bruker data:
             - use_recalibrated_state: bool - Use active/recalibrated calibration (default True)
         sparse_format: Sparse matrix format for output ('csc' or 'csr', default: 'csc')
+        include_optical: Whether to include optical images in output (default: True)
         **kwargs: Additional keyword arguments
 
     Returns:
@@ -282,6 +286,7 @@ def convert_msi(
             pixel_size_detection_info,
             resampling_config,
             sparse_format,
+            include_optical=include_optical,
             **kwargs,
         )
 

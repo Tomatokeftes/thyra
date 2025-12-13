@@ -19,6 +19,8 @@ SPATIALDATA_AVAILABLE = False
 _import_error_msg = None
 try:
     import geopandas as gpd
+    import tifffile
+    import xarray as xr
     from anndata import AnnData  # type: ignore
     from shapely.geometry import box
     from spatialdata import SpatialData
@@ -60,6 +62,7 @@ class BaseSpatialDataConverter(BaseMSIConverter, ABC):
         pixel_size_detection_info: Optional[Dict[str, Any]] = None,
         resampling_config: Optional[Union[Dict[str, Any], ResamplingConfig]] = None,
         sparse_format: str = "csc",
+        include_optical: bool = True,
         **kwargs: Any,
     ) -> None:
         """Initialize the base SpatialData converter.
@@ -76,6 +79,8 @@ class BaseSpatialDataConverter(BaseMSIConverter, ABC):
                 detection
             resampling_config: Optional resampling configuration dict
             sparse_format: Sparse matrix format ('csc' or 'csr', default: 'csc')
+            include_optical: Whether to include optical images in output
+                (default: True)
             **kwargs: Additional keyword arguments
 
         Raises:
@@ -121,6 +126,7 @@ class BaseSpatialDataConverter(BaseMSIConverter, ABC):
         self._pixel_size_detection_info = pixel_size_detection_info
         self._resampling_config = resampling_config
         self._sparse_format = sparse_format.lower()
+        self._include_optical = include_optical
         if self._sparse_format not in ("csc", "csr"):
             raise ValueError(
                 f"sparse_format must be 'csc' or 'csr', got '{sparse_format}'"
@@ -960,6 +966,124 @@ class BaseSpatialDataConverter(BaseMSIConverter, ABC):
         # Parse shapes
         shapes = ShapesModel.parse(gdf, transformations=transformations)
         return shapes
+
+    def _add_optical_images(self, data_structures: Dict[str, Any]) -> None:
+        """Load and add optical images from the reader to data structures.
+
+        Finds optical TIFF files associated with the MSI data and adds them
+        as image layers in the SpatialData output.
+
+        Args:
+            data_structures: Data structures dict to add images to
+        """
+        if not self._include_optical:
+            return
+
+        optical_paths = self.reader.get_optical_image_paths()
+        if not optical_paths:
+            logging.debug("No optical images found")
+            return
+
+        logging.info(f"Found {len(optical_paths)} optical image(s)")
+
+        for tiff_path in optical_paths:
+            try:
+                self._load_single_optical_image(tiff_path, data_structures)
+            except Exception as e:
+                logging.warning(f"Failed to load optical image {tiff_path.name}: {e}")
+
+    def _load_single_optical_image(
+        self, tiff_path: Path, data_structures: Dict[str, Any]
+    ) -> None:
+        """Load a single optical TIFF and add it to data structures.
+
+        Args:
+            tiff_path: Path to the TIFF file
+            data_structures: Data structures dict to add the image to
+        """
+        # Generate a clean name for the image layer
+        image_name = self._generate_optical_image_name(tiff_path)
+
+        logging.info(f"Loading optical image: {tiff_path.name} as '{image_name}'")
+
+        # Read TIFF using tifffile (handles large files efficiently)
+        with tifffile.TiffFile(tiff_path) as tif:
+            # Read the first page/frame
+            img_data = tif.pages[0].asarray()
+
+            # Get image dimensions
+            if img_data.ndim == 2:
+                # Grayscale: (y, x) -> (c, y, x)
+                img_data = img_data[np.newaxis, :, :]
+                n_channels = 1
+            elif img_data.ndim == 3:
+                # RGB/RGBA: (y, x, c) -> (c, y, x)
+                img_data = np.moveaxis(img_data, -1, 0)
+                n_channels = img_data.shape[0]
+            else:
+                logging.warning(
+                    f"Unexpected image dimensions {img_data.ndim} for {tiff_path.name}"
+                )
+                return
+
+            y_size, x_size = img_data.shape[1], img_data.shape[2]
+
+            # Create xarray DataArray
+            optical_image = xr.DataArray(
+                img_data,
+                dims=("c", "y", "x"),
+                coords={
+                    "c": np.arange(n_channels),
+                    "y": np.arange(y_size),
+                    "x": np.arange(x_size),
+                },
+                attrs={
+                    "source_file": tiff_path.name,
+                    "original_path": str(tiff_path),
+                },
+            )
+
+            # Create Image2DModel
+            transform = Identity()
+            data_structures["images"][image_name] = Image2DModel.parse(
+                optical_image,
+                transformations={
+                    self.dataset_id: transform,
+                    "global": transform,
+                },
+            )
+
+            logging.info(
+                f"Added optical image '{image_name}': {x_size}x{y_size} "
+                f"({n_channels} channel{'s' if n_channels > 1 else ''})"
+            )
+
+    def _generate_optical_image_name(self, tiff_path: Path) -> str:
+        """Generate a clean name for an optical image layer.
+
+        Args:
+            tiff_path: Path to the TIFF file
+
+        Returns:
+            Clean name for the image layer (e.g., 'optical_0000', 'optical_deriv')
+        """
+        stem = tiff_path.stem.lower()
+
+        # Extract meaningful suffix from filename
+        if "_0000" in stem:
+            suffix = "highres"
+        elif "_0001" in stem:
+            suffix = "derived"
+        elif "deriv" in stem:
+            suffix = "overview"
+        else:
+            # Use stem with special chars replaced
+            suffix = stem.replace(" ", "_").replace("-", "_")
+            # Truncate if too long
+            if len(suffix) > 30:
+                suffix = suffix[:30]
+
+        return f"{self.dataset_id}_optical_{suffix}"
 
     def _save_output(self, data_structures: Dict[str, Any]) -> bool:
         """Save the data to SpatialData format.

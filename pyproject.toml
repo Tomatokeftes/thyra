@@ -68,6 +68,7 @@ spatialdata = ">=0.2.0"
 tqdm = ">=4.50.0"
 zarr = ">=3.0.0"
 cryptography = "^45.0.5"
+imagecodecs = ">=2024.1.1"  # For reading compressed TIFF optical images
 
 anndata = ">=0.11.0"
 matplotlib = "^3.10.6"

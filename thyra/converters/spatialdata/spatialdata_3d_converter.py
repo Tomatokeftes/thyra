@@ -303,3 +303,6 @@ class SpatialData3DConverter(BaseSpatialDataConverter):
                     "global": transform,
                 },
             )
+
+        # Add optical images if available
+        self._add_optical_images(data_structures)

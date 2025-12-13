@@ -588,6 +588,21 @@ class FlexImagingReader(BaseMSIReader):
         finally:
             pbar.close()
 
+    def get_optical_image_paths(self) -> List[Path]:
+        """Get paths to optical/microscopy TIFF images.
+
+        FlexImaging data folders typically contain optical images:
+        - *deriv*.tif: Low-resolution optical overview
+        - *_0000.tif: High-resolution reference image (used for teaching points)
+        - *_0001.tif: Derived/processed image
+
+        Returns:
+            List of paths to TIFF files in the data folder, sorted by name.
+        """
+        tiff_paths = list(self.data_path.glob("*.tif"))
+        tiff_paths.extend(self.data_path.glob("*.tiff"))
+        return sorted(set(tiff_paths))
+
     def close(self) -> None:
         """Close the reader and release resources."""
         if self._closed:

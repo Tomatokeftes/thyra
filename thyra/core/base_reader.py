@@ -1,7 +1,7 @@
 # thyra/core/base_reader.py
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import TYPE_CHECKING, Generator, Optional, Tuple
+from typing import TYPE_CHECKING, Generator, List, Optional, Tuple
 
 import numpy as np
 from numpy.typing import NDArray
@@ -44,6 +44,21 @@ class BaseMSIReader(ABC):
     def get_comprehensive_metadata(self) -> ComprehensiveMetadata:
         """Get complete metadata."""
         return self.metadata_extractor.get_comprehensive()
+
+    def get_optical_image_paths(self) -> List[Path]:
+        """Get paths to optical/microscopy images associated with this data.
+
+        Returns list of TIFF file paths that contain optical images of the
+        sample. These images can be stored alongside MSI data in SpatialData
+        output for multimodal analysis.
+
+        Default implementation returns empty list. Subclasses should override
+        to return paths to optical images specific to their format.
+
+        Returns:
+            List of paths to TIFF files, empty if no optical images available.
+        """
+        return []
 
     @abstractmethod
     def get_common_mass_axis(self) -> NDArray[np.float64]:
