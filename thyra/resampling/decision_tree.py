@@ -17,8 +17,8 @@ class ResamplingDecisionTree:
         """Automatically select appropriate resampling method based on instrument metadata.
 
         Currently implemented:
-        - Bruker timsTOF detection -> NEAREST_NEIGHBOR (optimal for
-          centroid data)
+        - Bruker timsTOF detection -> NEAREST_NEIGHBOR (optimal for centroid data)
+        - Bruker FlexImaging (MALDI-TOF) -> TIC_PRESERVING (optimal for profile data)
         - All other instruments -> NotImplementedError (to be implemented
           in future phases)
 
@@ -47,9 +47,17 @@ class ResamplingDecisionTree:
         # Check for ImzML centroid spectrum detection (exact cvParam match)
         if self._is_imzml_centroid_spectrum(metadata):
             logger.info(
-                "ImzML centroid spectrum detected, using NEAREST_NEIGHBOR " "strategy"
+                "ImzML centroid spectrum detected, using NEAREST_NEIGHBOR strategy"
             )
             return ResamplingMethod.NEAREST_NEIGHBOR
+
+        # Check for FlexImaging MALDI-TOF (profile data)
+        if self._is_fleximaging_maldi_tof(metadata):
+            logger.info(
+                "FlexImaging MALDI-TOF detected, using TIC_PRESERVING strategy "
+                "(profile data)"
+            )
+            return ResamplingMethod.TIC_PRESERVING
 
         # Check Bruker GlobalMetadata for timsTOF detection (for .d files)
         if self._is_bruker_metadata(metadata):
@@ -88,11 +96,6 @@ class ResamplingDecisionTree:
         -------
         AxisType
             Recommended axis type for the instrument
-
-        Raises
-        ------
-        NotImplementedError
-            For non-timsTOF instruments (to be implemented)
         """
         if metadata is None:
             return AxisType.CONSTANT  # Default to uniform spacing
@@ -100,12 +103,20 @@ class ResamplingDecisionTree:
         # Check for ImzML centroid spectrum detection
         if self._is_imzml_centroid_spectrum(metadata):
             logger.info(
-                "ImzML centroid spectrum detected, using REFLECTOR_TOF axis " "type"
+                "ImzML centroid spectrum detected, using REFLECTOR_TOF axis type"
             )
             return (
                 AxisType.REFLECTOR_TOF
             )  # Most ImzML centroid data benefits from constant relative
             # resolution
+
+        # Check for FlexImaging MALDI-TOF (linear TOF spacing)
+        if self._is_fleximaging_maldi_tof(metadata):
+            logger.info(
+                "FlexImaging MALDI-TOF detected, using LINEAR_TOF axis type "
+                "(bin width proportional to sqrt(m/z))"
+            )
+            return AxisType.LINEAR_TOF
 
         # Check Bruker GlobalMetadata for timsTOF detection
         if self._is_bruker_metadata(metadata):
@@ -210,4 +221,49 @@ class ResamplingDecisionTree:
                 if instrument_name == "timsTOF Maldi 2":
                     return True
 
+        return False
+
+    def _is_fleximaging_maldi_tof(self, metadata: Dict[str, Any]) -> bool:
+        """Detect FlexImaging MALDI-TOF data from metadata.
+
+        FlexImaging data from rapifleX, autofleX, ultrafleXtreme instruments
+        is profile data with linear TOF mass axis (bin width proportional to sqrt(m/z)).
+
+        Detection methods:
+        1. format_specific.format == "FlexImaging"
+        2. instrument_info.instrument_type == "MALDI-TOF" + manufacturer == "Bruker"
+        3. essential_metadata.spectrum_type == "profile spectrum" + MALDI acq params
+        """
+        return (
+            self._check_fleximaging_format(metadata)
+            or self._check_bruker_maldi_tof(metadata)
+            or self._check_profile_with_maldi_params(metadata)
+        )
+
+    def _check_fleximaging_format(self, metadata: Dict[str, Any]) -> bool:
+        """Check if format_specific indicates FlexImaging."""
+        format_specific = metadata.get("format_specific", {})
+        if isinstance(format_specific, dict):
+            return format_specific.get("format") == "FlexImaging"
+        return False
+
+    def _check_bruker_maldi_tof(self, metadata: Dict[str, Any]) -> bool:
+        """Check if instrument_info indicates Bruker MALDI-TOF."""
+        instrument_info = metadata.get("instrument_info", {})
+        if isinstance(instrument_info, dict):
+            is_maldi_tof = instrument_info.get("instrument_type") == "MALDI-TOF"
+            is_bruker = instrument_info.get("manufacturer") == "Bruker"
+            return is_maldi_tof and is_bruker
+        return False
+
+    def _check_profile_with_maldi_params(self, metadata: Dict[str, Any]) -> bool:
+        """Check for profile spectrum with FlexImaging-specific acquisition params."""
+        essential = metadata.get("essential_metadata", {})
+        if not isinstance(essential, dict):
+            return False
+        if essential.get("spectrum_type") != "profile spectrum":
+            return False
+        acq = metadata.get("acquisition_params", {})
+        if isinstance(acq, dict):
+            return "shots_per_spot" in acq or "laser_power" in acq
         return False

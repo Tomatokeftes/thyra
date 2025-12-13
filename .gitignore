@@ -40,6 +40,10 @@ Archive/
 # Temporary files
 temp_*
 test_output*/
+nul
+
+# Test data (large MSI files)
+test_data/
 
 # Benchmark results and logs
 benchmarks/results/*.log

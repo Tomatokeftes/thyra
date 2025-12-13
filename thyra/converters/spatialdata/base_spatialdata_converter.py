@@ -285,6 +285,18 @@ class BaseSpatialDataConverter(BaseMSIConverter, ABC):
             metadata["instrument_info"] = comp_meta.instrument_info
             logging.debug(f"Extracted instrument_info: {comp_meta.instrument_info}")
 
+        # Extract format_specific for FlexImaging detection
+        if hasattr(comp_meta, "format_specific"):
+            metadata["format_specific"] = comp_meta.format_specific
+            logging.debug(f"Extracted format_specific: {comp_meta.format_specific}")
+
+        # Extract acquisition_params for additional detection
+        if hasattr(comp_meta, "acquisition_params"):
+            metadata["acquisition_params"] = comp_meta.acquisition_params
+            logging.debug(
+                f"Extracted acquisition_params: {comp_meta.acquisition_params}"
+            )
+
     def _extract_spectrum_metadata(self, metadata: Dict[str, Any]) -> None:
         """Extract ImzML-specific spectrum metadata."""
         try:
@@ -314,10 +326,23 @@ class BaseSpatialDataConverter(BaseMSIConverter, ABC):
         Returns:
             Calculated number of bins
         """
+        # Calculate bins based on axis type physics
+        if hasattr(axis_type, "value"):
+            axis_name = axis_type.value
+        else:
+            axis_name = str(axis_type).split(".")[-1].lower()
+
         if self._width_at_mz is None:
-            # Use default: 5.0 mDa at m/z 1000
-            width_at_mz = 0.005  # 5.0 mDa in Da
-            reference_mz = 1000.0
+            # Use axis-type-specific defaults for optimal resolution
+            if axis_name == "linear_tof":
+                # LINEAR_TOF (FlexImaging): Use SCiLS-like default ~17 mDa at m/z 300
+                # This matches typical MALDI-TOF resolution and gives ~30k bins
+                width_at_mz = 0.017  # 17.0 mDa in Da
+                reference_mz = 300.0
+            else:
+                # Default for other axis types: 5.0 mDa at m/z 1000
+                width_at_mz = 0.005  # 5.0 mDa in Da
+                reference_mz = 1000.0
         else:
             width_at_mz = self._width_at_mz
             reference_mz = self._reference_mz
@@ -325,12 +350,6 @@ class BaseSpatialDataConverter(BaseMSIConverter, ABC):
         logging.info(
             f"Calculating bins for {width_at_mz*1000:.1f} mDa width at m/z {reference_mz:.1f}"
         )
-
-        # Calculate bins based on axis type physics
-        if hasattr(axis_type, "value"):
-            axis_name = axis_type.value
-        else:
-            axis_name = str(axis_type).split(".")[-1].lower()
 
         if axis_name == "reflector_tof":
             # REFLECTOR_TOF: constant relative resolution (width ∝ m/z)
@@ -340,11 +359,11 @@ class BaseSpatialDataConverter(BaseMSIConverter, ABC):
             bins = int(np.log(max_mz / min_mz) * relative_resolution)
 
         elif axis_name == "linear_tof":
-            # LINEAR_TOF: width ∝ sqrt(m/z)
-            # For sqrt spacing: bins ≈ (sqrt(max_mz) - sqrt(min_mz)) /
-            # sqrt(width_at_mz / reference_mz)
-            scaling_factor = width_at_mz / np.sqrt(reference_mz)
-            bins = int((np.sqrt(max_mz) - np.sqrt(min_mz)) / np.sqrt(scaling_factor))
+            # LINEAR_TOF: bin width = k * sqrt(m/z), where k = width_at_mz / sqrt(reference_mz)
+            # Number of bins: n = (2/k) * (sqrt(max_mz) - sqrt(min_mz))
+            # This matches SCiLS Lab's "Linear TOF" mass axis calculation
+            k = width_at_mz / np.sqrt(reference_mz)
+            bins = int((2.0 / k) * (np.sqrt(max_mz) - np.sqrt(min_mz)))
 
         elif axis_name == "orbitrap":
             # ORBITRAP: width ∝ m/z^1.5
@@ -363,6 +382,27 @@ class BaseSpatialDataConverter(BaseMSIConverter, ABC):
 
         logging.info(f"Calculated {bins} bins for {axis_name} axis type")
         return bins
+
+    def _get_reference_params(self, axis_type) -> Tuple[float, float]:
+        """Get reference width and m/z for the given axis type.
+
+        Returns axis-type-specific defaults if user didn't specify.
+        """
+        if self._width_at_mz is not None:
+            return self._width_at_mz, self._reference_mz
+
+        # Get axis name for default selection
+        if hasattr(axis_type, "value"):
+            axis_name = axis_type.value
+        else:
+            axis_name = str(axis_type).split(".")[-1].lower()
+
+        # Use axis-type-specific defaults
+        if axis_name == "linear_tof":
+            # LINEAR_TOF (FlexImaging): Use SCiLS-like default ~17 mDa at m/z 300
+            return 0.017, 300.0
+        # Default for other axis types: 5.0 mDa at m/z 1000
+        return 0.005, 1000.0
 
     def _build_resampled_mass_axis(self) -> None:
         """Build resampled mass axis using physics-based generators."""
@@ -406,13 +446,7 @@ class BaseSpatialDataConverter(BaseMSIConverter, ABC):
         builder = CommonAxisBuilder()
 
         # Determine reference parameters for physics generators
-        if self._width_at_mz is not None:
-            reference_width = self._width_at_mz
-            reference_mz = self._reference_mz
-        else:
-            # Use default: 5.0 mDa at m/z 1000
-            reference_width = 0.005
-            reference_mz = 1000.0
+        reference_width, reference_mz = self._get_reference_params(axis_type)
 
         if hasattr(axis_type, "value") and axis_type.value != "constant":
             # Use physics-based generator with reference parameters
