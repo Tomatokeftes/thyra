@@ -336,42 +336,52 @@ class BaseSpatialDataConverter(BaseMSIConverter, ABC):
         try:
             comp_meta = self.reader.get_comprehensive_metadata()
 
-            # Store format-specific metadata (FlexImaging areas, teaching points, etc.)
-            if hasattr(comp_meta, "format_specific") and comp_meta.format_specific:
-                adata.uns["format_specific"] = comp_meta.format_specific
-
-            # Store acquisition parameters
-            if (
-                hasattr(comp_meta, "acquisition_params")
-                and comp_meta.acquisition_params
-            ):
-                adata.uns["acquisition_params"] = comp_meta.acquisition_params
-
-            # Store instrument info
-            if hasattr(comp_meta, "instrument_info") and comp_meta.instrument_info:
-                adata.uns["instrument_info"] = comp_meta.instrument_info
-
-            # Store essential metadata (convert tuples to lists for Zarr)
-            if hasattr(comp_meta, "essential"):
-                essential = comp_meta.essential
-                dims = essential.dimensions
-                mrange = essential.mass_range
-                adata.uns["essential_metadata"] = {
-                    "source_path": str(essential.source_path),
-                    "dimensions": list(dims) if dims else None,
-                    "mass_range": list(mrange) if mrange else None,
-                    "spectrum_type": getattr(essential, "spectrum_type", None),
-                }
-
-            # Store raw metadata (complete original data for future use)
-            if hasattr(comp_meta, "raw_metadata") and comp_meta.raw_metadata:
-                adata.uns["raw_metadata"] = self._serialize_for_zarr(
-                    comp_meta.raw_metadata
-                )
+            self._store_format_specific(adata, comp_meta)
+            self._store_acquisition_params(adata, comp_meta)
+            self._store_instrument_info(adata, comp_meta)
+            self._store_essential_metadata(adata, comp_meta)
+            self._store_raw_metadata(adata, comp_meta)
 
             logging.debug("Added MSI metadata to AnnData .uns")
         except Exception as e:
             logging.debug(f"Could not add metadata to .uns: {e}")
+
+    def _store_format_specific(self, adata, comp_meta) -> None:
+        """Store format-specific metadata (FlexImaging areas, teaching points)."""
+        if hasattr(comp_meta, "format_specific") and comp_meta.format_specific:
+            adata.uns["format_specific"] = comp_meta.format_specific
+
+    def _store_acquisition_params(self, adata, comp_meta) -> None:
+        """Store acquisition parameters."""
+        if hasattr(comp_meta, "acquisition_params") and comp_meta.acquisition_params:
+            adata.uns["acquisition_params"] = comp_meta.acquisition_params
+
+    def _store_instrument_info(self, adata, comp_meta) -> None:
+        """Store instrument information."""
+        if hasattr(comp_meta, "instrument_info") and comp_meta.instrument_info:
+            adata.uns["instrument_info"] = comp_meta.instrument_info
+
+    def _store_essential_metadata(self, adata, comp_meta) -> None:
+        """Store essential metadata (convert tuples to lists for Zarr)."""
+        if not hasattr(comp_meta, "essential"):
+            return
+
+        essential = comp_meta.essential
+        dims = essential.dimensions
+        mrange = essential.mass_range
+        adata.uns["essential_metadata"] = {
+            "source_path": str(essential.source_path),
+            "dimensions": list(dims) if dims else None,
+            "mass_range": list(mrange) if mrange else None,
+            "spectrum_type": getattr(essential, "spectrum_type", None),
+        }
+
+    def _store_raw_metadata(self, adata, comp_meta) -> None:
+        """Store raw metadata (complete original data for future use)."""
+        if hasattr(comp_meta, "raw_metadata") and comp_meta.raw_metadata:
+            adata.uns["raw_metadata"] = self._serialize_for_zarr(
+                comp_meta.raw_metadata
+            )
 
     def _serialize_for_zarr(self, obj):
         """Recursively convert tuples to lists for Zarr serialization."""

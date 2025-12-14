@@ -326,7 +326,7 @@ class TeachingPointAlignment:
         """
         warnings: List[str] = []
 
-        # Parse teaching points
+        # Parse and validate teaching points
         if len(teaching_points) < 3:
             n_pts = len(teaching_points)
             raise ValueError(f"At least 3 teaching points required, got {n_pts}")
@@ -334,13 +334,9 @@ class TeachingPointAlignment:
         points = [TeachingPoint.from_dict(tp) for tp in teaching_points]
         logger.info(f"Processing {len(points)} teaching points")
 
-        # Compute image -> stage transformation
+        # Compute transformations and RMSE
         image_to_stage = self._compute_image_to_stage(points)
-
-        # Compute RMSE for quality assessment
-        src_pts = [(float(p.image_x), float(p.image_y)) for p in points]
-        dst_pts = [(float(p.stage_x), float(p.stage_y)) for p in points]
-        rmse, _ = image_to_stage.compute_residuals(src_pts, dst_pts)
+        rmse = self._compute_alignment_rmse(points, image_to_stage)
 
         if rmse > 10.0:  # More than 10 um error
             warnings.append(
@@ -348,69 +344,112 @@ class TeachingPointAlignment:
                 "Alignment may be inaccurate."
             )
 
-        logger.info(f"Image->Stage RMSE: {rmse:.4f} um")
-
-        # Compute inverse
         stage_to_image = image_to_stage.inverse()
 
-        # Try to compute stage offset and MSI transformations
-        stage_offset = None
-        msi_to_image = None
-        image_to_msi = None
+        # Compute MSI transforms if poslog available
+        msi_result = self._compute_msi_alignment(
+            points, poslog_positions, image_to_stage, stage_to_image,
+            raster_step, flip_poslog_x, flip_poslog_y
+        )
 
-        if poslog_positions and len(poslog_positions) > 0:
-            # Apply coordinate flips to poslog positions if needed
-            flipped_positions = poslog_positions
-            if flip_poslog_x or flip_poslog_y:
-                flipped_positions = []
-                for pos in poslog_positions:
-                    flipped_pos = pos.copy()
-                    if flip_poslog_x:
-                        flipped_pos["phys_x"] = -pos["phys_x"]
-                    if flip_poslog_y:
-                        flipped_pos["phys_y"] = -pos["phys_y"]
-                    flipped_positions.append(flipped_pos)
-
-            stage_offset = self._estimate_stage_offset(
-                points, flipped_positions, raster_step
-            )
-
-            if stage_offset is not None:
-                logger.info(
-                    f"Estimated stage offset: ({stage_offset[0]:.1f}, "
-                    f"{stage_offset[1]:.1f}) um"
-                )
-
-                # Get first physical position (using flipped coordinates)
-                first_phys = (
-                    float(flipped_positions[0]["phys_x"]),
-                    float(flipped_positions[0]["phys_y"]),
-                )
-
-                # Compute MSI <-> image transformations
-                msi_to_image, image_to_msi = self._compute_msi_transforms(
-                    image_to_stage,
-                    stage_to_image,
-                    stage_offset,
-                    raster_step,
-                    first_phys,
-                    flip_poslog_x,
-                )
-            else:
-                warnings.append(
-                    "Could not determine stage coordinate offset. "
-                    "MSI-to-image transform may require manual calibration."
-                )
+        if msi_result["warning"]:
+            warnings.append(msi_result["warning"])
 
         return AlignmentResult(
             image_to_stage=image_to_stage,
             stage_to_image=stage_to_image,
-            msi_to_image=msi_to_image,
-            image_to_msi=image_to_msi,
-            stage_offset=stage_offset,
+            msi_to_image=msi_result["msi_to_image"],
+            image_to_msi=msi_result["image_to_msi"],
+            stage_offset=msi_result["stage_offset"],
             rmse=rmse,
             warnings=warnings,
         )
+
+    def _compute_alignment_rmse(
+        self, points: List[TeachingPoint], transform: AffineTransform
+    ) -> float:
+        """Compute RMSE for alignment quality assessment."""
+        src_pts = [(float(p.image_x), float(p.image_y)) for p in points]
+        dst_pts = [(float(p.stage_x), float(p.stage_y)) for p in points]
+        rmse, _ = transform.compute_residuals(src_pts, dst_pts)
+        logger.info(f"Image->Stage RMSE: {rmse:.4f} um")
+        return rmse
+
+    def _apply_coordinate_flips(
+        self,
+        positions: List[Dict[str, Any]],
+        flip_x: bool,
+        flip_y: bool,
+    ) -> List[Dict[str, Any]]:
+        """Apply coordinate flips to poslog positions if needed."""
+        if not flip_x and not flip_y:
+            return positions
+
+        flipped = []
+        for pos in positions:
+            flipped_pos = pos.copy()
+            if flip_x:
+                flipped_pos["phys_x"] = -pos["phys_x"]
+            if flip_y:
+                flipped_pos["phys_y"] = -pos["phys_y"]
+            flipped.append(flipped_pos)
+        return flipped
+
+    def _compute_msi_alignment(
+        self,
+        points: List[TeachingPoint],
+        poslog_positions: Optional[List[Dict[str, Any]]],
+        image_to_stage: AffineTransform,
+        stage_to_image: AffineTransform,
+        raster_step: Tuple[float, float],
+        flip_poslog_x: bool,
+        flip_poslog_y: bool,
+    ) -> Dict[str, Any]:
+        """Compute MSI-to-image alignment from poslog positions."""
+        result = {
+            "stage_offset": None,
+            "msi_to_image": None,
+            "image_to_msi": None,
+            "warning": None,
+        }
+
+        if not poslog_positions:
+            return result
+
+        flipped_positions = self._apply_coordinate_flips(
+            poslog_positions, flip_poslog_x, flip_poslog_y
+        )
+
+        stage_offset = self._estimate_stage_offset(
+            points, flipped_positions, raster_step
+        )
+        result["stage_offset"] = stage_offset
+
+        if stage_offset is None:
+            result["warning"] = (
+                "Could not determine stage coordinate offset. "
+                "MSI-to-image transform may require manual calibration."
+            )
+            return result
+
+        logger.info(
+            f"Estimated stage offset: ({stage_offset[0]:.1f}, "
+            f"{stage_offset[1]:.1f}) um"
+        )
+
+        first_phys = (
+            float(flipped_positions[0]["phys_x"]),
+            float(flipped_positions[0]["phys_y"]),
+        )
+
+        msi_to_image, image_to_msi = self._compute_msi_transforms(
+            image_to_stage, stage_to_image, stage_offset,
+            raster_step, first_phys, flip_poslog_x,
+        )
+        result["msi_to_image"] = msi_to_image
+        result["image_to_msi"] = image_to_msi
+
+        return result
 
     def _compute_image_to_stage(self, points: List[TeachingPoint]) -> AffineTransform:
         """Compute affine transformation from image pixels to stage coords.
