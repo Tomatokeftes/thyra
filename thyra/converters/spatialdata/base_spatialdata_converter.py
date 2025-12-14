@@ -323,6 +323,46 @@ class BaseSpatialDataConverter(BaseMSIConverter, ABC):
         except Exception as e:
             logging.debug(f"Could not extract spectrum metadata: {e}")
 
+    def _add_metadata_to_uns(self, adata) -> None:
+        """Add MSI metadata to AnnData .uns for preservation in SpatialData.
+
+        This stores comprehensive metadata including:
+        - Essential metadata (dimensions, mass range, source)
+        - Format-specific metadata (FlexImaging areas, teaching points, etc.)
+        - Acquisition parameters
+        - Instrument information
+        """
+        try:
+            comp_meta = self.reader.get_comprehensive_metadata()
+
+            # Store format-specific metadata (FlexImaging areas, teaching points, etc.)
+            if hasattr(comp_meta, "format_specific") and comp_meta.format_specific:
+                adata.uns["format_specific"] = comp_meta.format_specific
+
+            # Store acquisition parameters
+            if hasattr(comp_meta, "acquisition_params") and comp_meta.acquisition_params:
+                adata.uns["acquisition_params"] = comp_meta.acquisition_params
+
+            # Store instrument info
+            if hasattr(comp_meta, "instrument_info") and comp_meta.instrument_info:
+                adata.uns["instrument_info"] = comp_meta.instrument_info
+
+            # Store essential metadata (convert tuples to lists for Zarr)
+            if hasattr(comp_meta, "essential"):
+                essential = comp_meta.essential
+                dims = essential.dimensions
+                mrange = essential.mass_range
+                adata.uns["essential_metadata"] = {
+                    "source_path": str(essential.source_path),
+                    "dimensions": list(dims) if dims else None,
+                    "mass_range": list(mrange) if mrange else None,
+                    "spectrum_type": getattr(essential, "spectrum_type", None),
+                }
+
+            logging.debug("Added MSI metadata to AnnData .uns")
+        except Exception as e:
+            logging.debug(f"Could not add metadata to .uns: {e}")
+
     def _calculate_bins_from_width(
         self, min_mz: float, max_mz: float, axis_type
     ) -> int:

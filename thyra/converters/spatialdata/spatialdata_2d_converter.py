@@ -270,6 +270,9 @@ class SpatialData2DConverter(BaseSpatialDataConverter):
                 # Add average spectrum to .uns
                 adata.uns["average_spectrum"] = avg_spectrum
 
+                # Add MSI metadata to .uns
+                self._add_metadata_to_uns(adata)
+
                 # Make sure region column exists and is correct
                 region_key = f"{slice_id}_pixels"
                 if "region" not in adata.obs.columns:
