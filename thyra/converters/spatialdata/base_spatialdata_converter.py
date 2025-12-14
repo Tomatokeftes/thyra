@@ -331,6 +331,7 @@ class BaseSpatialDataConverter(BaseMSIConverter, ABC):
         - Format-specific metadata (FlexImaging areas, teaching points, etc.)
         - Acquisition parameters
         - Instrument information
+        - Raw metadata (complete original metadata for future use)
         """
         try:
             comp_meta = self.reader.get_comprehensive_metadata()
@@ -359,9 +360,27 @@ class BaseSpatialDataConverter(BaseMSIConverter, ABC):
                     "spectrum_type": getattr(essential, "spectrum_type", None),
                 }
 
+            # Store raw metadata (complete original data for future use)
+            if hasattr(comp_meta, "raw_metadata") and comp_meta.raw_metadata:
+                adata.uns["raw_metadata"] = self._serialize_for_zarr(
+                    comp_meta.raw_metadata
+                )
+
             logging.debug("Added MSI metadata to AnnData .uns")
         except Exception as e:
             logging.debug(f"Could not add metadata to .uns: {e}")
+
+    def _serialize_for_zarr(self, obj):
+        """Recursively convert tuples to lists for Zarr serialization."""
+        if isinstance(obj, dict):
+            return {k: self._serialize_for_zarr(v) for k, v in obj.items()}
+        elif isinstance(obj, (list, tuple)):
+            return [self._serialize_for_zarr(item) for item in obj]
+        elif hasattr(obj, "__dict__"):
+            # Convert dataclass/object to dict
+            return self._serialize_for_zarr(vars(obj))
+        else:
+            return obj
 
     def _calculate_bins_from_width(
         self, min_mz: float, max_mz: float, axis_type

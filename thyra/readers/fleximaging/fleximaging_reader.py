@@ -131,6 +131,7 @@ class FlexImagingMetadataExtractor(MetadataExtractor):
         raw_metadata = {
             "info_metadata": info,
             "mis_metadata": mis,
+            "header": self._reader._header,
         }
 
         return ComprehensiveMetadata(
