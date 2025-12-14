@@ -341,7 +341,10 @@ class BaseSpatialDataConverter(BaseMSIConverter, ABC):
                 adata.uns["format_specific"] = comp_meta.format_specific
 
             # Store acquisition parameters
-            if hasattr(comp_meta, "acquisition_params") and comp_meta.acquisition_params:
+            if (
+                hasattr(comp_meta, "acquisition_params")
+                and comp_meta.acquisition_params
+            ):
                 adata.uns["acquisition_params"] = comp_meta.acquisition_params
 
             # Store instrument info
@@ -1024,7 +1027,7 @@ class BaseSpatialDataConverter(BaseMSIConverter, ABC):
             # Default half-pixel size (fallback if region lookup fails)
             default_half_pixel = 10.0
             if self._alignment_result.region_mappings:
-                # Use average from first region as default
+                # Use first region as default
                 rm = self._alignment_result.region_mappings[0]
                 default_half_pixel = rm.get_half_pixel_size()
 

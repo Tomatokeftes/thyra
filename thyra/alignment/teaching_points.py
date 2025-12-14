@@ -145,8 +145,25 @@ class RegionMapping:
     image_min_y: int
     image_max_y: int
 
+    def _get_pixel_scale(self) -> float:
+        """Get the consistent pixel scale for this region.
+
+        Uses scale_x as the reference since it's typically more consistent
+        across regions. This ensures square pixels with no gaps.
+
+        Returns:
+            Pixel scale in image pixels per raster step
+        """
+        raster_width = max(1, self.raster_max_x - self.raster_min_x)
+        image_width = self.image_max_x - self.image_min_x
+        return image_width / raster_width
+
     def raster_to_image(self, raster_x: int, raster_y: int) -> Tuple[float, float]:
         """Convert raster coordinates to image coordinates within this region.
+
+        Uses consistent spacing (scale_x) for both X and Y to ensure square
+        pixels with no gaps. Pixels may not perfectly fill the bounding box
+        but will be correctly positioned relative to each other.
 
         Args:
             raster_x: Original raster X coordinate (not normalized)
@@ -155,41 +172,25 @@ class RegionMapping:
         Returns:
             Tuple of (image_x, image_y) in pixels
         """
-        # Linear interpolation within the region
-        # t=0 at raster_min maps to image_min, t=1 at raster_max maps to image_max
-        raster_width = max(1, self.raster_max_x - self.raster_min_x)
-        raster_height = max(1, self.raster_max_y - self.raster_min_y)
+        # Use consistent scale for both dimensions (square pixels, no gaps)
+        scale = self._get_pixel_scale()
 
-        t_x = (raster_x - self.raster_min_x) / raster_width
-        t_y = (raster_y - self.raster_min_y) / raster_height
-
-        image_x = self.image_min_x + t_x * (self.image_max_x - self.image_min_x)
-        image_y = self.image_min_y + t_y * (self.image_max_y - self.image_min_y)
+        # Position based on offset from first raster position
+        image_x = self.image_min_x + (raster_x - self.raster_min_x) * scale
+        image_y = self.image_min_y + (raster_y - self.raster_min_y) * scale
 
         return image_x, image_y
 
     def get_half_pixel_size(self) -> float:
         """Get the half-pixel size for this region in image coordinates.
 
-        MSI pixels are physically square (same step size in X and Y),
-        so we use the average of X and Y scales to maintain square shapes
-        even if the Area definition has slight calibration differences.
+        Returns a single value for square pixels. Uses the same scale as
+        raster_to_image() to ensure pixel size matches spacing (no gaps).
 
         Returns:
-            Half-pixel size in image pixels (single value for square pixels)
+            Half-pixel size in image pixels
         """
-        raster_width = max(1, self.raster_max_x - self.raster_min_x)
-        raster_height = max(1, self.raster_max_y - self.raster_min_y)
-
-        image_width = self.image_max_x - self.image_min_x
-        image_height = self.image_max_y - self.image_min_y
-
-        scale_x = image_width / raster_width
-        scale_y = image_height / raster_height
-
-        # Use average scale to maintain square pixels
-        avg_scale = (scale_x + scale_y) / 2
-        return avg_scale / 2
+        return self._get_pixel_scale() / 2
 
 
 @dataclass
@@ -239,13 +240,11 @@ class AreaAlignmentResult:
 
         return None
 
-    def get_half_pixel_size(
-        self, norm_x: int, norm_y: int
-    ) -> Optional[float]:
+    def get_half_pixel_size(self, norm_x: int, norm_y: int) -> Optional[float]:
         """Get the half-pixel size for a given position.
 
-        MSI pixels are physically square, so returns a single value.
-        The scale may vary slightly between regions due to Area calibration.
+        Returns a single value for square pixels. The scale may vary
+        between regions due to Area definitions.
 
         Args:
             norm_x: Normalized (0-based) raster X coordinate
