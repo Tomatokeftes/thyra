@@ -105,6 +105,11 @@ class FlexImagingMetadataExtractor(MetadataExtractor):
             "flexImaging_version": info.get("flexImaging Version", ""),
             "flexControl_version": info.get("flexControl Version", ""),
             "teaching_points": mis.get("teaching_points", []),
+            "areas": mis.get("areas", []),
+            "raster_step_um": list(mis.get("raster") or []),  # [x, y] step in micrometers
+            "optical_image": mis.get("ImageFile", ""),
+            "original_optical_image": mis.get("OriginalImage", ""),
+            "base_geometry": mis.get("BaseGeometry", ""),
         }
 
         acquisition_params = {
@@ -126,6 +131,7 @@ class FlexImagingMetadataExtractor(MetadataExtractor):
         raw_metadata = {
             "info_metadata": info,
             "mis_metadata": mis,
+            "header": self._reader._header,
         }
 
         return ComprehensiveMetadata(
@@ -322,20 +328,25 @@ class FlexImagingReader(BaseMSIReader):
             self._extract_basic_elements(root, metadata)
             self._extract_teaching_points(root, metadata)
             self._extract_raster_info(root, metadata)
+            self._extract_areas(root, metadata)
 
         except ET.ParseError as e:
             logger.warning(f"Failed to parse .mis file: {e}")
 
         return metadata
 
-    def _extract_basic_elements(self, root: "Element", metadata: Dict[str, Any]) -> None:
+    def _extract_basic_elements(
+        self, root: "Element", metadata: Dict[str, Any]
+    ) -> None:
         """Extract basic text elements from .mis XML."""
         for elem_name in ["Method", "ImageFile", "OriginalImage", "BaseGeometry"]:
             elem = root.find(f".//{elem_name}")
             if elem is not None and elem.text:
                 metadata[elem_name] = elem.text
 
-    def _extract_teaching_points(self, root: "Element", metadata: Dict[str, Any]) -> None:
+    def _extract_teaching_points(
+        self, root: "Element", metadata: Dict[str, Any]
+    ) -> None:
         """Extract teaching point calibration data from .mis XML."""
         teaching_points = []
         for tp in root.findall(".//TeachPoint"):
@@ -343,19 +354,61 @@ class FlexImagingReader(BaseMSIReader):
                 img_coords, stage_coords = tp.text.split(";")
                 img_x, img_y = map(int, img_coords.split(","))
                 stage_x, stage_y = map(int, stage_coords.split(","))
+                # Use lists instead of tuples for Zarr serialization
                 teaching_points.append(
-                    {"image": (img_x, img_y), "stage": (stage_x, stage_y)}
+                    {"image": [img_x, img_y], "stage": [stage_x, stage_y]}
                 )
         if teaching_points:
             metadata["teaching_points"] = teaching_points
 
-    def _extract_raster_info(self, root: "Element", metadata: Dict[str, Any]) -> None:
+    def _extract_raster_info(
+        self, root: "Element", metadata: Dict[str, Any]
+    ) -> None:
         """Extract raster dimensions from .mis XML."""
         raster_elem = root.find(".//Raster")
         if raster_elem is not None and raster_elem.text:
             parts = raster_elem.text.split(",")
             if len(parts) == 2:
-                metadata["raster"] = (int(parts[0]), int(parts[1]))
+                # Use list instead of tuple for Zarr serialization
+                metadata["raster"] = [int(parts[0]), int(parts[1])]
+
+    def _extract_areas(self, root: "Element", metadata: Dict[str, Any]) -> None:
+        """Extract Area definitions from .mis XML.
+
+        Areas define the image pixel coordinates for each acquisition region.
+        Each Area has a Name and two Point elements defining the bounding box.
+
+        Args:
+            root: XML root element
+            metadata: Dictionary to update with area info
+        """
+        areas = []
+        for area_elem in root.findall(".//Area"):
+            area_name = area_elem.get("Name", "")
+            points = area_elem.findall("Point")
+            if len(points) >= 2:
+                try:
+                    # Parse point coordinates (format: "x,y")
+                    # Use lists instead of tuples for Zarr serialization
+                    p1_parts = points[0].text.split(",")
+                    p2_parts = points[1].text.split(",")
+                    p1 = [int(p1_parts[0]), int(p1_parts[1])]
+                    p2 = [int(p2_parts[0]), int(p2_parts[1])]
+
+                    areas.append(
+                        {
+                            "name": area_name,
+                            "p1": p1,  # [x1, y1] in image pixels
+                            "p2": p2,  # [x2, y2] in image pixels
+                        }
+                    )
+                except (ValueError, IndexError) as e:
+                    logger.warning(f"Failed to parse Area '{area_name}': {e}")
+                    continue
+
+        if areas:
+            metadata["areas"] = areas
+            logger.debug(f"Parsed {len(areas)} area definitions from .mis")
 
     def _parse_positions(self) -> None:
         """Parse coordinate information from _poslog.txt file."""

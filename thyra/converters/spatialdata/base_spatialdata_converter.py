@@ -3,12 +3,13 @@
 import logging
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
 from numpy.typing import NDArray
 
+from ...alignment import AreaAlignmentResult, TeachingPointAlignment
 from ...core.base_converter import BaseMSIConverter, PixelSizeSource
 from ...core.base_reader import BaseMSIReader
 from ...resampling import ResamplingDecisionTree, ResamplingMethod
@@ -140,6 +141,9 @@ class BaseSpatialDataConverter(BaseMSIConverter, ABC):
 
         # Cache for dense mass axis indices (to avoid repeated np.arange calls)
         self._cached_mass_axis_indices: Optional[NDArray[np.int_]] = None
+
+        # Optical-MSI alignment (computed from FlexImaging Area definitions)
+        self._alignment_result: Optional[AreaAlignmentResult] = None
 
     def _setup_resampling(self) -> None:
         """Set up resampling configuration and strategy."""
@@ -318,6 +322,78 @@ class BaseSpatialDataConverter(BaseMSIConverter, ABC):
                     metadata.update(spec_meta)
         except Exception as e:
             logging.debug(f"Could not extract spectrum metadata: {e}")
+
+    def _add_metadata_to_uns(self, adata) -> None:
+        """Add MSI metadata to AnnData .uns for preservation in SpatialData.
+
+        This stores comprehensive metadata including:
+        - Essential metadata (dimensions, mass range, source)
+        - Format-specific metadata (FlexImaging areas, teaching points, etc.)
+        - Acquisition parameters
+        - Instrument information
+        - Raw metadata (complete original metadata for future use)
+        """
+        try:
+            comp_meta = self.reader.get_comprehensive_metadata()
+
+            self._store_format_specific(adata, comp_meta)
+            self._store_acquisition_params(adata, comp_meta)
+            self._store_instrument_info(adata, comp_meta)
+            self._store_essential_metadata(adata, comp_meta)
+            self._store_raw_metadata(adata, comp_meta)
+
+            logging.debug("Added MSI metadata to AnnData .uns")
+        except Exception as e:
+            logging.debug(f"Could not add metadata to .uns: {e}")
+
+    def _store_format_specific(self, adata, comp_meta) -> None:
+        """Store format-specific metadata (FlexImaging areas, teaching points)."""
+        if hasattr(comp_meta, "format_specific") and comp_meta.format_specific:
+            adata.uns["format_specific"] = comp_meta.format_specific
+
+    def _store_acquisition_params(self, adata, comp_meta) -> None:
+        """Store acquisition parameters."""
+        if hasattr(comp_meta, "acquisition_params") and comp_meta.acquisition_params:
+            adata.uns["acquisition_params"] = comp_meta.acquisition_params
+
+    def _store_instrument_info(self, adata, comp_meta) -> None:
+        """Store instrument information."""
+        if hasattr(comp_meta, "instrument_info") and comp_meta.instrument_info:
+            adata.uns["instrument_info"] = comp_meta.instrument_info
+
+    def _store_essential_metadata(self, adata, comp_meta) -> None:
+        """Store essential metadata (convert tuples to lists for Zarr)."""
+        if not hasattr(comp_meta, "essential"):
+            return
+
+        essential = comp_meta.essential
+        dims = essential.dimensions
+        mrange = essential.mass_range
+        adata.uns["essential_metadata"] = {
+            "source_path": str(essential.source_path),
+            "dimensions": list(dims) if dims else None,
+            "mass_range": list(mrange) if mrange else None,
+            "spectrum_type": getattr(essential, "spectrum_type", None),
+        }
+
+    def _store_raw_metadata(self, adata, comp_meta) -> None:
+        """Store raw metadata (complete original data for future use)."""
+        if hasattr(comp_meta, "raw_metadata") and comp_meta.raw_metadata:
+            adata.uns["raw_metadata"] = self._serialize_for_zarr(
+                comp_meta.raw_metadata
+            )
+
+    def _serialize_for_zarr(self, obj):
+        """Recursively convert tuples to lists for Zarr serialization."""
+        if isinstance(obj, dict):
+            return {k: self._serialize_for_zarr(v) for k, v in obj.items()}
+        elif isinstance(obj, (list, tuple)):
+            return [self._serialize_for_zarr(item) for item in obj]
+        elif hasattr(obj, "__dict__"):
+            # Convert dataclass/object to dict
+            return self._serialize_for_zarr(vars(obj))
+        else:
+            return obj
 
     def _calculate_bins_from_width(
         self, min_mz: float, max_mz: float, axis_type
@@ -564,6 +640,9 @@ class BaseSpatialDataConverter(BaseMSIConverter, ABC):
 
             # Only load comprehensive metadata if needed (lazy loading)
             self._metadata = None  # Will be loaded on demand
+
+            # Compute optical alignment for FlexImaging data
+            self._compute_optical_alignment()
 
             logging.info(f"Dataset dimensions: {self._dimensions}")
             logging.info(f"Coordinate bounds: {self._coordinate_bounds}")
@@ -927,6 +1006,10 @@ class BaseSpatialDataConverter(BaseMSIConverter, ABC):
     ) -> "ShapesModel":
         """Create geometric shapes for pixels with proper transformations.
 
+        When optical alignment is available (FlexImaging with Area definitions),
+        shapes are created in optical image pixel coordinates for proper overlay.
+        Otherwise, shapes use physical (micrometer) coordinates.
+
         Args:
             adata: AnnData object containing coordinates
             is_3d: Whether to handle as 3D data
@@ -940,24 +1023,77 @@ class BaseSpatialDataConverter(BaseMSIConverter, ABC):
         if not SPATIALDATA_AVAILABLE:
             raise ImportError("SpatialData dependencies not available")
 
-        # Extract coordinates directly from obs
-        x_coords: NDArray[np.float64] = adata.obs["spatial_x"].values
-        y_coords: NDArray[np.float64] = adata.obs["spatial_y"].values
-
-        # Create geometries efficiently - this loop could be optimized but
-        # kept for clarity
-        half_pixel = self.pixel_size_um / 2
         geometries = []
 
-        for i in range(len(adata)):
-            x, y = x_coords[i], y_coords[i]
-            pixel_box = box(
-                x - half_pixel, y - half_pixel, x + half_pixel, y + half_pixel
-            )
-            geometries.append(pixel_box)
+        # Track valid indices (for alignment mode where we skip empty positions)
+        valid_indices: Optional[List[int]] = None
 
-        # Create GeoDataFrame
-        gdf = gpd.GeoDataFrame(geometry=geometries, index=adata.obs.index)
+        if self._alignment_result is not None:
+            # Use optical alignment - transform raster coords to image pixels
+            # Only create shapes for positions that have actual spectra (in pos_to_region)
+            raster_x: NDArray[np.int_] = adata.obs["x"].values
+            raster_y: NDArray[np.int_] = adata.obs["y"].values
+
+            # Default half-pixel size (fallback if region lookup fails)
+            default_half_pixel = 10.0
+            if self._alignment_result.region_mappings:
+                # Use first region as default
+                rm = self._alignment_result.region_mappings[0]
+                default_half_pixel = rm.get_half_pixel_size()
+
+            valid_indices = []
+            for i in range(len(adata)):
+                rx, ry = int(raster_x[i]), int(raster_y[i])
+                img_coords = self._alignment_result.transform_point(rx, ry)
+
+                if img_coords is not None:
+                    ix, iy = img_coords
+                    # Get region-specific half-pixel size (square pixels)
+                    half_pixel = self._alignment_result.get_half_pixel_size(rx, ry)
+                    if half_pixel is None:
+                        half_pixel = default_half_pixel
+
+                    pixel_box = box(
+                        ix - half_pixel,
+                        iy - half_pixel,
+                        ix + half_pixel,
+                        iy + half_pixel,
+                    )
+                    geometries.append(pixel_box)
+                    valid_indices.append(i)
+                # Skip positions without spectra - empty grid cells
+
+            n_skipped = len(adata) - len(valid_indices)
+            if n_skipped > 0:
+                logging.info(
+                    f"Created {len(geometries)} shapes using optical alignment "
+                    f"(skipped {n_skipped} empty grid positions)"
+                )
+            else:
+                logging.info(
+                    f"Created {len(geometries)} shapes using optical alignment "
+                    f"(image pixel coordinates)"
+                )
+        else:
+            # Standard physical coordinates (micrometers)
+            x_coords: NDArray[np.float64] = adata.obs["spatial_x"].values
+            y_coords: NDArray[np.float64] = adata.obs["spatial_y"].values
+            half_pixel = self.pixel_size_um / 2
+
+            for i in range(len(adata)):
+                x, y = x_coords[i], y_coords[i]
+                pixel_box = box(
+                    x - half_pixel, y - half_pixel, x + half_pixel, y + half_pixel
+                )
+                geometries.append(pixel_box)
+
+        # Create GeoDataFrame with appropriate index
+        if valid_indices is not None:
+            # Use filtered indices for alignment mode
+            filtered_index = adata.obs.index[valid_indices]
+            gdf = gpd.GeoDataFrame(geometry=geometries, index=filtered_index)
+        else:
+            gdf = gpd.GeoDataFrame(geometry=geometries, index=adata.obs.index)
 
         # Set up transform
         transform = Identity()
@@ -966,6 +1102,53 @@ class BaseSpatialDataConverter(BaseMSIConverter, ABC):
         # Parse shapes
         shapes = ShapesModel.parse(gdf, transformations=transformations)
         return shapes
+
+    def _compute_optical_alignment(self) -> None:
+        """Compute optical-MSI alignment from reader metadata.
+
+        For FlexImaging data with Area definitions, this computes the
+        transformation that maps MSI raster coordinates to optical image
+        pixel coordinates.
+        """
+        # Check if reader has FlexImaging-specific metadata
+        if not hasattr(self.reader, "mis_metadata"):
+            logging.debug("Reader does not have mis_metadata, skipping alignment")
+            return
+
+        mis_metadata = getattr(self.reader, "mis_metadata", {})
+        areas = mis_metadata.get("areas", [])
+
+        if not areas:
+            logging.debug("No Area definitions found, skipping alignment")
+            return
+
+        # Get required data for alignment
+        positions = getattr(self.reader, "_positions", [])
+        header = getattr(self.reader, "_header", {})
+
+        if not positions:
+            logging.warning("No position data available for alignment")
+            return
+
+        first_raster_x = header.get("first_raster_x", 0)
+        first_raster_y = header.get("first_raster_y", 0)
+
+        # Compute area-based alignment
+        try:
+            aligner = TeachingPointAlignment()
+            self._alignment_result = aligner.compute_area_alignment(
+                areas=areas,
+                poslog_positions=positions,
+                first_raster_x=first_raster_x,
+                first_raster_y=first_raster_y,
+            )
+            logging.info(
+                f"Computed optical alignment with "
+                f"{len(self._alignment_result.region_mappings)} region mappings"
+            )
+        except Exception as e:
+            logging.warning(f"Failed to compute optical alignment: {e}")
+            self._alignment_result = None
 
     def _add_optical_images(self, data_structures: Dict[str, Any]) -> None:
         """Load and add optical images from the reader to data structures.
