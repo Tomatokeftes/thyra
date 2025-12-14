@@ -967,8 +967,7 @@ class BaseSpatialDataConverter(BaseMSIConverter, ABC):
             if self._alignment_result.region_mappings:
                 # Use average from first region as default
                 rm = self._alignment_result.region_mappings[0]
-                hpx, hpy = rm.get_half_pixel_size()
-                default_half_pixel = (hpx + hpy) / 2
+                default_half_pixel = rm.get_half_pixel_size()
 
             valid_indices = []
             for i in range(len(adata)):
@@ -977,18 +976,16 @@ class BaseSpatialDataConverter(BaseMSIConverter, ABC):
 
                 if img_coords is not None:
                     ix, iy = img_coords
-                    # Get region-specific half-pixel size (X and Y may differ)
-                    half_pixel_xy = self._alignment_result.get_half_pixel_size(rx, ry)
-                    if half_pixel_xy is not None:
-                        half_pixel_x, half_pixel_y = half_pixel_xy
-                    else:
-                        half_pixel_x = half_pixel_y = default_half_pixel
+                    # Get region-specific half-pixel size (square pixels)
+                    half_pixel = self._alignment_result.get_half_pixel_size(rx, ry)
+                    if half_pixel is None:
+                        half_pixel = default_half_pixel
 
                     pixel_box = box(
-                        ix - half_pixel_x,
-                        iy - half_pixel_y,
-                        ix + half_pixel_x,
-                        iy + half_pixel_y,
+                        ix - half_pixel,
+                        iy - half_pixel,
+                        ix + half_pixel,
+                        iy + half_pixel,
                     )
                     geometries.append(pixel_box)
                     valid_indices.append(i)

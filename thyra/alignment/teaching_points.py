@@ -168,11 +168,15 @@ class RegionMapping:
 
         return image_x, image_y
 
-    def get_half_pixel_size(self) -> Tuple[float, float]:
+    def get_half_pixel_size(self) -> float:
         """Get the half-pixel size for this region in image coordinates.
 
+        MSI pixels are physically square (same step size in X and Y),
+        so we use the average of X and Y scales to maintain square shapes
+        even if the Area definition has slight calibration differences.
+
         Returns:
-            Tuple of (half_pixel_x, half_pixel_y) in image pixels
+            Half-pixel size in image pixels (single value for square pixels)
         """
         raster_width = max(1, self.raster_max_x - self.raster_min_x)
         raster_height = max(1, self.raster_max_y - self.raster_min_y)
@@ -183,7 +187,9 @@ class RegionMapping:
         scale_x = image_width / raster_width
         scale_y = image_height / raster_height
 
-        return scale_x / 2, scale_y / 2
+        # Use average scale to maintain square pixels
+        avg_scale = (scale_x + scale_y) / 2
+        return avg_scale / 2
 
 
 @dataclass
@@ -235,18 +241,18 @@ class AreaAlignmentResult:
 
     def get_half_pixel_size(
         self, norm_x: int, norm_y: int
-    ) -> Optional[Tuple[float, float]]:
+    ) -> Optional[float]:
         """Get the half-pixel size for a given position.
 
-        Each region may have different X and Y scales, so the pixel size
-        depends on which region the position belongs to.
+        MSI pixels are physically square, so returns a single value.
+        The scale may vary slightly between regions due to Area calibration.
 
         Args:
             norm_x: Normalized (0-based) raster X coordinate
             norm_y: Normalized (0-based) raster Y coordinate
 
         Returns:
-            Tuple of (half_pixel_x, half_pixel_y) or None if no mapping exists
+            Half-pixel size in image pixels, or None if no mapping exists
         """
         # Convert normalized to original raster coords
         orig_x = norm_x + self.first_raster_x
