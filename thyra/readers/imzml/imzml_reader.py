@@ -1,4 +1,4 @@
-# thyra/readers/imzml_reader.py
+# thyra/readers/imzml/imzml_reader.py
 import logging
 from pathlib import Path
 from typing import Any, Dict, Generator, List, Optional, Tuple, Union, cast
@@ -8,10 +8,10 @@ from numpy.typing import NDArray
 from pyimzml.ImzMLParser import ImzMLParser  # type: ignore
 from tqdm import tqdm
 
-from ..core.base_extractor import MetadataExtractor
-from ..core.base_reader import BaseMSIReader
-from ..core.registry import register_reader
-from ..metadata.extractors.imzml_extractor import ImzMLMetadataExtractor
+from ...core.base_extractor import MetadataExtractor
+from ...core.base_reader import BaseMSIReader
+from ...core.registry import register_reader
+from ...metadata.extractors.imzml_extractor import ImzMLMetadataExtractor
 
 
 @register_reader("imzml")

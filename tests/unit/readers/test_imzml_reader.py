@@ -5,7 +5,7 @@ Tests for the imzML reader.
 import numpy as np
 import pytest
 
-from thyra.readers.imzml_reader import ImzMLReader
+from thyra.readers.imzml.imzml_reader import ImzMLReader
 
 
 class TestImzMLReader:

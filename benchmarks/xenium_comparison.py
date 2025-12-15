@@ -21,7 +21,7 @@ import numpy as np
 import spatialdata as sd
 from pyimzml.ImzMLParser import ImzMLParser
 
-from thyra.readers.bruker.bruker_reader import BrukerReader
+from thyra.readers.bruker.timstof.timstof_reader import BrukerReader
 
 # Configuration
 N_ROUNDS = 100
@@ -132,7 +132,9 @@ def benchmark_imzml() -> List[Dict]:
             elif isinstance(pattern, RandomMzRangeAccess):
                 # Ion image extraction: iterate through ALL pixels to get the m/z range
                 # This is what users do in practice to create spatial images
-                start_mz = choice["mz_start_idx"]  # This is an index, we need actual m/z value
+                start_mz = choice[
+                    "mz_start_idx"
+                ]  # This is an index, we need actual m/z value
                 width = choice["mz_width_bins"]
 
                 # Iterate through ALL pixels (this is what creating an ion image requires)
@@ -168,13 +170,15 @@ def benchmark_imzml() -> List[Dict]:
 
             end = time.perf_counter()
 
-            results.append({
-                "format": "ImzML (Processed)",
-                "access_pattern": pattern.name,
-                "round": round_idx,
-                "latency_seconds": end - start,
-                "data_size": data_size,
-            })
+            results.append(
+                {
+                    "format": "ImzML (Processed)",
+                    "access_pattern": pattern.name,
+                    "round": round_idx,
+                    "latency_seconds": end - start,
+                    "data_size": data_size,
+                }
+            )
 
         print(" Done")
 
@@ -212,7 +216,9 @@ def benchmark_bruker() -> List[Dict]:
 
     for pattern in patterns:
         print(f"   Testing {pattern.name}...", end="", flush=True)
-        choices = pattern.generate_choices(n_pixels, 100000)  # Use large n_mz for choices
+        choices = pattern.generate_choices(
+            n_pixels, 100000
+        )  # Use large n_mz for choices
 
         for round_idx, choice in enumerate(choices):
             start = time.perf_counter()
@@ -270,13 +276,15 @@ def benchmark_bruker() -> List[Dict]:
 
             end = time.perf_counter()
 
-            results.append({
-                "format": "Bruker .d",
-                "access_pattern": pattern.name,
-                "round": round_idx,
-                "latency_seconds": end - start,
-                "data_size": data_size,
-            })
+            results.append(
+                {
+                    "format": "Bruker .d",
+                    "access_pattern": pattern.name,
+                    "round": round_idx,
+                    "latency_seconds": end - start,
+                    "data_size": data_size,
+                }
+            )
 
         print(" Done")
 
@@ -319,7 +327,9 @@ def benchmark_spatialdata() -> List[Dict]:
                     _ = spectrum.toarray()
                 else:
                     _ = np.asarray(spectrum)
-                data_size = spectrum.nnz if hasattr(spectrum, "nnz") else spectrum.shape[1]
+                data_size = (
+                    spectrum.nnz if hasattr(spectrum, "nnz") else spectrum.shape[1]
+                )
             elif isinstance(pattern, RandomMzRangeAccess):
                 # Ion image extraction: slice ALL pixels for the m/z range and sum
                 start_idx = choice["mz_start_idx"]
@@ -332,24 +342,32 @@ def benchmark_spatialdata() -> List[Dict]:
                 data_size = width * n_pixels  # Approximate data accessed
             else:  # ROI
                 roi_size_pixels = choice["roi_size"] * choice["roi_size"]
-                start_pixel = choice["x_start"] * int(np.sqrt(n_pixels)) + choice["y_start"]
+                start_pixel = (
+                    choice["x_start"] * int(np.sqrt(n_pixels)) + choice["y_start"]
+                )
                 end_pixel = min(start_pixel + roi_size_pixels, n_pixels)
                 # Extract ROI data and compute a summary (e.g., mean spectrum)
                 roi_data = matrix[start_pixel:end_pixel, :]
                 mean_spectrum = roi_data.mean(axis=0)
                 # Force computation
                 _ = np.asarray(mean_spectrum).ravel()
-                data_size = roi_data.nnz if hasattr(roi_data, "nnz") else roi_data.shape[0] * roi_data.shape[1]
+                data_size = (
+                    roi_data.nnz
+                    if hasattr(roi_data, "nnz")
+                    else roi_data.shape[0] * roi_data.shape[1]
+                )
 
             end = time.perf_counter()
 
-            results.append({
-                "format": "SpatialData",
-                "access_pattern": pattern.name,
-                "round": round_idx,
-                "latency_seconds": end - start,
-                "data_size": data_size,
-            })
+            results.append(
+                {
+                    "format": "SpatialData",
+                    "access_pattern": pattern.name,
+                    "round": round_idx,
+                    "latency_seconds": end - start,
+                    "data_size": data_size,
+                }
+            )
 
         print(" Done")
 
@@ -362,7 +380,14 @@ def save_results(results: List[Dict], output_path: Path):
 
     with open(output_path, "w", newline="") as f:
         writer = csv.DictWriter(
-            f, fieldnames=["format", "access_pattern", "round", "latency_seconds", "data_size"]
+            f,
+            fieldnames=[
+                "format",
+                "access_pattern",
+                "round",
+                "latency_seconds",
+                "data_size",
+            ],
         )
         writer.writeheader()
         writer.writerows(results)
@@ -388,7 +413,9 @@ def print_summary(results: List[Dict]):
         median = np.median(latencies)
         mean = np.mean(latencies)
         p95 = np.percentile(latencies, 95)
-        print(f"{fmt:20s} | {pattern:20s} | Median: {median*1000:8.2f} ms | Mean: {mean*1000:8.2f} ms | P95: {p95*1000:8.2f} ms")
+        print(
+            f"{fmt:20s} | {pattern:20s} | Median: {median*1000:8.2f} ms | Mean: {mean*1000:8.2f} ms | P95: {p95*1000:8.2f} ms"
+        )
 
 
 def main():
@@ -412,7 +439,9 @@ def main():
     print_summary(all_results)
 
     print("\nTo plot results, run:")
-    print(f"  python benchmarks/plot_latency_results.py {OUTPUT_CSV} benchmarks/results/xenium_comparison_raincloud.png")
+    print(
+        f"  python benchmarks/plot_latency_results.py {OUTPUT_CSV} benchmarks/results/xenium_comparison_raincloud.png"
+    )
 
 
 if __name__ == "__main__":

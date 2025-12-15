@@ -20,7 +20,7 @@ from typing import List, Optional, Tuple
 
 import numpy as np
 
-from ....utils.bruker_exceptions import SDKError
+from .....utils.bruker_exceptions import SDKError
 from .dll_manager import DLLManager
 
 logger = logging.getLogger(__name__)

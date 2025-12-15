@@ -7,6 +7,23 @@ from typing import Dict, Type
 from .base_converter import BaseMSIConverter
 from .base_reader import BaseMSIReader
 
+# Import BrukerFolderStructure for unified Bruker format detection
+# This avoids circular imports by importing lazily in the method
+_bruker_folder_structure_module = None
+
+
+def _get_bruker_folder_structure():
+    """Lazy import of BrukerFolderStructure to avoid circular imports."""
+    global _bruker_folder_structure_module
+    if _bruker_folder_structure_module is None:
+        from ..readers.bruker.folder_structure import (
+            BrukerFolderStructure,
+            BrukerFormat,
+        )
+
+        _bruker_folder_structure_module = (BrukerFolderStructure, BrukerFormat)
+    return _bruker_folder_structure_module
+
 
 class MSIRegistry:
     """Thread-safe registry with format detection for MSI data."""
@@ -41,28 +58,31 @@ class MSIRegistry:
                 f"'{format_name}'"
             )
 
-    def _is_fleximaging_folder(self, path: Path) -> bool:
-        """Check if path is a FlexImaging data folder.
+    def _detect_bruker_format(self, path: Path) -> str:
+        """Detect Bruker data format using BrukerFolderStructure.
 
-        FlexImaging folders contain:
-        - *.dat file (spectral data)
-        - *_poslog.txt file (coordinates)
-        - *_info.txt file (metadata)
+        Uses the unified BrukerFolderStructure to detect whether the path
+        contains timsTOF or Rapiflex data.
 
         Args:
             path: Path to check
 
         Returns:
-            True if path is a FlexImaging folder
+            Format name ('bruker' for timsTOF, 'rapiflex' for Rapiflex,
+            or empty string if not a Bruker format)
         """
-        if not path.is_dir():
-            return False
+        BrukerFolderStructure, BrukerFormat = _get_bruker_folder_structure()
 
-        has_dat = bool(list(path.glob("*.dat")))
-        has_poslog = bool(list(path.glob("*_poslog.txt")))
-        has_info = bool(list(path.glob("*_info.txt")))
+        try:
+            detected_format = BrukerFolderStructure.detect_format(path)
+            if detected_format == BrukerFormat.TIMSTOF:
+                return "bruker"
+            elif detected_format == BrukerFormat.RAPIFLEX:
+                return "rapiflex"
+        except Exception:  # nosec B110 - intentionally ignore detection errors
+            pass  # Format detection failure means this is not a Bruker format
 
-        return has_dat and has_poslog and has_info
+        return ""
 
     def detect_format(self, input_path: Path) -> str:
         """Detect MSI format from input path.
@@ -70,7 +90,7 @@ class MSIRegistry:
         Supports:
         - .imzml files (ImzML format)
         - .d directories (Bruker timsTOF)
-        - Folders with .dat + _poslog.txt (Bruker FlexImaging)
+        - Folders with .dat + _poslog.txt (Bruker Rapiflex)
         """
         if not input_path.exists():
             raise ValueError(f"Input path does not exist: {input_path}")
@@ -81,24 +101,38 @@ class MSIRegistry:
 
     def _detect_format_name(self, input_path: Path) -> str:
         """Detect format name from path extension or directory structure."""
-        # Check extension-based formats first
+        # Check ImzML by extension first
         extension = input_path.suffix.lower()
-        format_name = self._extension_to_format.get(extension)
+        if extension == ".imzml":
+            return "imzml"
 
-        # If no extension match and it's a directory, check for FlexImaging
-        if not format_name and input_path.is_dir():
-            if self._is_fleximaging_folder(input_path):
-                format_name = "fleximaging"
-
-        if not format_name:
-            available = list(self._extension_to_format.keys()) + [
-                "folder (FlexImaging)"
-            ]
+        # For .d paths, check if it's a valid Bruker format
+        if extension == ".d":
+            # .d extension indicates Bruker intent, provide specific errors
+            if not input_path.is_dir():
+                raise ValueError(
+                    f"Bruker format requires .d directory, got file: {input_path}"
+                )
+            bruker_format = self._detect_bruker_format(input_path)
+            if bruker_format:
+                return bruker_format
+            # .d directory without valid Bruker content
             raise ValueError(
-                f"Unsupported format for '{input_path}'. "
-                f"Supported: {', '.join(available)}"
+                f"Bruker .d directory missing analysis files: {input_path}"
             )
-        return format_name
+
+        # For other directories, check for Bruker formats
+        if input_path.is_dir():
+            bruker_format = self._detect_bruker_format(input_path)
+            if bruker_format:
+                return bruker_format
+
+        # If still no match, raise error
+        available = [".imzml", ".d (timsTOF)", "folder (Rapiflex)"]
+        raise ValueError(
+            f"Unsupported format for '{input_path}'. "
+            f"Supported: {', '.join(available)}"
+        )
 
     def _validate_format(self, format_name: str, input_path: Path) -> None:
         """Validate format-specific requirements."""
@@ -112,17 +146,36 @@ class MSIRegistry:
             self._validate_bruker_format(input_path)
 
     def _validate_bruker_format(self, input_path: Path) -> None:
-        """Validate Bruker .d directory structure."""
+        """Validate Bruker .d directory structure using BrukerFolderStructure.
+
+        The detection already validated the format, but we do additional
+        checks here for better error messages.
+        """
+        BrukerFolderStructure, BrukerFormat = _get_bruker_folder_structure()
+
         if not input_path.is_dir():
             raise ValueError(
                 f"Bruker format requires .d directory, got file: {input_path}"
             )
-        has_tsf = (input_path / "analysis.tsf").exists()
-        has_tdf = (input_path / "analysis.tdf").exists()
-        if not has_tsf and not has_tdf:
-            raise ValueError(
-                f"Bruker .d directory missing analysis files: {input_path}"
-            )
+
+        # Use BrukerFolderStructure for validation
+        try:
+            folder = BrukerFolderStructure(input_path)
+            info = folder.analyze()
+            if info.format == BrukerFormat.UNKNOWN:
+                raise ValueError(
+                    f"Bruker .d directory missing analysis files: {input_path}"
+                )
+        except Exception as e:
+            if "missing analysis" in str(e).lower():
+                raise
+            # Re-check for required files
+            has_tsf = (input_path / "analysis.tsf").exists()
+            has_tdf = (input_path / "analysis.tdf").exists()
+            if not has_tsf and not has_tdf:
+                raise ValueError(
+                    f"Bruker .d directory missing analysis files: {input_path}"
+                ) from e
 
     def get_reader_class(self, format_name: str) -> Type[BaseMSIReader]:
         """Get reader class."""
@@ -158,7 +211,7 @@ def detect_format(input_path: Path) -> str:
         input_path: Path to MSI data file or directory
 
     Returns:
-        Format name ('imzml', 'bruker', or 'fleximaging')
+        Format name ('imzml', 'bruker', or 'rapiflex')
     """
     return _registry.detect_format(input_path)
 

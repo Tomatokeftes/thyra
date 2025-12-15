@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from thyra.readers.bruker.bruker_reader import BrukerReader
+from thyra.readers.bruker.timstof.timstof_reader import BrukerReader
 
 
 class TestCalibrationMetadataReading:
@@ -323,7 +323,7 @@ class TestDefaultCalibrationBehavior:
         """Test that use_recalibrated_state defaults to True."""
         import inspect
 
-        from thyra.readers.bruker.bruker_reader import BrukerReader
+        from thyra.readers.bruker.timstof.timstof_reader import BrukerReader
 
         # Get the __init__ signature
         sig = inspect.signature(BrukerReader.__init__)

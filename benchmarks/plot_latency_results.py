@@ -23,7 +23,7 @@ def plot_latency_results(
     print(f"Loaded {len(df)} measurements")
 
     # Handle both CSV formats (with or without 'dataset' column)
-    if 'dataset' in df.columns:
+    if "dataset" in df.columns:
         print(f"Datasets: {df['dataset'].unique()}")
 
     print(f"Formats: {df['format'].unique()}")

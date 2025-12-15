@@ -1,0 +1,295 @@
+# thyra/readers/bruker/folder_structure.py
+"""Bruker MSI folder structure abstraction.
+
+This module provides a lightweight, pure Python abstraction for analyzing
+Bruker MSI folder structures. It handles format detection and file discovery
+without requiring any SDK dependencies.
+
+Supported formats:
+- timsTOF: .d folders containing analysis.tdf or analysis.tsf
+- Rapiflex: Folders with .dat, _poslog.txt, and _info.txt files
+"""
+
+import logging
+from dataclasses import dataclass, field
+from enum import Enum
+from pathlib import Path
+from typing import List, Optional, Tuple
+
+logger = logging.getLogger(__name__)
+
+
+class BrukerFormat(Enum):
+    """Bruker MSI data formats."""
+
+    TIMSTOF = "timstof"
+    RAPIFLEX = "rapiflex"
+    UNKNOWN = "unknown"
+
+
+@dataclass
+class BrukerFolderInfo:
+    """Information about a Bruker MSI folder structure.
+
+    Attributes:
+        path: Root path of the Bruker data
+        format: Detected Bruker format
+        data_path: Path to the main data (e.g., .d folder or data folder)
+        optical_images: List of optical image paths (TIFFs)
+        teaching_points_file: Path to teaching points file (e.g., .mis)
+        metadata_files: Dictionary of metadata file paths
+    """
+
+    path: Path
+    format: BrukerFormat
+    data_path: Path
+    optical_images: List[Path] = field(default_factory=list)
+    teaching_points_file: Optional[Path] = None
+    metadata_files: dict = field(default_factory=dict)
+
+
+class BrukerFolderStructure:
+    """Lightweight analyzer for Bruker MSI folder structures.
+
+    This class provides format detection and file discovery for Bruker MSI
+    data without requiring any SDK. It's designed to be used for:
+    - Automatic format detection
+    - Finding optical images
+    - Locating metadata and alignment files
+
+    No SDK is required - all operations are pure Python file system checks.
+
+    Example:
+        >>> folder = BrukerFolderStructure(Path("/path/to/data"))
+        >>> info = folder.analyze()
+        >>> print(f"Format: {info.format.value}")
+        >>> print(f"Optical images: {info.optical_images}")
+    """
+
+    # File patterns for Rapiflex format
+    RAPIFLEX_PATTERNS = {
+        "data": "*.dat",
+        "poslog": "*_poslog.txt",
+        "info": "*_info.txt",
+        "mis": "*.mis",
+    }
+
+    # File patterns for timsTOF format
+    TIMSTOF_PATTERNS = {
+        "tdf": "analysis.tdf",
+        "tsf": "analysis.tsf",
+        "tdf_bin": "analysis.tdf_bin",
+        "tsf_bin": "analysis.tsf_bin",
+    }
+
+    # Common optical image patterns
+    OPTICAL_IMAGE_PATTERNS = ["*.tif", "*.tiff", "*.TIF", "*.TIFF"]
+
+    def __init__(self, path: Path):
+        """Initialize folder structure analyzer.
+
+        Args:
+            path: Path to analyze (can be .d folder or parent folder)
+        """
+        self.path = Path(path)
+        self._info: Optional[BrukerFolderInfo] = None
+
+    def analyze(self) -> BrukerFolderInfo:
+        """Analyze the folder structure and return information.
+
+        Returns:
+            BrukerFolderInfo with detected format and file paths
+
+        Raises:
+            ValueError: If path doesn't exist
+        """
+        if not self.path.exists():
+            raise ValueError(f"Path does not exist: {self.path}")
+
+        # Cache the result
+        if self._info is None:
+            self._info = self._analyze_structure()
+
+        return self._info
+
+    def _analyze_structure(self) -> BrukerFolderInfo:
+        """Perform the actual folder analysis."""
+        # First, detect the format
+        fmt, data_path = self._detect_format()
+
+        # Find optical images
+        optical_images = self._find_optical_images(data_path)
+
+        # Find teaching points file
+        teaching_points_file = self._find_teaching_points_file(data_path)
+
+        # Find other metadata files
+        metadata_files = self._find_metadata_files(data_path, fmt)
+
+        return BrukerFolderInfo(
+            path=self.path,
+            format=fmt,
+            data_path=data_path,
+            optical_images=optical_images,
+            teaching_points_file=teaching_points_file,
+            metadata_files=metadata_files,
+        )
+
+    def _detect_format(self) -> Tuple["BrukerFormat", Path]:
+        """Detect the Bruker format and return (format, data_path)."""
+        # Check if this is a .d folder (timsTOF)
+        if self.path.suffix.lower() == ".d":
+            if self._is_timstof_folder(self.path):
+                return BrukerFormat.TIMSTOF, self.path
+
+        # Check if this folder contains Rapiflex data
+        if self._is_rapiflex_folder(self.path):
+            return BrukerFormat.RAPIFLEX, self.path
+
+        # Check if this is a parent folder containing a .d subfolder
+        d_folders = list(self.path.glob("*.d"))
+        for d_folder in d_folders:
+            if self._is_timstof_folder(d_folder):
+                return BrukerFormat.TIMSTOF, d_folder
+
+        # Check subfolders for Rapiflex
+        for subdir in self.path.iterdir():
+            if subdir.is_dir() and self._is_rapiflex_folder(subdir):
+                return BrukerFormat.RAPIFLEX, subdir
+
+        return BrukerFormat.UNKNOWN, self.path
+
+    def _is_timstof_folder(self, path: Path) -> bool:
+        """Check if path is a timsTOF .d folder."""
+        if not path.is_dir():
+            return False
+
+        has_tdf = (path / self.TIMSTOF_PATTERNS["tdf"]).exists()
+        has_tsf = (path / self.TIMSTOF_PATTERNS["tsf"]).exists()
+
+        return has_tdf or has_tsf
+
+    def _is_rapiflex_folder(self, path: Path) -> bool:
+        """Check if path is a Rapiflex data folder."""
+        if not path.is_dir():
+            return False
+
+        has_dat = bool(list(path.glob(self.RAPIFLEX_PATTERNS["data"])))
+        has_poslog = bool(list(path.glob(self.RAPIFLEX_PATTERNS["poslog"])))
+        has_info = bool(list(path.glob(self.RAPIFLEX_PATTERNS["info"])))
+
+        return has_dat and has_poslog and has_info
+
+    def _find_optical_images(self, data_path: Path) -> List[Path]:
+        """Find optical TIFF images in the folder structure.
+
+        Searches both the data folder and its parent for optical images.
+
+        Args:
+            data_path: Path to the data folder
+
+        Returns:
+            List of paths to TIFF files
+        """
+        optical_images = []
+
+        # Search paths: data folder, parent folder, and common subdirs
+        search_paths = [data_path]
+        if data_path != self.path:
+            search_paths.append(self.path)
+        if data_path.parent != data_path:
+            search_paths.append(data_path.parent)
+
+        for search_path in search_paths:
+            if not search_path.exists():
+                continue
+
+            for pattern in self.OPTICAL_IMAGE_PATTERNS:
+                for tiff_path in search_path.glob(pattern):
+                    if tiff_path not in optical_images:
+                        optical_images.append(tiff_path)
+                        logger.debug(f"Found optical image: {tiff_path}")
+
+        return sorted(optical_images)
+
+    def _find_teaching_points_file(self, data_path: Path) -> Optional[Path]:
+        """Find the teaching points / alignment file.
+
+        For Rapiflex, this is the .mis file.
+        For timsTOF, teaching points may be in other locations (TBD).
+
+        Args:
+            data_path: Path to the data folder
+
+        Returns:
+            Path to teaching points file, or None if not found
+        """
+        # Search for .mis file (Rapiflex)
+        search_paths = [data_path, self.path, data_path.parent]
+
+        for search_path in search_paths:
+            if not search_path.exists():
+                continue
+
+            mis_files = list(search_path.glob("*.mis"))
+            if mis_files:
+                # Return the first .mis file found
+                logger.debug(f"Found teaching points file: {mis_files[0]}")
+                return mis_files[0]
+
+        return None
+
+    def _find_metadata_files(self, data_path: Path, fmt: BrukerFormat) -> dict:
+        """Find metadata files based on format.
+
+        Args:
+            data_path: Path to the data folder
+            fmt: Detected Bruker format
+
+        Returns:
+            Dictionary of metadata file paths
+        """
+        metadata = {}
+
+        if fmt == BrukerFormat.RAPIFLEX:
+            # Rapiflex metadata files
+            for name, pattern in self.RAPIFLEX_PATTERNS.items():
+                files = list(data_path.glob(pattern))
+                if files:
+                    metadata[name] = files[0] if len(files) == 1 else files
+
+        elif fmt == BrukerFormat.TIMSTOF:
+            # timsTOF metadata files
+            for name, pattern in self.TIMSTOF_PATTERNS.items():
+                file_path = data_path / pattern
+                if file_path.exists():
+                    metadata[name] = file_path
+
+        return metadata
+
+    @classmethod
+    def detect_format(cls, path: Path) -> BrukerFormat:
+        """Quick format detection without full analysis.
+
+        Args:
+            path: Path to check
+
+        Returns:
+            Detected BrukerFormat
+        """
+        analyzer = cls(path)
+        fmt, _ = analyzer._detect_format()
+        return fmt
+
+    @classmethod
+    def is_bruker_data(cls, path: Path) -> bool:
+        """Check if path contains Bruker MSI data.
+
+        Args:
+            path: Path to check
+
+        Returns:
+            True if Bruker data is detected
+        """
+        fmt = cls.detect_format(path)
+        return fmt != BrukerFormat.UNKNOWN

@@ -51,10 +51,10 @@ class ResamplingDecisionTree:
             )
             return ResamplingMethod.NEAREST_NEIGHBOR
 
-        # Check for FlexImaging MALDI-TOF (profile data)
-        if self._is_fleximaging_maldi_tof(metadata):
+        # Check for Rapiflex MALDI-TOF (profile data)
+        if self._is_rapiflex_maldi_tof(metadata):
             logger.info(
-                "FlexImaging MALDI-TOF detected, using TIC_PRESERVING strategy "
+                "Rapiflex MALDI-TOF detected, using TIC_PRESERVING strategy "
                 "(profile data)"
             )
             return ResamplingMethod.TIC_PRESERVING
@@ -110,10 +110,10 @@ class ResamplingDecisionTree:
             )  # Most ImzML centroid data benefits from constant relative
             # resolution
 
-        # Check for FlexImaging MALDI-TOF (linear TOF spacing)
-        if self._is_fleximaging_maldi_tof(metadata):
+        # Check for Rapiflex MALDI-TOF (linear TOF spacing)
+        if self._is_rapiflex_maldi_tof(metadata):
             logger.info(
-                "FlexImaging MALDI-TOF detected, using LINEAR_TOF axis type "
+                "Rapiflex MALDI-TOF detected, using LINEAR_TOF axis type "
                 "(bin width proportional to sqrt(m/z))"
             )
             return AxisType.LINEAR_TOF
@@ -178,7 +178,7 @@ class ResamplingDecisionTree:
         if "essential_metadata" in metadata:
             essential = metadata["essential_metadata"]
             if isinstance(essential, dict) and "spectrum_type" in essential:
-                return essential["spectrum_type"] == "centroid spectrum"
+                return bool(essential["spectrum_type"] == "centroid spectrum")
 
         # Fallback: Look for cvParam with exact name="centroid spectrum"
         if "cvParams" in metadata:
@@ -193,7 +193,7 @@ class ResamplingDecisionTree:
 
         # Also check for spectrum_type containing exact match
         if "spectrum_type" in metadata:
-            return metadata["spectrum_type"] == "centroid spectrum"
+            return bool(metadata["spectrum_type"] == "centroid spectrum")
 
         return False
 
@@ -223,28 +223,28 @@ class ResamplingDecisionTree:
 
         return False
 
-    def _is_fleximaging_maldi_tof(self, metadata: Dict[str, Any]) -> bool:
-        """Detect FlexImaging MALDI-TOF data from metadata.
+    def _is_rapiflex_maldi_tof(self, metadata: Dict[str, Any]) -> bool:
+        """Detect Rapiflex MALDI-TOF data from metadata.
 
-        FlexImaging data from rapifleX, autofleX, ultrafleXtreme instruments
+        Rapiflex data from rapifleX, autofleX, ultrafleXtreme instruments
         is profile data with linear TOF mass axis (bin width proportional to sqrt(m/z)).
 
         Detection methods:
-        1. format_specific.format == "FlexImaging"
+        1. format_specific.format == "Rapiflex"
         2. instrument_info.instrument_type == "MALDI-TOF" + manufacturer == "Bruker"
         3. essential_metadata.spectrum_type == "profile spectrum" + MALDI acq params
         """
         return (
-            self._check_fleximaging_format(metadata)
+            self._check_rapiflex_format(metadata)
             or self._check_bruker_maldi_tof(metadata)
             or self._check_profile_with_maldi_params(metadata)
         )
 
-    def _check_fleximaging_format(self, metadata: Dict[str, Any]) -> bool:
-        """Check if format_specific indicates FlexImaging."""
+    def _check_rapiflex_format(self, metadata: Dict[str, Any]) -> bool:
+        """Check if format_specific indicates Rapiflex."""
         format_specific = metadata.get("format_specific", {})
         if isinstance(format_specific, dict):
-            return format_specific.get("format") == "FlexImaging"
+            return bool(format_specific.get("format") == "Rapiflex")
         return False
 
     def _check_bruker_maldi_tof(self, metadata: Dict[str, Any]) -> bool:
@@ -253,11 +253,11 @@ class ResamplingDecisionTree:
         if isinstance(instrument_info, dict):
             is_maldi_tof = instrument_info.get("instrument_type") == "MALDI-TOF"
             is_bruker = instrument_info.get("manufacturer") == "Bruker"
-            return is_maldi_tof and is_bruker
+            return bool(is_maldi_tof and is_bruker)
         return False
 
     def _check_profile_with_maldi_params(self, metadata: Dict[str, Any]) -> bool:
-        """Check for profile spectrum with FlexImaging-specific acquisition params."""
+        """Check for profile spectrum with Rapiflex-specific acquisition params."""
         essential = metadata.get("essential_metadata", {})
         if not isinstance(essential, dict):
             return False
