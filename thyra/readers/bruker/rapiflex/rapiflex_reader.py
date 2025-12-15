@@ -1,7 +1,7 @@
-# thyra/readers/bruker/fleximaging/fleximaging_reader.py
-"""FlexImaging reader for Bruker MALDI-TOF data.
+# thyra/readers/bruker/rapiflex/rapiflex_reader.py
+"""Rapiflex reader for Bruker MALDI-TOF data.
 
-This module provides a pure Python reader for Bruker FlexImaging data format
+This module provides a pure Python reader for Bruker Rapiflex data format
 used by MALDI-TOF instruments (rapifleX, autoflex, microflex, ultraflex).
 No SDK is required - the format is read directly from binary files.
 
@@ -37,14 +37,14 @@ from ..base_bruker_reader import BrukerBaseMSIReader
 logger = logging.getLogger(__name__)
 
 
-class FlexImagingMetadataExtractor(MetadataExtractor):
-    """Metadata extractor for FlexImaging data."""
+class RapiflexMetadataExtractor(MetadataExtractor):
+    """Metadata extractor for Rapiflex data."""
 
-    def __init__(self, reader: "FlexImagingReader"):
+    def __init__(self, reader: "RapiflexReader"):
         """Initialize metadata extractor.
 
         Args:
-            reader: FlexImagingReader instance
+            reader: RapiflexReader instance
         """
         super().__init__(reader)
         self._reader = reader
@@ -100,7 +100,7 @@ class FlexImagingMetadataExtractor(MetadataExtractor):
         mis = self._reader.mis_metadata
 
         format_specific = {
-            "format": "FlexImaging",
+            "format": "Rapiflex",
             "acquisition_mode": info.get("Acquisition Mode", "UNKNOWN"),
             "flexImaging_version": info.get("flexImaging Version", ""),
             "flexControl_version": info.get("flexControl Version", ""),
@@ -145,11 +145,11 @@ class FlexImagingMetadataExtractor(MetadataExtractor):
         )
 
 
-@register_reader("fleximaging")
-class FlexImagingReader(BrukerBaseMSIReader):
-    """Reader for Bruker FlexImaging MALDI-TOF data.
+@register_reader("rapiflex")
+class RapiflexReader(BrukerBaseMSIReader):
+    """Reader for Bruker Rapiflex MALDI-TOF data.
 
-    This reader handles FlexImaging data format without requiring any SDK.
+    This reader handles Rapiflex data format without requiring any SDK.
     The format stores spectral data in a binary .dat file with coordinates
     in a separate text file.
 
@@ -166,10 +166,10 @@ class FlexImagingReader(BrukerBaseMSIReader):
         progress_callback: Optional[Callable[[int, int], None]] = None,
         **kwargs,
     ):
-        """Initialize the FlexImaging reader.
+        """Initialize the Rapiflex reader.
 
         Args:
-            data_path: Path to the FlexImaging data folder (containing .dat file)
+            data_path: Path to the Rapiflex data folder (containing .dat file)
             progress_callback: Optional callback for progress updates
             **kwargs: Additional arguments passed to base class
         """
@@ -217,7 +217,7 @@ class FlexImagingReader(BrukerBaseMSIReader):
 
         n_raster = self._header["raster_width"] * self._header["raster_height"]
         logger.info(
-            f"Initialized FlexImagingReader: {self.n_spectra} valid spectra "
+            f"Initialized RapiflexReader: {self.n_spectra} valid spectra "
             f"out of {n_raster} raster positions"
         )
 
@@ -226,7 +226,7 @@ class FlexImagingReader(BrukerBaseMSIReader):
         folder = self.data_path
 
         if not folder.is_dir():
-            raise ValueError(f"FlexImaging path must be a directory: {folder}")
+            raise ValueError(f"Rapiflex path must be a directory: {folder}")
 
         # Find .dat file
         dat_files = list(folder.glob("*.dat"))
@@ -522,7 +522,7 @@ class FlexImagingReader(BrukerBaseMSIReader):
 
     def _create_metadata_extractor(self) -> MetadataExtractor:
         """Create format-specific metadata extractor."""
-        return FlexImagingMetadataExtractor(self)
+        return RapiflexMetadataExtractor(self)
 
     def get_common_mass_axis(self) -> NDArray[np.float64]:
         """Return the common mass axis for all spectra.
@@ -613,12 +613,15 @@ class FlexImagingReader(BrukerBaseMSIReader):
         if self._closed:
             raise RuntimeError("Reader has been closed")
 
+        # Get m/z axis once and cache as float64 to avoid repeated conversions
         mz_axis = self.get_common_mass_axis()
+        if mz_axis.dtype != np.float64:
+            mz_axis = mz_axis.astype(np.float64)
 
         # Use tqdm for progress bar
         pbar = tqdm(
             self._valid_indices,
-            desc="Reading FlexImaging spectra",
+            desc="Reading Rapiflex spectra",
             unit=" spectra",
             dynamic_ncols=True,
         )
@@ -628,10 +631,10 @@ class FlexImagingReader(BrukerBaseMSIReader):
                 coords = self._get_normalized_coordinates(idx)
                 intensities = self._read_spectrum(idx)
 
-                # Convert to float64 for consistency with other readers
+                # Return cached m/z axis (same reference) and convert intensities
                 yield (
                     coords,
-                    mz_axis.astype(np.float64),
+                    mz_axis,  # Same array reference for all spectra
                     intensities.astype(np.float64),
                 )
 
@@ -652,12 +655,12 @@ class FlexImagingReader(BrukerBaseMSIReader):
         self._positions = []
 
         self._closed = True
-        logger.debug("FlexImagingReader closed")
+        logger.debug("RapiflexReader closed")
 
     def __repr__(self) -> str:
         """Return string representation."""
         return (
-            f"FlexImagingReader(path={self.data_path}, "
+            f"RapiflexReader(path={self.data_path}, "
             f"n_spectra={self.n_spectra}, "
             f"n_datapoints={self.n_datapoints})"
         )

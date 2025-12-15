@@ -16,7 +16,7 @@ class TestBrukerFormat:
     def test_format_values(self):
         """Test that format enum has expected values."""
         assert BrukerFormat.TIMSTOF.value == "timstof"
-        assert BrukerFormat.FLEXIMAGING.value == "fleximaging"
+        assert BrukerFormat.RAPIFLEX.value == "rapiflex"
         assert BrukerFormat.UNKNOWN.value == "unknown"
 
 
@@ -51,10 +51,10 @@ class TestBrukerFolderStructure:
         assert info.format == BrukerFormat.TIMSTOF
         assert info.data_path == d_dir
 
-    def test_detect_fleximaging(self, tmp_path):
-        """Test detection of FlexImaging format."""
-        # Create FlexImaging folder structure
-        data_dir = tmp_path / "fleximaging_data"
+    def test_detect_rapiflex(self, tmp_path):
+        """Test detection of Rapiflex format."""
+        # Create Rapiflex folder structure
+        data_dir = tmp_path / "rapiflex_data"
         data_dir.mkdir()
         (data_dir / "sample.dat").touch()
         (data_dir / "sample_poslog.txt").touch()
@@ -63,7 +63,7 @@ class TestBrukerFolderStructure:
         folder = BrukerFolderStructure(data_dir)
         info = folder.analyze()
 
-        assert info.format == BrukerFormat.FLEXIMAGING
+        assert info.format == BrukerFormat.RAPIFLEX
         assert info.data_path == data_dir
 
     def test_detect_unknown_format(self, tmp_path):
@@ -92,9 +92,9 @@ class TestBrukerFolderStructure:
         assert info.format == BrukerFormat.TIMSTOF
         assert info.data_path == d_dir
 
-    def test_detect_fleximaging_from_parent(self, tmp_path):
-        """Test detection of FlexImaging from parent folder."""
-        # Create parent folder containing FlexImaging subfolder
+    def test_detect_rapiflex_from_parent(self, tmp_path):
+        """Test detection of Rapiflex from parent folder."""
+        # Create parent folder containing Rapiflex subfolder
         parent = tmp_path / "experiment"
         parent.mkdir()
         data_dir = parent / "data"
@@ -106,12 +106,12 @@ class TestBrukerFolderStructure:
         folder = BrukerFolderStructure(parent)
         info = folder.analyze()
 
-        assert info.format == BrukerFormat.FLEXIMAGING
+        assert info.format == BrukerFormat.RAPIFLEX
         assert info.data_path == data_dir
 
     def test_find_optical_images(self, tmp_path):
         """Test finding optical TIFF images."""
-        # Create FlexImaging structure with TIFF files
+        # Create Rapiflex structure with TIFF files
         data_dir = tmp_path / "data"
         data_dir.mkdir()
         (data_dir / "sample.dat").touch()
@@ -146,7 +146,7 @@ class TestBrukerFolderStructure:
 
     def test_find_teaching_points_file(self, tmp_path):
         """Test finding .mis teaching points file."""
-        # Create FlexImaging structure with .mis file
+        # Create Rapiflex structure with .mis file
         data_dir = tmp_path / "data"
         data_dir.mkdir()
         (data_dir / "sample.dat").touch()
@@ -160,8 +160,8 @@ class TestBrukerFolderStructure:
         assert info.teaching_points_file is not None
         assert info.teaching_points_file.name == "sample.mis"
 
-    def test_find_metadata_files_fleximaging(self, tmp_path):
-        """Test finding FlexImaging metadata files."""
+    def test_find_metadata_files_rapiflex(self, tmp_path):
+        """Test finding Rapiflex metadata files."""
         data_dir = tmp_path / "data"
         data_dir.mkdir()
         (data_dir / "sample.dat").touch()

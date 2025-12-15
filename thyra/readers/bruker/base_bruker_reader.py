@@ -66,7 +66,7 @@ class BrukerBaseMSIReader(BaseMSIReader):
     def get_teaching_points_file(self) -> Optional[Path]:
         """Get path to the teaching points / alignment file.
 
-        For FlexImaging data, this is typically the .mis file containing
+        For Rapiflex data, this is typically the .mis file containing
         teaching point calibration data.
 
         Returns:

@@ -7,7 +7,7 @@ without requiring any SDK dependencies.
 
 Supported formats:
 - timsTOF: .d folders containing analysis.tdf or analysis.tsf
-- FlexImaging: Folders with .dat, _poslog.txt, and _info.txt files
+- Rapiflex: Folders with .dat, _poslog.txt, and _info.txt files
 """
 
 import logging
@@ -23,7 +23,7 @@ class BrukerFormat(Enum):
     """Bruker MSI data formats."""
 
     TIMSTOF = "timstof"
-    FLEXIMAGING = "fleximaging"
+    RAPIFLEX = "rapiflex"
     UNKNOWN = "unknown"
 
 
@@ -66,8 +66,8 @@ class BrukerFolderStructure:
         >>> print(f"Optical images: {info.optical_images}")
     """
 
-    # File patterns for FlexImaging format
-    FLEXIMAGING_PATTERNS = {
+    # File patterns for Rapiflex format
+    RAPIFLEX_PATTERNS = {
         "data": "*.dat",
         "poslog": "*_poslog.txt",
         "info": "*_info.txt",
@@ -142,9 +142,9 @@ class BrukerFolderStructure:
             if self._is_timstof_folder(self.path):
                 return BrukerFormat.TIMSTOF, self.path
 
-        # Check if this folder contains FlexImaging data
-        if self._is_fleximaging_folder(self.path):
-            return BrukerFormat.FLEXIMAGING, self.path
+        # Check if this folder contains Rapiflex data
+        if self._is_rapiflex_folder(self.path):
+            return BrukerFormat.RAPIFLEX, self.path
 
         # Check if this is a parent folder containing a .d subfolder
         d_folders = list(self.path.glob("*.d"))
@@ -152,10 +152,10 @@ class BrukerFolderStructure:
             if self._is_timstof_folder(d_folder):
                 return BrukerFormat.TIMSTOF, d_folder
 
-        # Check subfolders for FlexImaging
+        # Check subfolders for Rapiflex
         for subdir in self.path.iterdir():
-            if subdir.is_dir() and self._is_fleximaging_folder(subdir):
-                return BrukerFormat.FLEXIMAGING, subdir
+            if subdir.is_dir() and self._is_rapiflex_folder(subdir):
+                return BrukerFormat.RAPIFLEX, subdir
 
         return BrukerFormat.UNKNOWN, self.path
 
@@ -169,14 +169,14 @@ class BrukerFolderStructure:
 
         return has_tdf or has_tsf
 
-    def _is_fleximaging_folder(self, path: Path) -> bool:
-        """Check if path is a FlexImaging data folder."""
+    def _is_rapiflex_folder(self, path: Path) -> bool:
+        """Check if path is a Rapiflex data folder."""
         if not path.is_dir():
             return False
 
-        has_dat = bool(list(path.glob(self.FLEXIMAGING_PATTERNS["data"])))
-        has_poslog = bool(list(path.glob(self.FLEXIMAGING_PATTERNS["poslog"])))
-        has_info = bool(list(path.glob(self.FLEXIMAGING_PATTERNS["info"])))
+        has_dat = bool(list(path.glob(self.RAPIFLEX_PATTERNS["data"])))
+        has_poslog = bool(list(path.glob(self.RAPIFLEX_PATTERNS["poslog"])))
+        has_info = bool(list(path.glob(self.RAPIFLEX_PATTERNS["info"])))
 
         return has_dat and has_poslog and has_info
 
@@ -215,7 +215,7 @@ class BrukerFolderStructure:
     def _find_teaching_points_file(self, data_path: Path) -> Optional[Path]:
         """Find the teaching points / alignment file.
 
-        For FlexImaging, this is the .mis file.
+        For Rapiflex, this is the .mis file.
         For timsTOF, teaching points may be in other locations (TBD).
 
         Args:
@@ -224,7 +224,7 @@ class BrukerFolderStructure:
         Returns:
             Path to teaching points file, or None if not found
         """
-        # Search for .mis file (FlexImaging)
+        # Search for .mis file (Rapiflex)
         search_paths = [data_path, self.path, data_path.parent]
 
         for search_path in search_paths:
@@ -251,9 +251,9 @@ class BrukerFolderStructure:
         """
         metadata = {}
 
-        if fmt == BrukerFormat.FLEXIMAGING:
-            # FlexImaging metadata files
-            for name, pattern in self.FLEXIMAGING_PATTERNS.items():
+        if fmt == BrukerFormat.RAPIFLEX:
+            # Rapiflex metadata files
+            for name, pattern in self.RAPIFLEX_PATTERNS.items():
                 files = list(data_path.glob(pattern))
                 if files:
                     metadata[name] = files[0] if len(files) == 1 else files

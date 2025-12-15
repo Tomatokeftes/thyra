@@ -2,11 +2,11 @@
 
 This package provides readers for Bruker MSI data formats:
 - timsTOF: TSF/TDF data via SDK (BrukerReader)
-- FlexImaging: MALDI-TOF data via pure Python (FlexImagingReader)
+- Rapiflex: MALDI-TOF data via pure Python (RapiflexReader)
 
 Organization:
 - timstof/: timsTOF reader and SDK integration
-- fleximaging/: FlexImaging reader (pure Python)
+- rapiflex/: Rapiflex reader (pure Python)
 
 Common functionality is provided by BrukerBaseMSIReader and
 BrukerFolderStructure for folder analysis.
@@ -19,10 +19,10 @@ from ...utils.bruker_exceptions import (
     SDKError,
 )
 from .base_bruker_reader import BrukerBaseMSIReader
+from .folder_structure import BrukerFolderInfo, BrukerFolderStructure, BrukerFormat
 
 # Import readers from submodules to trigger registration
-from .fleximaging.fleximaging_reader import FlexImagingReader
-from .folder_structure import BrukerFolderInfo, BrukerFolderStructure, BrukerFormat
+from .rapiflex import RapiflexReader
 from .timstof.timstof_reader import BrukerReader
 
 __all__ = [
@@ -33,7 +33,7 @@ __all__ = [
     "BrukerFormat",
     # Readers
     "BrukerReader",
-    "FlexImagingReader",
+    "RapiflexReader",
     # Exceptions
     "BrukerReaderError",
     "DataError",

@@ -62,13 +62,13 @@ class MSIRegistry:
         """Detect Bruker data format using BrukerFolderStructure.
 
         Uses the unified BrukerFolderStructure to detect whether the path
-        contains timsTOF or FlexImaging data.
+        contains timsTOF or Rapiflex data.
 
         Args:
             path: Path to check
 
         Returns:
-            Format name ('bruker' for timsTOF, 'fleximaging' for FlexImaging,
+            Format name ('bruker' for timsTOF, 'rapiflex' for Rapiflex,
             or empty string if not a Bruker format)
         """
         BrukerFolderStructure, BrukerFormat = _get_bruker_folder_structure()
@@ -77,8 +77,8 @@ class MSIRegistry:
             detected_format = BrukerFolderStructure.detect_format(path)
             if detected_format == BrukerFormat.TIMSTOF:
                 return "bruker"
-            elif detected_format == BrukerFormat.FLEXIMAGING:
-                return "fleximaging"
+            elif detected_format == BrukerFormat.RAPIFLEX:
+                return "rapiflex"
         except Exception:  # nosec B110 - intentionally ignore detection errors
             pass  # Format detection failure means this is not a Bruker format
 
@@ -90,7 +90,7 @@ class MSIRegistry:
         Supports:
         - .imzml files (ImzML format)
         - .d directories (Bruker timsTOF)
-        - Folders with .dat + _poslog.txt (Bruker FlexImaging)
+        - Folders with .dat + _poslog.txt (Bruker Rapiflex)
         """
         if not input_path.exists():
             raise ValueError(f"Input path does not exist: {input_path}")
@@ -128,7 +128,7 @@ class MSIRegistry:
                 return bruker_format
 
         # If still no match, raise error
-        available = [".imzml", ".d (timsTOF)", "folder (FlexImaging)"]
+        available = [".imzml", ".d (timsTOF)", "folder (Rapiflex)"]
         raise ValueError(
             f"Unsupported format for '{input_path}'. "
             f"Supported: {', '.join(available)}"
@@ -211,7 +211,7 @@ def detect_format(input_path: Path) -> str:
         input_path: Path to MSI data file or directory
 
     Returns:
-        Format name ('imzml', 'bruker', or 'fleximaging')
+        Format name ('imzml', 'bruker', or 'rapiflex')
     """
     return _registry.detect_format(input_path)
 

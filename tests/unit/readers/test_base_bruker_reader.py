@@ -50,9 +50,9 @@ class TestBrukerBaseMSIReader:
     """Tests for BrukerBaseMSIReader class."""
 
     @pytest.fixture
-    def fleximaging_folder(self, tmp_path):
-        """Create a mock FlexImaging folder structure."""
-        data_dir = tmp_path / "fleximaging_data"
+    def rapiflex_folder(self, tmp_path):
+        """Create a mock Rapiflex folder structure."""
+        data_dir = tmp_path / "rapiflex_data"
         data_dir.mkdir()
         (data_dir / "sample.dat").touch()
         (data_dir / "sample_poslog.txt").touch()
@@ -73,15 +73,15 @@ class TestBrukerBaseMSIReader:
         (tmp_path / "optical.tif").touch()
         return d_dir
 
-    def test_initialization(self, fleximaging_folder):
+    def test_initialization(self, rapiflex_folder):
         """Test reader initialization."""
-        reader = ConcreteBrukerReader(fleximaging_folder)
-        assert reader.data_path == fleximaging_folder
+        reader = ConcreteBrukerReader(rapiflex_folder)
+        assert reader.data_path == rapiflex_folder
         assert reader._folder_info is None  # Lazy loaded
 
-    def test_folder_info_lazy_loading(self, fleximaging_folder):
+    def test_folder_info_lazy_loading(self, rapiflex_folder):
         """Test that folder_info is lazily loaded."""
-        reader = ConcreteBrukerReader(fleximaging_folder)
+        reader = ConcreteBrukerReader(rapiflex_folder)
 
         # Not loaded yet
         assert reader._folder_info is None
@@ -91,11 +91,11 @@ class TestBrukerBaseMSIReader:
 
         # Now loaded
         assert reader._folder_info is not None
-        assert info.format == BrukerFormat.FLEXIMAGING
+        assert info.format == BrukerFormat.RAPIFLEX
 
-    def test_get_optical_image_paths_fleximaging(self, fleximaging_folder):
-        """Test getting optical images for FlexImaging."""
-        reader = ConcreteBrukerReader(fleximaging_folder)
+    def test_get_optical_image_paths_rapiflex(self, rapiflex_folder):
+        """Test getting optical images for Rapiflex."""
+        reader = ConcreteBrukerReader(rapiflex_folder)
         optical_paths = reader.get_optical_image_paths()
 
         assert len(optical_paths) == 2
@@ -109,9 +109,9 @@ class TestBrukerBaseMSIReader:
 
         assert len(optical_paths) >= 1
 
-    def test_get_teaching_points_file(self, fleximaging_folder):
+    def test_get_teaching_points_file(self, rapiflex_folder):
         """Test getting teaching points file."""
-        reader = ConcreteBrukerReader(fleximaging_folder)
+        reader = ConcreteBrukerReader(rapiflex_folder)
         mis_file = reader.get_teaching_points_file()
 
         assert mis_file is not None
@@ -119,7 +119,7 @@ class TestBrukerBaseMSIReader:
 
     def test_get_teaching_points_file_not_found(self, tmp_path):
         """Test getting teaching points when not present."""
-        # Create minimal FlexImaging structure without .mis
+        # Create minimal Rapiflex structure without .mis
         data_dir = tmp_path / "data"
         data_dir.mkdir()
         (data_dir / "sample.dat").touch()
@@ -131,15 +131,15 @@ class TestBrukerBaseMSIReader:
 
         assert mis_file is None
 
-    def test_context_manager(self, fleximaging_folder):
+    def test_context_manager(self, rapiflex_folder):
         """Test reader works as context manager."""
-        with ConcreteBrukerReader(fleximaging_folder) as reader:
+        with ConcreteBrukerReader(rapiflex_folder) as reader:
             info = reader.folder_info
-            assert info.format == BrukerFormat.FLEXIMAGING
+            assert info.format == BrukerFormat.RAPIFLEX
 
-    def test_inheritance_from_base_msi_reader(self, fleximaging_folder):
+    def test_inheritance_from_base_msi_reader(self, rapiflex_folder):
         """Test that BrukerBaseMSIReader properly inherits from BaseMSIReader."""
-        reader = ConcreteBrukerReader(fleximaging_folder)
+        reader = ConcreteBrukerReader(rapiflex_folder)
 
         # Should have BaseMSIReader methods
         assert hasattr(reader, "get_essential_metadata")
@@ -161,13 +161,11 @@ class TestBrukerBaseMSIReader:
 class TestBrukerReadersUseBaseClass:
     """Tests to verify existing readers use BrukerBaseMSIReader."""
 
-    def test_fleximaging_reader_extends_bruker_base(self):
-        """Test FlexImagingReader extends BrukerBaseMSIReader."""
-        from thyra.readers.bruker.fleximaging.fleximaging_reader import (
-            FlexImagingReader,
-        )
+    def test_rapiflex_reader_extends_bruker_base(self):
+        """Test RapiflexReader extends BrukerBaseMSIReader."""
+        from thyra.readers.bruker.rapiflex.rapiflex_reader import RapiflexReader
 
-        assert issubclass(FlexImagingReader, BrukerBaseMSIReader)
+        assert issubclass(RapiflexReader, BrukerBaseMSIReader)
 
     def test_bruker_reader_extends_bruker_base(self):
         """Test BrukerReader extends BrukerBaseMSIReader."""
@@ -175,14 +173,12 @@ class TestBrukerReadersUseBaseClass:
 
         assert issubclass(BrukerReader, BrukerBaseMSIReader)
 
-    def test_fleximaging_reader_has_folder_info(self):
-        """Test FlexImagingReader has folder_info property."""
-        from thyra.readers.bruker.fleximaging.fleximaging_reader import (
-            FlexImagingReader,
-        )
+    def test_rapiflex_reader_has_folder_info(self):
+        """Test RapiflexReader has folder_info property."""
+        from thyra.readers.bruker.rapiflex.rapiflex_reader import RapiflexReader
 
-        assert hasattr(FlexImagingReader, "folder_info")
-        assert hasattr(FlexImagingReader, "get_teaching_points_file")
+        assert hasattr(RapiflexReader, "folder_info")
+        assert hasattr(RapiflexReader, "get_teaching_points_file")
 
     def test_bruker_reader_has_folder_info(self):
         """Test BrukerReader has folder_info property."""

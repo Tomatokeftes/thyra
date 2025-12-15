@@ -3,10 +3,10 @@
 
 This package provides reader implementations for different MSI data formats:
 - ImzML: Open format for MSI data
-- Bruker: timsTOF and FlexImaging data
+- Bruker: timsTOF and Rapiflex data
 
 Reader organization:
-- bruker/: All Bruker formats (timsTOF, FlexImaging)
+- bruker/: All Bruker formats (timsTOF, Rapiflex)
 - imzml/: ImzML format reader
 """
 

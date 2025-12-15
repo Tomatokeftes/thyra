@@ -1,5 +1,5 @@
 """
-Tests for the FlexImaging reader.
+Tests for the Rapiflex reader.
 """
 
 import struct
@@ -7,12 +7,12 @@ import struct
 import numpy as np
 import pytest
 
-from thyra.readers.bruker.fleximaging import FlexImagingReader
+from thyra.readers.bruker.rapiflex import RapiflexReader
 
 
 @pytest.fixture
-def create_mock_fleximaging_data(tmp_path):
-    """Create mock FlexImaging data files for testing.
+def create_mock_rapiflex_data(tmp_path):
+    """Create mock Rapiflex data files for testing.
 
     Creates:
     - sample.dat: Binary file with header, offset table, and spectral data
@@ -20,7 +20,7 @@ def create_mock_fleximaging_data(tmp_path):
     - sample_poslog.txt: Position log file
     - sample.mis: Optional XML method file
     """
-    folder = tmp_path / "mock_fleximaging"
+    folder = tmp_path / "mock_rapiflex"
     folder.mkdir()
 
     # Parameters
@@ -49,7 +49,7 @@ def create_mock_fleximaging_data(tmp_path):
     # Create info file
     info_path = folder / "sample_info.txt"
     with open(info_path, "w") as f:
-        f.write("FlexImaging Info File\n")
+        f.write("Rapiflex Info File\n")
         f.write("Name of Sample: Mock Sample\n")
         f.write(f"Number of Spots: {n_spots}\n")
         f.write("Number of Shots: 100\n")
@@ -144,16 +144,16 @@ def create_mock_fleximaging_data(tmp_path):
     return folder, n_spots, n_datapoints, mass_start, mass_end, spectra
 
 
-class TestFlexImagingReader:
-    """Test the FlexImaging reader functionality."""
+class TestRapiflexReader:
+    """Test the Rapiflex reader functionality."""
 
-    def test_initialization(self, create_mock_fleximaging_data):
+    def test_initialization(self, create_mock_rapiflex_data):
         """Test initializing the reader with valid files."""
         folder, n_spots, n_datapoints, mass_start, mass_end, _ = (
-            create_mock_fleximaging_data
+            create_mock_rapiflex_data
         )
 
-        reader = FlexImagingReader(folder)
+        reader = RapiflexReader(folder)
 
         assert reader.n_spectra == n_spots
         assert reader.n_datapoints == n_datapoints
@@ -161,11 +161,11 @@ class TestFlexImagingReader:
 
         reader.close()
 
-    def test_initialization_with_string_path(self, create_mock_fleximaging_data):
+    def test_initialization_with_string_path(self, create_mock_rapiflex_data):
         """Test initializing with string path."""
-        folder, _, _, _, _, _ = create_mock_fleximaging_data
+        folder, _, _, _, _, _ = create_mock_rapiflex_data
 
-        reader = FlexImagingReader(str(folder))
+        reader = RapiflexReader(str(folder))
         assert reader.n_spectra > 0
         reader.close()
 
@@ -175,11 +175,11 @@ class TestFlexImagingReader:
         folder.mkdir()
 
         # Create only info and poslog files
-        (folder / "sample_info.txt").write_text("FlexImaging Info File\n")
+        (folder / "sample_info.txt").write_text("Rapiflex Info File\n")
         (folder / "sample_poslog.txt").write_text("#Timestamp Pos X Y Z\n")
 
         with pytest.raises(ValueError, match="No .dat file found"):
-            FlexImagingReader(folder)
+            RapiflexReader(folder)
 
     def test_missing_poslog_file(self, tmp_path):
         """Test error when _poslog.txt file is missing."""
@@ -188,16 +188,16 @@ class TestFlexImagingReader:
 
         # Create only dat and info files
         (folder / "sample.dat").write_bytes(b"\x00" * 100)
-        (folder / "sample_info.txt").write_text("FlexImaging Info File\n")
+        (folder / "sample_info.txt").write_text("Rapiflex Info File\n")
 
         with pytest.raises(ValueError, match="No .*_poslog.txt file found"):
-            FlexImagingReader(folder)
+            RapiflexReader(folder)
 
-    def test_get_common_mass_axis(self, create_mock_fleximaging_data):
+    def test_get_common_mass_axis(self, create_mock_rapiflex_data):
         """Test getting common mass axis."""
-        folder, _, n_datapoints, mass_start, mass_end, _ = create_mock_fleximaging_data
+        folder, _, n_datapoints, mass_start, mass_end, _ = create_mock_rapiflex_data
 
-        reader = FlexImagingReader(folder)
+        reader = RapiflexReader(folder)
         mz_axis = reader.get_common_mass_axis()
 
         assert len(mz_axis) == n_datapoints
@@ -211,13 +211,13 @@ class TestFlexImagingReader:
 
         reader.close()
 
-    def test_iter_spectra(self, create_mock_fleximaging_data):
+    def test_iter_spectra(self, create_mock_rapiflex_data):
         """Test iterating through spectra."""
         folder, n_spots, n_datapoints, _, _, expected_spectra = (
-            create_mock_fleximaging_data
+            create_mock_rapiflex_data
         )
 
-        reader = FlexImagingReader(folder)
+        reader = RapiflexReader(folder)
 
         count = 0
         for coords, mz, intensities in reader.iter_spectra():
@@ -234,11 +234,11 @@ class TestFlexImagingReader:
         assert count == n_spots
         reader.close()
 
-    def test_iter_spectra_coordinates(self, create_mock_fleximaging_data):
+    def test_iter_spectra_coordinates(self, create_mock_rapiflex_data):
         """Test that coordinates are correctly parsed."""
-        folder, _, _, _, _, _ = create_mock_fleximaging_data
+        folder, _, _, _, _, _ = create_mock_rapiflex_data
 
-        reader = FlexImagingReader(folder)
+        reader = RapiflexReader(folder)
 
         coords_list = []
         for coords, _, _ in reader.iter_spectra():
@@ -258,11 +258,11 @@ class TestFlexImagingReader:
 
         reader.close()
 
-    def test_metadata_extraction(self, create_mock_fleximaging_data):
+    def test_metadata_extraction(self, create_mock_rapiflex_data):
         """Test metadata extraction."""
-        folder, _, _, _, _, _ = create_mock_fleximaging_data
+        folder, _, _, _, _, _ = create_mock_rapiflex_data
 
-        reader = FlexImagingReader(folder)
+        reader = RapiflexReader(folder)
 
         # Check info metadata
         info = reader.info_metadata
@@ -278,13 +278,13 @@ class TestFlexImagingReader:
 
         reader.close()
 
-    def test_essential_metadata(self, create_mock_fleximaging_data):
+    def test_essential_metadata(self, create_mock_rapiflex_data):
         """Test essential metadata through extractor."""
         folder, n_spots, n_datapoints, mass_start, mass_end, _ = (
-            create_mock_fleximaging_data
+            create_mock_rapiflex_data
         )
 
-        reader = FlexImagingReader(folder)
+        reader = RapiflexReader(folder)
         essential = reader.get_essential_metadata()
 
         # Check EssentialMetadata attributes
@@ -296,11 +296,11 @@ class TestFlexImagingReader:
 
         reader.close()
 
-    def test_context_manager(self, create_mock_fleximaging_data):
+    def test_context_manager(self, create_mock_rapiflex_data):
         """Test reader as context manager."""
-        folder, _, _, _, _, _ = create_mock_fleximaging_data
+        folder, _, _, _, _, _ = create_mock_rapiflex_data
 
-        with FlexImagingReader(folder) as reader:
+        with RapiflexReader(folder) as reader:
             assert reader.n_spectra > 0
             mz = reader.get_common_mass_axis()
             assert len(mz) > 0
@@ -308,45 +308,45 @@ class TestFlexImagingReader:
         # After context exit, reader should be closed
         assert reader._closed
 
-    def test_close_idempotent(self, create_mock_fleximaging_data):
+    def test_close_idempotent(self, create_mock_rapiflex_data):
         """Test that close() can be called multiple times."""
-        folder, _, _, _, _, _ = create_mock_fleximaging_data
+        folder, _, _, _, _, _ = create_mock_rapiflex_data
 
-        reader = FlexImagingReader(folder)
+        reader = RapiflexReader(folder)
         reader.close()
         reader.close()  # Should not raise
 
-    def test_repr(self, create_mock_fleximaging_data):
+    def test_repr(self, create_mock_rapiflex_data):
         """Test string representation."""
-        folder, n_spots, n_datapoints, _, _, _ = create_mock_fleximaging_data
+        folder, n_spots, n_datapoints, _, _, _ = create_mock_rapiflex_data
 
-        reader = FlexImagingReader(folder)
+        reader = RapiflexReader(folder)
         repr_str = repr(reader)
 
-        assert "FlexImagingReader" in repr_str
+        assert "RapiflexReader" in repr_str
         assert str(n_spots) in repr_str
         assert str(n_datapoints) in repr_str
 
         reader.close()
 
 
-class TestFlexImagingFormatDetection:
-    """Test format detection for FlexImaging data."""
+class TestRapiflexFormatDetection:
+    """Test format detection for Rapiflex data."""
 
-    def test_detect_fleximaging_format(self, create_mock_fleximaging_data):
-        """Test that FlexImaging format is correctly detected."""
+    def test_detect_rapiflex_format(self, create_mock_rapiflex_data):
+        """Test that Rapiflex format is correctly detected."""
         from thyra.core.registry import detect_format
 
-        folder, _, _, _, _, _ = create_mock_fleximaging_data
+        folder, _, _, _, _, _ = create_mock_rapiflex_data
         format_name = detect_format(folder)
 
-        assert format_name == "fleximaging"
+        assert format_name == "rapiflex"
 
-    def test_not_fleximaging_without_dat(self, tmp_path):
-        """Test that folder without .dat is not detected as FlexImaging."""
+    def test_not_rapiflex_without_dat(self, tmp_path):
+        """Test that folder without .dat is not detected as Rapiflex."""
         from thyra.core.registry import detect_format
 
-        folder = tmp_path / "not_fleximaging"
+        folder = tmp_path / "not_rapiflex"
         folder.mkdir()
 
         # Create some files but not .dat
