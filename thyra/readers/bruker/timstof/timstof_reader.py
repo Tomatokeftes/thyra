@@ -33,6 +33,7 @@ from ....core.registry import register_reader
 from ....metadata.extractors.bruker_extractor import BrukerMetadataExtractor
 from ....utils.bruker_exceptions import DataError, FileFormatError, SDKError
 from ..base_bruker_reader import BrukerBaseMSIReader
+from ..folder_structure import BrukerFolderStructure, BrukerFormat
 from .sdk.dll_manager import DLLManager
 from .sdk.sdk_functions import SDKFunctions
 
@@ -199,7 +200,9 @@ class BrukerReader(BrukerBaseMSIReader):
         """Initialize the Bruker reader.
 
         Args:
-            data_path: Path to Bruker .d directory
+            data_path: Path to Bruker .d directory, or parent folder containing it.
+                If a parent folder is provided, the reader will automatically find
+                the .d folder within it.
             use_recalibrated_state: Whether to use recalibrated/active calibration state.
                 Defaults to True (use active calibration). Set to False to use original
                 calibration from data acquisition.
@@ -247,15 +250,43 @@ class BrukerReader(BrukerBaseMSIReader):
         )
 
     def _validate_data_path(self) -> None:
-        """Validate the data path and check for required files."""
+        """Validate the data path and find .d directory if needed.
+
+        If the path is not a .d directory, uses BrukerFolderStructure to
+        find a .d folder within the given path. This allows users to pass
+        a parent directory containing the .d folder.
+        """
         if not self.data_path.exists():
             raise FileFormatError(f"Data path does not exist: {self.data_path}")
 
         if not self.data_path.is_dir():
             raise FileFormatError(f"Data path must be a directory: {self.data_path}")
 
-        if not self.data_path.suffix == ".d":
-            raise FileFormatError(f"Expected .d directory, got: {self.data_path}")
+        # If already a .d directory, use it directly
+        if self.data_path.suffix.lower() == ".d":
+            return
+
+        # Otherwise, use BrukerFolderStructure to find the .d folder
+        try:
+            folder = BrukerFolderStructure(self.data_path)
+            info = folder.analyze()
+
+            if info.format != BrukerFormat.TIMSTOF:
+                raise FileFormatError(
+                    f"Path does not contain timsTOF data: {self.data_path}. "
+                    f"Detected format: {info.format.value}"
+                )
+
+            # Update data_path to point to the actual .d folder
+            self.data_path = info.data_path
+            logger.info(f"Found .d folder at: {self.data_path}")
+
+        except ValueError as e:
+            raise FileFormatError(str(e)) from e
+        except Exception as e:
+            raise FileFormatError(
+                f"Could not find .d folder in {self.data_path}: {e}"
+            ) from e
 
     def _detect_file_type(self) -> None:
         """Detect whether this is TSF or TDF data."""
