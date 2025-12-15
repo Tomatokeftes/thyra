@@ -379,9 +379,7 @@ class BaseSpatialDataConverter(BaseMSIConverter, ABC):
     def _store_raw_metadata(self, adata, comp_meta) -> None:
         """Store raw metadata (complete original data for future use)."""
         if hasattr(comp_meta, "raw_metadata") and comp_meta.raw_metadata:
-            adata.uns["raw_metadata"] = self._serialize_for_zarr(
-                comp_meta.raw_metadata
-            )
+            adata.uns["raw_metadata"] = self._serialize_for_zarr(comp_meta.raw_metadata)
 
     def _serialize_for_zarr(self, obj):
         """Recursively convert tuples to lists for Zarr serialization."""

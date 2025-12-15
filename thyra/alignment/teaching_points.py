@@ -348,8 +348,13 @@ class TeachingPointAlignment:
 
         # Compute MSI transforms if poslog available
         msi_result = self._compute_msi_alignment(
-            points, poslog_positions, image_to_stage, stage_to_image,
-            raster_step, flip_poslog_x, flip_poslog_y
+            points,
+            poslog_positions,
+            image_to_stage,
+            stage_to_image,
+            raster_step,
+            flip_poslog_x,
+            flip_poslog_y,
         )
 
         if msi_result["warning"]:
@@ -443,8 +448,12 @@ class TeachingPointAlignment:
         )
 
         msi_to_image, image_to_msi = self._compute_msi_transforms(
-            image_to_stage, stage_to_image, stage_offset,
-            raster_step, first_phys, flip_poslog_x,
+            image_to_stage,
+            stage_to_image,
+            stage_offset,
+            raster_step,
+            first_phys,
+            flip_poslog_x,
         )
         result["msi_to_image"] = msi_to_image
         result["image_to_msi"] = image_to_msi

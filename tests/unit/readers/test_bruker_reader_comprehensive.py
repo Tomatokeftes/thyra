@@ -17,7 +17,7 @@ from typing import Any, Dict
 import numpy as np
 
 # Import the reader from the proper location
-from thyra.readers.bruker.bruker_reader import BrukerReader
+from thyra.readers.bruker.timstof.timstof_reader import BrukerReader
 from thyra.utils.bruker_exceptions import BrukerReaderError
 
 logger = logging.getLogger(__name__)

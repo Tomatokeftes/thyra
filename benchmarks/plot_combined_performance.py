@@ -10,16 +10,15 @@ import argparse
 from pathlib import Path
 
 import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
 import ptitprince as pt
-import numpy as np
-
 
 # EDIT THESE VALUES based on your benchmark run:
 INITIALIZATION_TIMES = {
-    'ImzML (Processed)': 58.0,  # seconds - UPDATE THIS
-    'Bruker .d': 0.5,            # seconds - UPDATE THIS
-    'SpatialData': 8.0,          # seconds - UPDATE THIS
+    "ImzML (Processed)": 58.0,  # seconds - UPDATE THIS
+    "Bruker .d": 0.5,  # seconds - UPDATE THIS
+    "SpatialData": 8.0,  # seconds - UPDATE THIS
 }
 
 
@@ -38,7 +37,7 @@ def plot_combined_figure(
     df = pd.read_csv(csv_path)
 
     print(f"Loaded {len(df)} measurements")
-    if 'dataset' in df.columns:
+    if "dataset" in df.columns:
         print(f"Datasets: {df['dataset'].unique()}")
     print(f"Formats: {df['format'].unique()}")
     print(f"Access patterns: {df['access_pattern'].unique()}")
@@ -72,40 +71,57 @@ def plot_combined_figure(
     init_values = list(init_times.values())
 
     # Colors matching Set2 palette
-    init_colors = ['#fc8d62', '#8da0cb', '#66c2a5']  # Orange, Blue, Teal
+    init_colors = ["#fc8d62", "#8da0cb", "#66c2a5"]  # Orange, Blue, Teal
 
     # Create bars
-    bars = ax_init.bar(init_formats, init_values, color=init_colors,
-                       alpha=0.8, edgecolor='black', linewidth=1.5)
+    bars = ax_init.bar(
+        init_formats,
+        init_values,
+        color=init_colors,
+        alpha=0.8,
+        edgecolor="black",
+        linewidth=1.5,
+    )
 
     # Add value labels on top of bars
     for bar, value in zip(bars, init_values):
         height = bar.get_height()
         # Position label above bar with some padding
         y_pos = height * 1.05 if use_log_init else height + 1
-        ax_init.text(bar.get_x() + bar.get_width()/2., y_pos,
-                     f'{value:.1f}s',
-                     ha='center', va='bottom', fontsize=font_size, fontweight='bold')
+        ax_init.text(
+            bar.get_x() + bar.get_width() / 2.0,
+            y_pos,
+            f"{value:.1f}s",
+            ha="center",
+            va="bottom",
+            fontsize=font_size,
+            fontweight="bold",
+        )
 
     # Labels
-    ylabel = 'Time (seconds, log scale)' if use_log_init else 'Time (seconds)'
-    ax_init.set_ylabel(ylabel, fontsize=font_size, fontweight='bold')
-    ax_init.set_title('(a) Format Initialization Overhead',
-                      fontsize=font_size+2, fontweight='bold', loc='left', pad=10)
+    ylabel = "Time (seconds, log scale)" if use_log_init else "Time (seconds)"
+    ax_init.set_ylabel(ylabel, fontsize=font_size, fontweight="bold")
+    ax_init.set_title(
+        "(a) Format Initialization Overhead",
+        fontsize=font_size + 2,
+        fontweight="bold",
+        loc="left",
+        pad=10,
+    )
 
     # Use log scale for y-axis if requested
     if use_log_init:
-        ax_init.set_yscale('log')
+        ax_init.set_yscale("log")
         # Set y-limits to give space for labels
-        ax_init.set_ylim(bottom=min(init_values)*0.5, top=max(init_values)*2)
+        ax_init.set_ylim(bottom=min(init_values) * 0.5, top=max(init_values) * 2)
     else:
         # Extend y-axis to 65 to avoid label overlap
         ax_init.set_ylim(top=65)
 
     # Grid
-    ax_init.grid(True, alpha=0.3, axis='y')
+    ax_init.grid(True, alpha=0.3, axis="y")
     ax_init.set_axisbelow(True)
-    ax_init.tick_params(axis='both', which='major', labelsize=font_size)
+    ax_init.tick_params(axis="both", which="major", labelsize=font_size)
 
     # =================================================================
     # BOTTOM PANEL (b): Raincloud Plots
@@ -131,14 +147,20 @@ def plot_combined_figure(
 
     # Set log scale for x-axis (latency)
     ax_rain.set_xscale("log")
-    ax_rain.set_xlabel("Latency per access (seconds, log scale)",
-                       fontsize=font_size, fontweight='bold')
+    ax_rain.set_xlabel(
+        "Latency per access (seconds, log scale)", fontsize=font_size, fontweight="bold"
+    )
     ax_rain.set_ylabel("", fontsize=font_size)
-    ax_rain.set_title('(b) Access Pattern Latencies',
-                      fontsize=font_size+2, fontweight='bold', loc='left', pad=10)
+    ax_rain.set_title(
+        "(b) Access Pattern Latencies",
+        fontsize=font_size + 2,
+        fontweight="bold",
+        loc="left",
+        pad=10,
+    )
 
     # Font sizes
-    ax_rain.tick_params(axis='both', which='major', labelsize=font_size)
+    ax_rain.tick_params(axis="both", which="major", labelsize=font_size)
 
     # Format legend
     handles, labels = ax_rain.get_legend_handles_labels()
@@ -176,11 +198,11 @@ def plot_combined_figure(
         print(f"{fmt:25s}: {time:8.3f} seconds")
 
     # Speedups
-    if 'SpatialData' in init_times:
+    if "SpatialData" in init_times:
         print("\nInitialization vs SpatialData:")
-        sd_time = init_times['SpatialData']
+        sd_time = init_times["SpatialData"]
         for fmt, time in init_times.items():
-            if fmt != 'SpatialData':
+            if fmt != "SpatialData":
                 ratio = time / sd_time
                 if ratio > 1:
                     print(f"  {fmt:25s}: {ratio:.2f}x slower")
@@ -227,8 +249,11 @@ def main():
     parser.add_argument("--font-size", type=int, default=12, help="Font size")
     parser.add_argument("--width", type=int, default=12, help="Figure width")
     parser.add_argument("--height", type=int, default=10, help="Figure height")
-    parser.add_argument("--no-log-init", action="store_true",
-                       help="Don't use log scale for initialization times (extends to y=65)")
+    parser.add_argument(
+        "--no-log-init",
+        action="store_true",
+        help="Don't use log scale for initialization times (extends to y=65)",
+    )
 
     args = parser.parse_args()
 

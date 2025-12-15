@@ -7,7 +7,7 @@ import struct
 import numpy as np
 import pytest
 
-from thyra.readers.fleximaging import FlexImagingReader
+from thyra.readers.bruker.fleximaging import FlexImagingReader
 
 
 @pytest.fixture

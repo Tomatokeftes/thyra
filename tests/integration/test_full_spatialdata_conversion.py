@@ -19,7 +19,7 @@ import numpy as np
 import pytest
 
 # Import from the correct location
-from thyra.readers.bruker.bruker_reader import BrukerReader
+from thyra.readers.bruker.timstof.timstof_reader import BrukerReader
 
 
 def _setup_test_environment():

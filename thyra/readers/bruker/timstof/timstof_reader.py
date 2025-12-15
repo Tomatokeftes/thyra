@@ -28,11 +28,11 @@ else:
         f"Using existing OMP_NUM_THREADS={current_setting}"
     )
 
-from ...core.base_extractor import MetadataExtractor
-from ...core.base_reader import BaseMSIReader
-from ...core.registry import register_reader
-from ...metadata.extractors.bruker_extractor import BrukerMetadataExtractor
-from ...utils.bruker_exceptions import DataError, FileFormatError, SDKError
+from ....core.base_extractor import MetadataExtractor
+from ....core.registry import register_reader
+from ....metadata.extractors.bruker_extractor import BrukerMetadataExtractor
+from ....utils.bruker_exceptions import DataError, FileFormatError, SDKError
+from ..base_bruker_reader import BrukerBaseMSIReader
 from .sdk.dll_manager import DLLManager
 from .sdk.sdk_functions import SDKFunctions
 
@@ -175,7 +175,7 @@ def _get_frame_count(db_path: Path) -> int:
 
 
 @register_reader("bruker")
-class BrukerReader(BaseMSIReader):
+class BrukerReader(BrukerBaseMSIReader):
     """Bruker reader for TSF/TDF data formats.
 
     Features:

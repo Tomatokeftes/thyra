@@ -1,12 +1,13 @@
 """Run only Bruker .d benchmark and merge with existing results."""
+
 import csv
 from pathlib import Path
 
 import pandas as pd
-
 from xenium_comparison import benchmark_bruker
 
 OUTPUT_CSV = Path("results/xenium_comparison.csv")
+
 
 def main():
     print("=" * 70)
@@ -25,7 +26,7 @@ def main():
     print(f"Formats in existing data: {df['format'].unique()}")
 
     # Remove old Bruker results
-    df_filtered = df[df['format'] != 'Bruker .d'].copy()
+    df_filtered = df[df["format"] != "Bruker .d"].copy()
     print(f"\nRemoved {len(df) - len(df_filtered)} Bruker .d rows")
     print(f"Remaining rows: {len(df_filtered)}")
 
@@ -51,9 +52,10 @@ def main():
     print("\n" + "=" * 70)
     print("SUMMARY BY FORMAT")
     print("=" * 70)
-    for fmt in sorted(merged_df['format'].unique()):
-        count = len(merged_df[merged_df['format'] == fmt])
+    for fmt in sorted(merged_df["format"].unique()):
+        count = len(merged_df[merged_df["format"] == fmt])
         print(f"{fmt:25s}: {count} measurements")
+
 
 if __name__ == "__main__":
     main()

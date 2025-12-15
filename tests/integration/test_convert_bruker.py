@@ -13,7 +13,7 @@ import numpy as np
 import pytest
 
 from thyra.convert import convert_msi
-from thyra.readers.bruker.bruker_reader import BrukerReader
+from thyra.readers.bruker.timstof.timstof_reader import BrukerReader
 
 # Determine if Bruker DLL/shared library is available
 # For now, assume it's not available to skip these tests

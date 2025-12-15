@@ -1,8 +1,15 @@
-"""Bruker reader implementation combining best features from all implementations.
+"""Bruker MSI reader implementations.
 
-This module provides a high-performance, memory-efficient reader for
-Bruker TSF/TDF data formats with lazy loading, intelligent caching, and
-comprehensive error handling.
+This package provides readers for Bruker MSI data formats:
+- timsTOF: TSF/TDF data via SDK (BrukerReader)
+- FlexImaging: MALDI-TOF data via pure Python (FlexImagingReader)
+
+Organization:
+- timstof/: timsTOF reader and SDK integration
+- fleximaging/: FlexImaging reader (pure Python)
+
+Common functionality is provided by BrukerBaseMSIReader and
+BrukerFolderStructure for folder analysis.
 """
 
 from ...utils.bruker_exceptions import (
@@ -11,10 +18,23 @@ from ...utils.bruker_exceptions import (
     FileFormatError,
     SDKError,
 )
-from .bruker_reader import BrukerReader
+from .base_bruker_reader import BrukerBaseMSIReader
+
+# Import readers from submodules to trigger registration
+from .fleximaging.fleximaging_reader import FlexImagingReader
+from .folder_structure import BrukerFolderInfo, BrukerFolderStructure, BrukerFormat
+from .timstof.timstof_reader import BrukerReader
 
 __all__ = [
+    # Base classes
+    "BrukerBaseMSIReader",
+    "BrukerFolderStructure",
+    "BrukerFolderInfo",
+    "BrukerFormat",
+    # Readers
     "BrukerReader",
+    "FlexImagingReader",
+    # Exceptions
     "BrukerReaderError",
     "DataError",
     "FileFormatError",

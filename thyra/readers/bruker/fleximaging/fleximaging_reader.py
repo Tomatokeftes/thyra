@@ -1,4 +1,4 @@
-# thyra/readers/fleximaging/fleximaging_reader.py
+# thyra/readers/bruker/fleximaging/fleximaging_reader.py
 """FlexImaging reader for Bruker MALDI-TOF data.
 
 This module provides a pure Python reader for Bruker FlexImaging data format
@@ -22,17 +22,17 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Dict, Generator, List, Optional, Tuple
 
 if TYPE_CHECKING:
-    from xml.etree.ElementTree import Element
+    from xml.etree.ElementTree import Element  # nosec B405 - type hint only
 
 import defusedxml.ElementTree as ET
 import numpy as np
 from numpy.typing import NDArray
 from tqdm import tqdm
 
-from ...core.base_extractor import MetadataExtractor
-from ...core.base_reader import BaseMSIReader
-from ...core.registry import register_reader
-from ...metadata.types import ComprehensiveMetadata, EssentialMetadata
+from ....core.base_extractor import MetadataExtractor
+from ....core.registry import register_reader
+from ....metadata.types import ComprehensiveMetadata, EssentialMetadata
+from ..base_bruker_reader import BrukerBaseMSIReader
 
 logger = logging.getLogger(__name__)
 
@@ -106,7 +106,9 @@ class FlexImagingMetadataExtractor(MetadataExtractor):
             "flexControl_version": info.get("flexControl Version", ""),
             "teaching_points": mis.get("teaching_points", []),
             "areas": mis.get("areas", []),
-            "raster_step_um": list(mis.get("raster") or []),  # [x, y] step in micrometers
+            "raster_step_um": list(
+                mis.get("raster") or []
+            ),  # [x, y] step in micrometers
             "optical_image": mis.get("ImageFile", ""),
             "original_optical_image": mis.get("OriginalImage", ""),
             "base_geometry": mis.get("BaseGeometry", ""),
@@ -144,7 +146,7 @@ class FlexImagingMetadataExtractor(MetadataExtractor):
 
 
 @register_reader("fleximaging")
-class FlexImagingReader(BaseMSIReader):
+class FlexImagingReader(BrukerBaseMSIReader):
     """Reader for Bruker FlexImaging MALDI-TOF data.
 
     This reader handles FlexImaging data format without requiring any SDK.
@@ -361,9 +363,7 @@ class FlexImagingReader(BaseMSIReader):
         if teaching_points:
             metadata["teaching_points"] = teaching_points
 
-    def _extract_raster_info(
-        self, root: "Element", metadata: Dict[str, Any]
-    ) -> None:
+    def _extract_raster_info(self, root: "Element", metadata: Dict[str, Any]) -> None:
         """Extract raster dimensions from .mis XML."""
         raster_elem = root.find(".//Raster")
         if raster_elem is not None and raster_elem.text:
@@ -640,21 +640,6 @@ class FlexImagingReader(BaseMSIReader):
 
         finally:
             pbar.close()
-
-    def get_optical_image_paths(self) -> List[Path]:
-        """Get paths to optical/microscopy TIFF images.
-
-        FlexImaging data folders typically contain optical images:
-        - *deriv*.tif: Low-resolution optical overview
-        - *_0000.tif: High-resolution reference image (used for teaching points)
-        - *_0001.tif: Derived/processed image
-
-        Returns:
-            List of paths to TIFF files in the data folder, sorted by name.
-        """
-        tiff_paths = list(self.data_path.glob("*.tif"))
-        tiff_paths.extend(self.data_path.glob("*.tiff"))
-        return sorted(set(tiff_paths))
 
     def close(self) -> None:
         """Close the reader and release resources."""
