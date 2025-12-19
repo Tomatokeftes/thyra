@@ -45,9 +45,12 @@ nul
 # Test data (large MSI files)
 test_data/
 
-# Benchmark results and logs
-benchmarks/results/*.log
-benchmarks/results/*.csv
+# Benchmark data and results
+benchmarks/converted/
+benchmarks/results/
+benchmarks/continue_benchmark.py
+benchmarks/missing_benchmark.py
+benchmarks/test_*.py
 
 # Claude Code files - should not be committed
 .claude/

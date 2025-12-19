@@ -10,16 +10,26 @@ import argparse
 from pathlib import Path
 
 import matplotlib.pyplot as plt
-import numpy as np
 import pandas as pd
 import ptitprince as pt
 
 # EDIT THESE VALUES based on your benchmark run:
 INITIALIZATION_TIMES = {
-    "ImzML (Processed)": 58.0,  # seconds - UPDATE THIS
-    "Bruker .d": 0.5,  # seconds - UPDATE THIS
-    "SpatialData": 8.0,  # seconds - UPDATE THIS
+    "ImzML (Processed)": 58.0,  # seconds
+    "Bruker .d": 0.5,  # seconds
+    "SpatialData": 8.0,  # seconds
 }
+
+# Consistent color scheme across all plots
+# Order: ImzML (Orange), Bruker (Blue), SpatialData (Teal)
+FORMAT_COLORS = {
+    "ImzML (Processed)": "#fc8d62",  # Orange
+    "Bruker .d": "#8da0cb",  # Blue
+    "SpatialData": "#66c2a5",  # Teal/Green
+}
+
+# Ordered list for consistent legend ordering (must match CSV format names)
+FORMAT_ORDER = ["ImzML (Processed)", "Bruker .d", "SpatialData"]
 
 
 def plot_combined_figure(
@@ -32,7 +42,6 @@ def plot_combined_figure(
     use_log_init: bool = True,
 ):
     """Create combined figure with initialization and latency plots."""
-
     # Load latency results
     df = pd.read_csv(csv_path)
 
@@ -40,12 +49,14 @@ def plot_combined_figure(
     if "dataset" in df.columns:
         print(f"Datasets: {df['dataset'].unique()}")
     print(f"Formats: {df['format'].unique()}")
-    print(f"Access patterns: {df['access_pattern'].unique()}")
+    pattern_col = "access_pattern" if "access_pattern" in df.columns else "pattern"
+    print(f"Access patterns: {df[pattern_col].unique()}")
 
-    # Rename columns for better labels
+    # Rename columns for better labels (handle both 'pattern' and 'access_pattern')
     df = df.rename(
         columns={
             "access_pattern": "Access Pattern",
+            "pattern": "Access Pattern",
             "format": "Format",
             "latency_seconds": "Latency (seconds)",
         }
@@ -67,11 +78,10 @@ def plot_combined_figure(
     # =================================================================
     ax_init = fig.add_subplot(gs[0])
 
-    init_formats = list(init_times.keys())
-    init_values = list(init_times.values())
-
-    # Colors matching Set2 palette
-    init_colors = ["#fc8d62", "#8da0cb", "#66c2a5"]  # Orange, Blue, Teal
+    # Use consistent ordering
+    init_formats = FORMAT_ORDER
+    init_values = [init_times[fmt] for fmt in FORMAT_ORDER]
+    init_colors = [FORMAT_COLORS[fmt] for fmt in FORMAT_ORDER]
 
     # Create bars
     bars = ax_init.bar(
@@ -91,7 +101,7 @@ def plot_combined_figure(
         ax_init.text(
             bar.get_x() + bar.get_width() / 2.0,
             y_pos,
-            f"{value:.1f}s",
+            f"{value:.1f} s",  # Space between number and unit
             ha="center",
             va="bottom",
             fontsize=font_size,
@@ -128,15 +138,18 @@ def plot_combined_figure(
     # =================================================================
     ax_rain = fig.add_subplot(gs[1])
 
-    # Create raincloud plot
+    # Build color palette matching the initialization bar order
+    rain_palette = [FORMAT_COLORS[fmt] for fmt in FORMAT_ORDER]
+
+    # Create raincloud plot with consistent colors and ordering
     ax_rain = pt.RainCloud(
         x="Access Pattern",
         y="Latency (seconds)",
         hue="Format",
         data=df,
-        palette="Set2",
+        palette=rain_palette,
         order=access_patterns,
-        hue_order=formats,
+        hue_order=FORMAT_ORDER,  # Same order as initialization bars
         width_viol=0.6,
         ax=ax_rain,
         orient="h",
@@ -181,12 +194,12 @@ def plot_combined_figure(
     plt.tight_layout()
 
     # Save figure
-    output_path = Path(output_path)
-    fig.savefig(output_path, dpi=300, bbox_inches="tight")
-    print(f"\nCombined figure saved to: {output_path}")
+    out_file = Path(output_path)
+    fig.savefig(out_file, dpi=300, bbox_inches="tight")
+    print(f"\nCombined figure saved to: {out_file}")
 
     # Also save as PDF
-    pdf_path = output_path.with_suffix(".pdf")
+    pdf_path = out_file.with_suffix(".pdf")
     fig.savefig(pdf_path, bbox_inches="tight")
     print(f"PDF version saved to: {pdf_path}")
 
@@ -222,7 +235,7 @@ def plot_combined_figure(
             if len(fmt_df) > 0:
                 median = fmt_df["Latency (seconds)"].median()
                 if median < 0.001:
-                    print(f"  {fmt:25s}: {median*1000:.3f} ms ({median*1e6:.1f} μs)")
+                    print(f"  {fmt:25s}: {median*1000:.3f} ms ({median*1e6:.1f} us)")
                 elif median < 1:
                     print(f"  {fmt:25s}: {median*1000:.3f} ms")
                 else:

@@ -28,10 +28,13 @@ N_ROUNDS = 100
 RANDOM_SEED = 42
 
 # Paths (relative to project root)
-IMZML_PATH = Path(__file__).parent.parent / "test_data/20240826_xenium_0041899.imzML"
-BRUKER_PATH = Path(__file__).parent.parent / "test_data/20240826_Xenium_0041899.d"
-ZARR_PATH = Path(__file__).parent / "converted/xenium.zarr"
-OUTPUT_CSV = Path(__file__).parent / "results/xenium_comparison.csv"
+IMZML_PATH = Path(__file__).parent / "converted/mouse_brain.imzML"
+BRUKER_PATH = (
+    Path(__file__).parent
+    / "converted/MALDI-MSI Sagittal Mouse Brain/20240826_Xenium_0041899.d"
+)
+ZARR_PATH = Path(__file__).parent / "converted/mouse_brain.zarr"
+OUTPUT_CSV = Path(__file__).parent / "results/mouse_brain_comparison.csv"
 
 
 class RandomPixelAccess:
@@ -42,7 +45,9 @@ class RandomPixelAccess:
     def generate_choices(self, n_pixels: int, n_mz: int) -> List[Dict]:
         """Generate random pixel indices."""
         random.seed(RANDOM_SEED)
-        return [{"pixel_idx": random.randint(0, n_pixels - 1)} for _ in range(N_ROUNDS)]
+        return [  # nosec B311
+            {"pixel_idx": random.randint(0, n_pixels - 1)} for _ in range(N_ROUNDS)
+        ]
 
     def describe_choice(self, choice: Dict) -> str:
         """Describe the choice."""
@@ -58,6 +63,7 @@ class RandomMzRangeAccess:
         """Generate random m/z ranges."""
         random.seed(RANDOM_SEED)
         choices = []
+        # nosec B311 - random used for benchmarking, not cryptography
         for _ in range(N_ROUNDS):
             width = random.randint(100, 1000)  # bins
             start = random.randint(0, max(0, n_mz - width))
@@ -79,6 +85,7 @@ class RandomROIAccess:
         random.seed(RANDOM_SEED)
         grid_size = int(np.sqrt(n_pixels))
         choices = []
+        # nosec B311 - random used for benchmarking, not cryptography
         for _ in range(N_ROUNDS):
             # Random ROI size between 10x10 and 50x50
             roi_size = random.randint(10, 50)
@@ -132,11 +139,7 @@ def benchmark_imzml() -> List[Dict]:
             elif isinstance(pattern, RandomMzRangeAccess):
                 # Ion image extraction: iterate through ALL pixels to get the m/z range
                 # This is what users do in practice to create spatial images
-                start_mz = choice[
-                    "mz_start_idx"
-                ]  # This is an index, we need actual m/z value
-                width = choice["mz_width_bins"]
-
+                # Note: choice has mz_start_idx and mz_width_bins but we iterate all pixels
                 # Iterate through ALL pixels (this is what creating an ion image requires)
                 data_size = 0
                 for i in range(n_pixels):
@@ -414,7 +417,8 @@ def print_summary(results: List[Dict]):
         mean = np.mean(latencies)
         p95 = np.percentile(latencies, 95)
         print(
-            f"{fmt:20s} | {pattern:20s} | Median: {median*1000:8.2f} ms | Mean: {mean*1000:8.2f} ms | P95: {p95*1000:8.2f} ms"
+            f"{fmt:20s} | {pattern:20s} | "
+            f"Median: {median*1000:8.2f} ms | Mean: {mean*1000:8.2f} ms | P95: {p95*1000:8.2f} ms"
         )
 
 
@@ -439,9 +443,8 @@ def main():
     print_summary(all_results)
 
     print("\nTo plot results, run:")
-    print(
-        f"  python benchmarks/plot_latency_results.py {OUTPUT_CSV} benchmarks/results/xenium_comparison_raincloud.png"
-    )
+    print(f"  python benchmarks/plot_latency_results.py {OUTPUT_CSV}")
+    print("    benchmarks/results/xenium_comparison_raincloud.png")
 
 
 if __name__ == "__main__":
