@@ -856,7 +856,8 @@ class BrukerReader(BrukerBaseMSIReader):
     def get_total_peak_count(self) -> int:
         """Get total number of peaks across all spectra from NumPeaks cache.
 
-        This is very fast as NumPeaks data is cached from the database at initialization.
+        This is very fast as NumPeaks data is cached from the database at
+        initialization.
 
         Returns:
             Total number of peaks across all spectra
@@ -868,6 +869,59 @@ class BrukerReader(BrukerBaseMSIReader):
         total = sum(self._num_peaks_cache.values())
         logger.info(f"Total peak count from NumPeaks cache: {total:,}")
         return total
+
+    def get_peak_counts_per_pixel(self) -> Optional[np.ndarray]:
+        """Get per-pixel peak counts for CSR indptr construction.
+
+        Converts the frame-indexed NumPeaks cache to pixel-indexed array
+        using coordinate mapping.
+
+        Returns:
+            Array of size n_pixels where arr[pixel_idx] = peak_count.
+            pixel_idx = z * (n_x * n_y) + y * n_x + x
+            Returns None if NumPeaks cache not available.
+        """
+        if not self._num_peaks_cache:
+            logger.warning("NumPeaks cache not available")
+            return None
+
+        # Get dimensions and coordinate offsets
+        metadata = self.get_essential_metadata()
+        n_x, n_y, n_z = metadata.dimensions
+        n_pixels = n_x * n_y * n_z
+        coordinate_offsets = metadata.coordinate_offsets
+
+        # Create output array
+        peak_counts = np.zeros(n_pixels, dtype=np.int32)
+
+        # Map frame_id -> pixel_idx using coordinate lookup
+        cursor = self.conn.cursor()
+        try:
+            cursor.execute("SELECT Frame, XIndexPos, YIndexPos FROM MaldiFrameInfo")
+            for frame_id, x, y in cursor.fetchall():
+                if frame_id not in self._num_peaks_cache:
+                    continue
+
+                # Apply coordinate offsets (normalize to 0-based)
+                if coordinate_offsets:
+                    x = int(x) - coordinate_offsets[0]
+                    y = int(y) - coordinate_offsets[1]
+                else:
+                    x, y = int(x), int(y)
+
+                # Calculate pixel index
+                z = 0  # Bruker MSI is typically 2D
+                pixel_idx = z * (n_x * n_y) + y * n_x + x
+
+                if 0 <= pixel_idx < n_pixels:
+                    peak_counts[pixel_idx] = self._num_peaks_cache[frame_id]
+
+        except Exception as e:
+            logger.warning(f"Error mapping peak counts to pixels: {e}")
+            return None
+
+        logger.info(f"Mapped peak counts for {n_pixels:,} pixels")
+        return peak_counts
 
     def __del__(self) -> None:
         """Destructor to ensure cleanup."""
