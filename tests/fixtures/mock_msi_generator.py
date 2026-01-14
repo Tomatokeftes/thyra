@@ -192,6 +192,15 @@ class MockMSIReader:
         """Return the common mass axis."""
         return self._common_mass_axis
 
+    def get_peak_counts_per_pixel(self) -> Optional[np.ndarray]:
+        """Return per-pixel peak counts for CSR indptr construction.
+
+        For mock data, we estimate based on average peaks per spectrum.
+        Returns None to trigger the fallback estimation in the converter.
+        """
+        # Return None to test the fallback path
+        return None
+
 
 def test_streaming_conversion(config: MockMSIConfig, output_dir: Path):
     """Test the streaming converter with mock data."""

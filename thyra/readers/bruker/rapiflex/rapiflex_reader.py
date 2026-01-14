@@ -644,6 +644,42 @@ class RapiflexReader(BrukerBaseMSIReader):
         finally:
             pbar.close()
 
+    def get_peak_counts_per_pixel(self) -> Optional[NDArray[np.int32]]:
+        """Get per-pixel peak counts for CSR indptr construction.
+
+        For Rapiflex profile data, all valid pixels have the same number
+        of data points. Empty pixels (no spectrum) have 0 peaks.
+
+        Returns:
+            Array of size n_pixels where arr[pixel_idx] = peak_count.
+            pixel_idx = z * (n_x * n_y) + y * n_x + x
+        """
+        # Get dimensions from header
+        n_x = self._header.get("raster_width", 0)
+        n_y = self._header.get("raster_height", 0)
+        n_z = 1  # Rapiflex is 2D
+        n_pixels = n_x * n_y * n_z
+
+        if n_pixels == 0:
+            return None
+
+        # Create output array - all zeros initially
+        peak_counts = np.zeros(n_pixels, dtype=np.int32)
+
+        # For profile data, all valid pixels have n_datapoints
+        n_datapoints = self.n_datapoints
+
+        # Set peak count for valid indices only
+        for idx in self._valid_indices:
+            if 0 <= idx < n_pixels:
+                peak_counts[idx] = n_datapoints
+
+        logger.info(
+            f"Rapiflex peak counts: {len(self._valid_indices)} valid pixels "
+            f"x {n_datapoints} datapoints"
+        )
+        return peak_counts
+
     def close(self) -> None:
         """Close the reader and release resources."""
         if self._closed:

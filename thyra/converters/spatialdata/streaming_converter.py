@@ -14,7 +14,7 @@ import logging
 import shutil
 import tempfile
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Literal, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -26,9 +26,11 @@ from tqdm import tqdm
 from .base_spatialdata_converter import SPATIALDATA_AVAILABLE, BaseSpatialDataConverter
 
 if SPATIALDATA_AVAILABLE:
+    import geopandas as gpd
     import xarray as xr
     from anndata import AnnData
-    from spatialdata.models import Image2DModel, TableModel
+    from spatialdata import SpatialData
+    from spatialdata.models import Image2DModel, ShapesModel, TableModel
     from spatialdata.transformations import Identity
 
 
@@ -50,12 +52,17 @@ class StreamingSpatialDataConverter(BaseSpatialDataConverter):
     - Produces identical output to SpatialData2DConverter
     """
 
+    # Threshold in GB above which PCS (Pre-calculated Scatter) method is used
+    # for memory-efficient CSC conversion. Below this, standard COO approach is used.
+    PCS_SIZE_THRESHOLD_GB: float = 50.0
+
     def __init__(
         self,
         *args,
         chunk_size: int = 5000,
         temp_dir: Optional[Path] = None,
         zero_copy: bool = True,
+        use_csc: Union[bool, Literal["auto"]] = "auto",
         **kwargs,
     ):
         """Initialize streaming converter.
@@ -70,6 +77,11 @@ class StreamingSpatialDataConverter(BaseSpatialDataConverter):
             zero_copy: If True (default), writes directly to final output
                 without creating scipy sparse matrix. This avoids the final
                 memory spike but may be slightly slower due to more disk I/O.
+            use_csc: Controls CSC format conversion method:
+                - "auto" (default): Use PCS method for large datasets (>50GB),
+                  standard method for smaller datasets
+                - True: Always use PCS method for memory-efficient CSC
+                - False: Use CSR format instead
             **kwargs: Keyword arguments passed to BaseSpatialDataConverter
         """
         kwargs["handle_3d"] = False  # Force 2D mode for now
@@ -79,8 +91,70 @@ class StreamingSpatialDataConverter(BaseSpatialDataConverter):
         self._temp_dir = temp_dir
         self._cleanup_temp = temp_dir is None
         self._zero_copy = zero_copy
+        self._use_csc = use_csc
         self._zarr_store: Optional[zarr.Group] = None
         self._temp_path: Optional[Path] = None
+
+    def _estimate_output_size_gb(self) -> float:
+        """Estimate the output dataset size in GB.
+
+        Uses metadata to estimate the dense matrix size:
+        n_pixels * n_mz_bins * 4 bytes (float32)
+
+        Returns:
+            Estimated size in gigabytes
+        """
+        metadata = self.reader.get_essential_metadata()
+
+        # Get dimensions
+        n_x, n_y, n_z = metadata.dimensions
+        n_pixels = n_x * n_y * n_z
+
+        # Estimate number of m/z bins after resampling
+        if self._resampling_config:
+            n_mz_bins = self._resampling_config.get("target_bins", 10000)
+        else:
+            # Estimate from mass range with ~0.01 Da resolution
+            min_mass, max_mass = metadata.mass_range
+            n_mz_bins = int((max_mass - min_mass) / 0.01)
+
+        # Dense matrix size in bytes (float32 = 4 bytes)
+        dense_bytes = n_pixels * n_mz_bins * 4
+
+        # Convert to GB
+        size_gb = dense_bytes / (1024**3)
+
+        logging.info(
+            f"Estimated output size: {size_gb:.1f} GB "
+            f"({n_pixels:,} pixels x {n_mz_bins:,} m/z bins)"
+        )
+
+        return size_gb
+
+    def _should_use_pcs(self) -> bool:
+        """Determine whether to use PCS method based on settings and dataset size.
+
+        Returns:
+            True if PCS method should be used, False otherwise
+        """
+        if self._use_csc is True:
+            return True
+        elif self._use_csc is False:
+            return False
+        else:  # "auto"
+            estimated_size = self._estimate_output_size_gb()
+            use_pcs = estimated_size > self.PCS_SIZE_THRESHOLD_GB
+            if use_pcs:
+                logging.info(
+                    f"Dataset size ({estimated_size:.1f} GB) exceeds threshold "
+                    f"({self.PCS_SIZE_THRESHOLD_GB} GB) - using PCS method"
+                )
+            else:
+                logging.info(
+                    f"Dataset size ({estimated_size:.1f} GB) below threshold "
+                    f"({self.PCS_SIZE_THRESHOLD_GB} GB) - using standard method"
+                )
+            return use_pcs
 
     def convert(self) -> bool:
         """Stream-convert MSI data to SpatialData format.
@@ -102,17 +176,38 @@ class StreamingSpatialDataConverter(BaseSpatialDataConverter):
         This method writes directly to the final output Zarr without ever
         creating a scipy sparse matrix in memory. Memory stays bounded
         regardless of dataset size.
+
+        For large datasets (>50GB by default), uses the Pre-calculated Scatter
+        (PCS) approach for CSC format:
+        - O(N) time complexity (no sorting required)
+        - ~200 MB memory regardless of dataset size
+        - CSC format for efficient ion image access
+
+        For smaller datasets, uses the standard COO approach which is simpler
+        but requires more memory for the scipy conversion step.
         """
         try:
             # Initialize (loads metadata, mass axis, etc.)
             self._initialize_conversion()
 
-            # Stream process and write directly to output - use new direct Zarr method
-            result = self._stream_write_direct_zarr()
+            # Decide which method to use based on settings and dataset size
+            if self._should_use_pcs():
+                # Use no-cache approach for memory-efficient CSC conversion
+                # This processes spectra twice but eliminates the ~200GB cache file
+                result = self._convert_to_csc_no_cache()
+                logging.info(
+                    f"Zero-copy CSC conversion complete: {result['total_nnz']:,} non-zeros"
+                )
+            else:
+                # Use standard COO approach for smaller datasets
+                self._setup_temp_storage()
+                coo_result = self._stream_build_coo()
+                data_structures = self._create_data_structures_from_coo(coo_result)
+                self._finalize_data(data_structures)
+                self._save_output(data_structures)
+                self._cleanup_temp_storage()
+                logging.info("Zero-copy COO conversion complete")
 
-            logging.info(
-                f"Zero-copy conversion complete: {result['total_nnz']:,} non-zeros"
-            )
             return True
 
         except Exception as e:
@@ -291,9 +386,11 @@ class StreamingSpatialDataConverter(BaseSpatialDataConverter):
         logging.info("Pass 2: Writing data directly to Zarr...")
 
         # Reset reader for second pass
-        reader_path = self.reader.data_path
-        self.reader.close()
-        self.reader = type(self.reader)(reader_path)
+        # For real readers (ImzML, Bruker), iter_spectra() is a generator factory
+        # that creates a fresh iterator each time - no need to recreate the reader.
+        # For mock readers with random data, we need to reset the random seed.
+        if hasattr(self.reader, "reset"):
+            self.reader.reset()
         setattr(self.reader, "_quiet_mode", True)
 
         # Process in chunks to batch Zarr writes
@@ -607,20 +704,33 @@ class StreamingSpatialDataConverter(BaseSpatialDataConverter):
         # Add optical images if available
         self._add_optical_images(data_structures)
 
-    def _stream_write_direct(self) -> Dict[str, Any]:
-        """Stream CSR data directly to final output (zero-copy approach).
+    # ========================================================================
+    # No-Cache CSC Conversion (Optimized)
+    # Two-pass approach without disk caching - processes spectra twice
+    # but eliminates ~200GB cache file I/O
+    # ========================================================================
 
-        This method writes directly to the final SpatialData/Zarr output without
-        ever creating a scipy sparse matrix in memory.
+    def _convert_to_csc_no_cache(self) -> Dict[str, Any]:
+        """Convert MSI data to CSC sparse format without disk caching.
 
-        Approach:
-        1. Pass 1: Count non-zeros per row to build indptr and collect TIC
-        2. Create placeholder SpatialData structure (empty X matrix)
-        3. Pass 2: Stream-write indices and data directly to output Zarr
+        This optimized method processes spectra twice but eliminates the
+        large cache file (~200GB for big datasets):
+
+        1. Pre-scan: Count entries per column + compute TIC + average spectrum
+           - Light pass: just resampling and counting, no disk I/O
+        2. Allocate memory-mapped files for CSC arrays
+        3. Main pass: Process spectra again and scatter directly to CSC
+        4. Write CSC arrays to Zarr
+
+        This works because nearest-neighbor resampling is deterministic -
+        same input always produces same output. The 2x CPU cost of resampling
+        is far less than the disk I/O cost of caching.
 
         Returns:
             Dictionary with conversion statistics
         """
+        from uuid import uuid4
+
         if self._dimensions is None:
             raise ValueError("Dimensions not initialized")
         if self._common_mass_axis is None:
@@ -629,306 +739,314 @@ class StreamingSpatialDataConverter(BaseSpatialDataConverter):
         n_x, n_y, n_z = self._dimensions
         n_rows = n_x * n_y * n_z
         n_cols = len(self._common_mass_axis)
-        slice_id = f"{self.dataset_id}_z0"
-        region_key = f"{slice_id}_pixels"
 
-        logging.info(f"Zero-copy streaming: {n_rows:,} pixels x {n_cols:,} cols")
+        logging.info(
+            f"Streaming CSC (no-cache): {n_rows:,} pixels x {n_cols:,} m/z bins"
+        )
 
-        # Track TIC values and total intensity for average spectrum
-        tic_values = np.zeros((n_y, n_x), dtype=np.float64)
+        # Create temp directory for memmap files only (no cache file)
+        temp_dir = self.output_path.parent / f".streaming_csc_{uuid4().hex[:8]}"
+        temp_dir.mkdir(exist_ok=True)
+
+        try:
+            # Step 1: Pre-scan - count entries per column (no caching)
+            logging.info("Step 1/3: Pre-scan (counting entries per column)...")
+            prescan_result = self._prescan_count_columns(n_rows, n_cols, n_x, n_y)
+
+            col_counts = prescan_result["col_counts"]
+            total_nnz = prescan_result["total_nnz"]
+            tic_values = prescan_result["tic_values"]
+            avg_spectrum = prescan_result["avg_spectrum"]
+            pixel_count = prescan_result["pixel_count"]
+
+            if total_nnz == 0:
+                logging.warning("No non-zero entries found!")
+
+            # Build indptr from col_counts
+            indptr = np.zeros(n_cols + 1, dtype=np.int64)
+            indptr[1:] = np.cumsum(col_counts)
+
+            # Step 2: Allocate memory-mapped files for CSC arrays
+            logging.info(f"Step 2/3: Allocating memmap ({total_nnz:,} entries)...")
+            mm_indices, mm_data = self._allocate_csc_memmap_arrays(total_nnz, temp_dir)
+
+            # Step 3: Main pass - process and scatter directly to CSC
+            logging.info("Step 3/3: Processing spectra and scattering to CSC...")
+            self._scatter_spectra_direct(mm_indices, mm_data, indptr, n_x, pixel_count)
+
+            # Write CSC arrays to Zarr
+            logging.info("Writing CSC arrays to Zarr...")
+            self._write_csc_arrays_to_zarr(
+                mm_indices,
+                mm_data,
+                indptr,
+                n_rows,
+                n_cols,
+                total_nnz,
+                tic_values,
+                avg_spectrum,
+                pixel_count,
+            )
+
+            # Cleanup memmap references before deleting files
+            del mm_indices, mm_data
+            gc.collect()
+
+            logging.info(f"Streaming CSC (no-cache) complete: {total_nnz:,} non-zeros")
+
+            return {
+                "total_nnz": total_nnz,
+                "n_rows": n_rows,
+                "n_cols": n_cols,
+                "pixel_count": pixel_count,
+            }
+
+        finally:
+            # Clean up temp directory
+            if temp_dir.exists():
+                shutil.rmtree(temp_dir, ignore_errors=True)
+
+    def _prescan_count_columns(
+        self, n_rows: int, n_cols: int, n_x: int, n_y: int
+    ) -> Dict[str, Any]:
+        """Pre-scan spectra to count entries per column without caching.
+
+        This is a lightweight pass that:
+        1. Counts how many entries each m/z column will have (for CSC indptr)
+        2. Computes TIC values per pixel
+        3. Accumulates total intensity for average spectrum
+
+        No data is cached to disk - we'll reprocess spectra in the main pass.
+
+        Args:
+            n_rows: Total number of pixels
+            n_cols: Number of m/z bins
+            n_x, n_y: Spatial dimensions
+
+        Returns:
+            Dictionary with col_counts, total_nnz, tic_values, avg_spectrum, pixel_count
+        """
+        # Allocate counting arrays (very small memory footprint)
+        col_counts = np.zeros(n_cols, dtype=np.int64)
         total_intensity = np.zeros(n_cols, dtype=np.float64)
+        tic_values = np.zeros((n_y, n_x), dtype=np.float64)
 
-        # Set quiet mode on reader
-        setattr(self.reader, "_quiet_mode", True)
-        total_spectra = self._get_total_spectra_count()
-
-        # ========== PASS 1: Count non-zeros per row ==========
-        logging.info(f"Pass 1: Counting non-zeros ({total_spectra:,} spectra)...")
-        nnz_per_row = np.zeros(n_rows, dtype=np.int64)
         total_nnz = 0
         pixel_count = 0
 
+        setattr(self.reader, "_quiet_mode", True)
+        total_spectra = self._get_total_spectra_count()
+
         with tqdm(
             total=total_spectra,
-            desc="Pass 1: Counting",
+            desc="Pre-scan",
             unit="spectrum",
         ) as pbar:
             for coords, mzs, intensities in self.reader.iter_spectra(
                 batch_size=self._buffer_size
             ):
                 x, y, z = coords
-                pixel_idx = z * (n_x * n_y) + y * n_x + x
 
-                # Resample to get nnz count
+                # Process spectrum (same resampling as main pass)
                 mz_indices, resampled_ints = self._process_spectrum(mzs, intensities)
+
                 nnz = len(mz_indices)
-
-                nnz_per_row[pixel_idx] = nnz
-                total_nnz += nnz
-
-                # Update TIC
-                tic_value = float(np.sum(resampled_ints))
-                if 0 <= y < n_y and 0 <= x < n_x:
-                    tic_values[y, x] = tic_value
-
-                # Update total intensity for average spectrum
                 if nnz > 0:
+                    # Count entries per column (vectorized)
+                    np.add.at(col_counts, mz_indices, 1)
+                    total_nnz += nnz
+
+                    # Accumulate for average spectrum (vectorized)
                     np.add.at(total_intensity, mz_indices, resampled_ints)
+
+                    # TIC
+                    if 0 <= y < n_y and 0 <= x < n_x:
+                        tic_values[y, x] = resampled_ints.sum()
 
                 pixel_count += 1
                 pbar.update(1)
 
-        logging.info(f"Pass 1 complete: {total_nnz:,} total non-zeros")
-
-        # Build indptr from nnz counts
-        indptr = np.zeros(n_rows + 1, dtype=np.int64)
-        indptr[1:] = np.cumsum(nnz_per_row)
-        del nnz_per_row
-        gc.collect()
-
-        # ========== Create placeholder SpatialData structure ==========
-        logging.info("Creating output structure...")
-
-        # Create empty placeholder CSR (correct shape, zero nnz)
-        placeholder_csr = sparse.csr_matrix((n_rows, n_cols), dtype=np.float64)
-
-        # Create coordinate dataframe
-        coords_df = self._create_coordinates_dataframe_for_slice(0)
-
-        # Create var dataframe
-        var_df = self._create_mass_dataframe()
-
-        # Create placeholder AnnData
-        adata = AnnData(
-            X=placeholder_csr,
-            obs=coords_df,
-            var=var_df,
-        )
-
-        # Calculate and add average spectrum to .uns
+        # Compute average spectrum
         avg_spectrum = total_intensity / max(pixel_count, 1)
-        adata.uns["average_spectrum"] = avg_spectrum
 
-        # Add MSI metadata
-        self._add_metadata_to_uns(adata)
-
-        # Add region and instance_key columns
-        if "region" not in adata.obs.columns:
-            adata.obs["region"] = region_key
-        adata.obs["instance_key"] = adata.obs.index.astype(str)
-
-        # Create table model
-        table = TableModel.parse(
-            adata,
-            region=region_key,
-            region_key="region",
-            instance_key="instance_key",
+        logging.info(
+            f"  Pre-scan complete: {total_nnz:,} entries across {n_cols:,} columns"
         )
 
-        # Create pixel shapes
-        shapes = {region_key: self._create_pixel_shapes(adata, is_3d=False)}
+        return {
+            "col_counts": col_counts,
+            "total_nnz": total_nnz,
+            "tic_values": tic_values,
+            "avg_spectrum": avg_spectrum,
+            "pixel_count": pixel_count,
+        }
 
-        # Create TIC image
-        tic_values_with_channel = tic_values.reshape(1, n_y, n_x)
-        tic_image = xr.DataArray(
-            tic_values_with_channel,
-            dims=("c", "y", "x"),
-            coords={
-                "c": [0],
-                "y": np.arange(n_y) * self.pixel_size_um,
-                "x": np.arange(n_x) * self.pixel_size_um,
-            },
-        )
-        transform = Identity()
-        tic_model = Image2DModel.parse(
-            tic_image,
-            transformations={
-                slice_id: transform,
-                "global": transform,
-            },
-        )
+    def _scatter_spectra_direct(
+        self,
+        mm_indices: np.memmap,
+        mm_data: np.memmap,
+        indptr: NDArray[np.int64],
+        n_x: int,
+        pixel_count: int,
+    ) -> None:
+        """Process spectra and scatter directly to CSC arrays.
 
-        images = {f"{slice_id}_tic": tic_model}
+        This is the main pass that processes spectra again (same resampling
+        as pre-scan) and scatters values directly to their CSC positions.
 
-        # Create SpatialData with placeholder X
-        from spatialdata import SpatialData
+        Args:
+            mm_indices: Memory-mapped array for row indices
+            mm_data: Memory-mapped array for values
+            indptr: Column pointers array (from pre-scan)
+            n_x: Number of columns in spatial grid
+            pixel_count: Number of spectra to process
+        """
+        # Current write position for each column
+        write_pos = indptr[:-1].copy()
 
-        sdata = SpatialData(
-            tables={slice_id: table},
-            shapes=shapes,
-            images=images,
-        )
-
-        # Add metadata
-        self.add_metadata(sdata)
-
-        # Write to disk (this creates the full structure with empty X)
-        if self.output_path.exists():
-            shutil.rmtree(self.output_path)
-        sdata.write(str(self.output_path))
-        logging.info(f"Created output structure at {self.output_path}")
-
-        # Free memory from placeholder structures
-        del sdata, table, adata, placeholder_csr
-        gc.collect()
-
-        # ========== Overwrite X arrays directly ==========
-        logging.info("Setting up X arrays for streaming write...")
-
-        # Open output Zarr WITHOUT consolidated metadata to allow modifications
-        # SpatialData writes zarr v3 with consolidated metadata, but we need
-        # to modify arrays which requires bypassing the consolidated metadata
-        store = zarr.open_group(
-            str(self.output_path),
-            mode="r+",
-            use_consolidated=False,  # Important: bypass consolidated metadata
-        )
-        X_group = store[f"tables/{slice_id}/X"]
-
-        # Get original dtypes from placeholder (scipy uses int32 for indices)
-        orig_indptr_dtype = X_group["indptr"].dtype
-        orig_indices_dtype = X_group["indices"].dtype
-        orig_data_dtype = X_group["data"].dtype
-        logging.debug(
-            f"Original dtypes: indptr={orig_indptr_dtype}, "
-            f"indices={orig_indices_dtype}, data={orig_data_dtype}"
-        )
-
-        # Overwrite indptr with our computed values (matching original dtype)
-        del X_group["indptr"]
-        X_group.create_array("indptr", data=indptr.astype(orig_indptr_dtype))
-
-        # Delete empty arrays and create correctly-sized ones
-        del X_group["indices"]
-        del X_group["data"]
-
-        chunk_size_zarr = min(total_nnz, 1000000) if total_nnz > 0 else 1
-        indices_arr = X_group.create_array(
-            "indices",
-            shape=(max(total_nnz, 1),),
-            dtype=orig_indices_dtype,
-            chunks=(chunk_size_zarr,),
-        )
-        data_arr = X_group.create_array(
-            "data",
-            shape=(max(total_nnz, 1),),
-            dtype=orig_data_dtype,
-            chunks=(chunk_size_zarr,),
-        )
-
-        # Update shape attribute
-        X_group.attrs["shape"] = [n_rows, n_cols]
-
-        # ========== PASS 2: Stream-write data directly to output ==========
-        logging.info("Pass 2: Writing data directly to output Zarr...")
+        # Periodic flush to reduce memory pressure
+        flush_interval = 100_000
+        spectra_since_flush = 0
 
         # Reset reader for second pass
-        reader_path = self.reader.data_path
-        self.reader.close()
-        self.reader = type(self.reader)(reader_path)
+        # For real readers (ImzML, Bruker), iter_spectra() is a generator factory
+        # that creates a fresh iterator each time - no need to recreate the reader.
+        # For mock readers with random data, we need to reset the random seed.
+        if hasattr(self.reader, "reset"):
+            self.reader.reset()
+
         setattr(self.reader, "_quiet_mode", True)
 
-        # Process in chunks to batch Zarr writes
-        chunk_indices: list = []
-        chunk_data: list = []
-        chunk_start_pos = 0
-        spectra_in_chunk = 0
-
         with tqdm(
-            total=total_spectra,
-            desc="Pass 2: Writing",
+            total=pixel_count,
+            desc="Scatter to CSC",
             unit="spectrum",
         ) as pbar:
             for coords, mzs, intensities in self.reader.iter_spectra(
                 batch_size=self._buffer_size
             ):
-                # Resample spectrum
+                x, y, z = coords
+
+                # Process spectrum (deterministic - same result as pre-scan)
                 mz_indices, resampled_ints = self._process_spectrum(mzs, intensities)
 
                 if len(mz_indices) > 0:
-                    # Use original dtypes from placeholder (scipy uses int32)
-                    chunk_indices.append(mz_indices.astype(orig_indices_dtype))
-                    chunk_data.append(resampled_ints.astype(orig_data_dtype))
+                    # Compute row index (row-major order)
+                    row_idx = y * n_x + x
 
-                spectra_in_chunk += 1
+                    # Vectorized scatter
+                    destinations = write_pos[mz_indices]
+                    mm_indices[destinations] = row_idx
+                    mm_data[destinations] = resampled_ints.astype(np.float32)
 
-                # Write chunk when full
-                if spectra_in_chunk >= self._chunk_size:
-                    if chunk_indices:
-                        all_indices = np.concatenate(chunk_indices)
-                        all_data = np.concatenate(chunk_data)
-
-                        end_pos = chunk_start_pos + len(all_indices)
-                        indices_arr[chunk_start_pos:end_pos] = all_indices
-                        data_arr[chunk_start_pos:end_pos] = all_data
-
-                        chunk_start_pos = end_pos
-                        del all_indices, all_data
-
-                    chunk_indices = []
-                    chunk_data = []
-                    spectra_in_chunk = 0
-                    gc.collect()
+                    # Increment write positions
+                    write_pos[mz_indices] += 1
 
                 pbar.update(1)
+                spectra_since_flush += 1
 
-        # Write final chunk
-        if chunk_indices:
-            all_indices = np.concatenate(chunk_indices)
-            all_data = np.concatenate(chunk_data)
+                # Periodic flush
+                if spectra_since_flush >= flush_interval:
+                    mm_indices.flush()
+                    mm_data.flush()
+                    spectra_since_flush = 0
 
-            end_pos = chunk_start_pos + len(all_indices)
-            indices_arr[chunk_start_pos:end_pos] = all_indices
-            data_arr[chunk_start_pos:end_pos] = all_data
+        # Final flush
+        mm_indices.flush()
+        mm_data.flush()
 
-        logging.info(f"Pass 2 complete: {total_nnz:,} non-zeros written")
+        logging.info("  Scatter complete, memmap flushed")
 
-        return {
-            "total_nnz": total_nnz,
-            "n_rows": n_rows,
-            "n_cols": n_cols,
-            "pixel_count": pixel_count,
-        }
+    def _allocate_csc_memmap_arrays(
+        self, total_nnz: int, temp_dir: Path
+    ) -> Tuple[np.memmap, np.memmap]:
+        """Allocate memory-mapped files for CSC indices and data arrays.
 
-    def _stream_write_direct_zarr(self) -> Dict[str, Any]:
-        """Single-pass direct Zarr construction - no SpatialData intermediate.
+        Uses numpy memmap so the OS handles memory management via virtual memory.
+        This keeps RAM usage minimal regardless of array size.
 
-        This method constructs the SpatialData-compatible Zarr store directly
-        without ever using SpatialData.write() or creating scipy matrices.
-
-        Approach:
-        1. Create Zarr directory structure with proper attributes
-        2. Stream through spectra once, building indptr incrementally
-        3. Write indices/data directly as we go
-        4. Consolidate metadata at the end
+        Args:
+            total_nnz: Total number of non-zero entries
+            temp_dir: Directory for temporary files
 
         Returns:
-            Dictionary with conversion statistics
+            Tuple of (mm_indices, mm_data) memory-mapped arrays
+        """
+        # Ensure at least 1 element for empty datasets
+        size = max(total_nnz, 1)
+
+        # CSC indices (row indices for each non-zero) - int32 sufficient for rows
+        mm_indices = np.memmap(
+            temp_dir / "csc_indices.bin",
+            dtype=np.int32,
+            mode="w+",
+            shape=(size,),
+        )
+
+        # CSC data (values for each non-zero)
+        mm_data = np.memmap(
+            temp_dir / "csc_data.bin",
+            dtype=np.float32,
+            mode="w+",
+            shape=(size,),
+        )
+
+        logging.info(
+            f"  Allocated memmap: {size * 4 / (1024**3):.2f} GB indices + "
+            f"{size * 4 / (1024**3):.2f} GB data"
+        )
+
+        return mm_indices, mm_data
+
+    def _write_csc_arrays_to_zarr(
+        self,
+        mm_indices: np.memmap,
+        mm_data: np.memmap,
+        indptr: NDArray[np.int64],
+        n_rows: int,
+        n_cols: int,
+        total_nnz: int,
+        tic_values: NDArray[np.float64],
+        avg_spectrum: NDArray[np.float64],
+        pixel_count: int,
+    ) -> None:
+        """Write CSC arrays to Zarr store with SpatialData-compatible structure.
+
+        Creates the complete Zarr directory structure including:
+        - CSC sparse matrix (indptr, indices, data)
+        - Observation metadata (coordinates, region keys)
+        - Variable metadata (m/z values)
+        - Essential metadata and average spectrum
+
+        Reads from memmap sequentially and writes in aligned chunks for efficiency.
+
+        Args:
+            mm_indices: Memory-mapped CSC indices array.
+            mm_data: Memory-mapped CSC data array.
+            indptr: Column pointers for CSC format.
+            n_rows: Number of rows in the matrix.
+            n_cols: Number of columns in the matrix.
+            total_nnz: Total non-zero count.
+            tic_values: TIC image array.
+            avg_spectrum: Average spectrum.
+            pixel_count: Number of non-empty pixels.
         """
         from datetime import datetime
 
-        if self._dimensions is None:
-            raise ValueError("Dimensions not initialized")
-        if self._common_mass_axis is None:
-            raise ValueError("Common mass axis not initialized")
+        from ... import __version__
 
-        n_x, n_y, n_z = self._dimensions
-        n_rows = n_x * n_y * n_z
-        n_cols = len(self._common_mass_axis)
         slice_id = f"{self.dataset_id}_z0"
         region_key = f"{slice_id}_pixels"
-
-        logging.info(f"Direct Zarr streaming: {n_rows:,} pixels x {n_cols:,} cols")
+        n_x, n_y, n_z = self._dimensions
 
         # Clean output directory
         if self.output_path.exists():
             shutil.rmtree(self.output_path)
 
-        # ========== Create Zarr store structure ==========
-        logging.info("Creating Zarr structure...")
+        # Create Zarr store
         store = zarr.open_group(str(self.output_path), mode="w")
 
-        # Root attributes (SpatialData metadata)
+        # Root attributes
         store.attrs["spatialdata_attrs"] = {
             "version": "0.2",
             "spatialdata_software_version": "0.6.1",
@@ -937,14 +1055,13 @@ class StreamingSpatialDataConverter(BaseSpatialDataConverter):
         store.attrs["pixel_size_y_um"] = float(self.pixel_size_um)
         store.attrs["pixel_size_units"] = "micrometers"
         store.attrs["coordinate_system"] = "physical_micrometers"
-        store.attrs["msi_converter_version"] = "1.9.0"
+        store.attrs["msi_converter_version"] = __version__
         store.attrs["conversion_timestamp"] = datetime.now().isoformat()
 
-        # ========== Create table structure ==========
+        # Create table structure
         tables_group = store.create_group("tables")
         table_group = tables_group.create_group(slice_id)
 
-        # Table attributes
         table_group.attrs["encoding-type"] = "anndata"
         table_group.attrs["encoding-version"] = "0.1.0"
         table_group.attrs["spatialdata-encoding-type"] = "ngff:regions_table"
@@ -953,49 +1070,61 @@ class StreamingSpatialDataConverter(BaseSpatialDataConverter):
         table_group.attrs["instance_key"] = "instance_key"
         table_group.attrs["version"] = "0.2"
 
-        # Create empty groups required by AnnData
+        # Empty groups required by AnnData
         for group_name in ["layers", "obsm", "obsp", "varm", "varp"]:
             g = table_group.create_group(group_name)
             g.attrs["encoding-type"] = "dict"
             g.attrs["encoding-version"] = "0.1.0"
 
-        # Create 'raw' array (AnnData uses this)
         table_group.create_array("raw", data=np.array(False))
 
-        # ========== Create X group (CSR matrix) ==========
+        # X group (CSC matrix)
         X_group = table_group.create_group("X")
-        X_group.attrs["encoding-type"] = "csr_matrix"
+        X_group.attrs["encoding-type"] = "csc_matrix"
         X_group.attrs["encoding-version"] = "0.1.0"
         X_group.attrs["shape"] = [n_rows, n_cols]
 
-        # Pre-allocate indptr (we know its exact size)
-        indptr_arr = X_group.create_array(
+        # Write indptr (small, do it directly) - use int64
+        X_group.create_array(
             "indptr",
-            shape=(n_rows + 1,),
-            dtype=np.int32,
-            chunks=(min(n_rows + 1, 100000),),
+            data=indptr.astype(np.int64),
+            chunks=(min(len(indptr), 100_000),),
         )
 
-        # Estimate total nnz for initial allocation
-        # Use a reasonable estimate based on typical MSI data
-        estimated_nnz = n_rows * 500  # Assume ~500 peaks per spectrum on average
+        # Zarr chunk settings
+        z_chunk = 1_000_000
+        actual_nnz = max(total_nnz, 1)
 
-        # Create resizable arrays for indices and data
-        chunk_size_zarr = min(estimated_nnz, 1000000)
         indices_arr = X_group.create_array(
             "indices",
-            shape=(estimated_nnz,),
+            shape=(actual_nnz,),
             dtype=np.int32,
-            chunks=(chunk_size_zarr,),
+            chunks=(min(actual_nnz, z_chunk),),
         )
         data_arr = X_group.create_array(
             "data",
-            shape=(estimated_nnz,),
-            dtype=np.float64,
-            chunks=(chunk_size_zarr,),
+            shape=(actual_nnz,),
+            dtype=np.float32,
+            chunks=(min(actual_nnz, z_chunk),),
         )
 
-        # ========== Create obs (coordinates) ==========
+        # Sequential transfer from memmap to Zarr (aligned to chunks)
+        read_buffer_size = z_chunk * 50  # ~200 MB buffer
+
+        with tqdm(
+            total=total_nnz,
+            desc="Step 4/4: Writing to Zarr",
+            unit="entries",
+            unit_scale=True,
+        ) as pbar:
+            for start in range(0, total_nnz, read_buffer_size):
+                end = min(start + read_buffer_size, total_nnz)
+                indices_arr[start:end] = mm_indices[start:end]
+                data_arr[start:end] = mm_data[start:end]
+                pbar.update(end - start)
+
+        # obs (coordinates)
+        str_dtype = np.dtypes.StringDType()
         obs_group = table_group.create_group("obs")
         obs_group.attrs["encoding-type"] = "dataframe"
         obs_group.attrs["encoding-version"] = "0.2.0"
@@ -1009,11 +1138,8 @@ class StreamingSpatialDataConverter(BaseSpatialDataConverter):
             "instance_key",
         ]
 
-        # Pre-compute coordinate arrays
         y_values = np.repeat(np.arange(n_y, dtype=np.int32), n_x)
         x_values = np.tile(np.arange(n_x, dtype=np.int32), n_y)
-        # Use numpy StringDType for proper Zarr 3.x string handling
-        str_dtype = np.dtypes.StringDType()
         instance_ids = np.array([str(i) for i in range(n_rows)], dtype=str_dtype)
         spatial_x = x_values.astype(np.float64) * self.pixel_size_um
         spatial_y = y_values.astype(np.float64) * self.pixel_size_um
@@ -1035,7 +1161,7 @@ class StreamingSpatialDataConverter(BaseSpatialDataConverter):
         )
         region_group.create_array("codes", data=np.zeros(n_rows, dtype=np.int8))
 
-        # ========== Create var (mass axis) ==========
+        # var (mass axis)
         var_group = table_group.create_group("var")
         var_group.attrs["encoding-type"] = "dataframe"
         var_group.attrs["encoding-version"] = "0.2.0"
@@ -1047,12 +1173,11 @@ class StreamingSpatialDataConverter(BaseSpatialDataConverter):
         var_group.create_array("_index", data=mz_index)
         var_group.create_array("mz", data=mz_values)
 
-        # ========== Create uns (metadata) ==========
+        # uns (metadata)
         uns_group = table_group.create_group("uns")
         uns_group.attrs["encoding-type"] = "dict"
         uns_group.attrs["encoding-version"] = "0.1.0"
 
-        # spatialdata_attrs in uns
         sd_attrs = uns_group.create_group("spatialdata_attrs")
         sd_attrs.attrs["encoding-type"] = "dict"
         sd_attrs.attrs["encoding-version"] = "0.1.0"
@@ -1062,7 +1187,6 @@ class StreamingSpatialDataConverter(BaseSpatialDataConverter):
             "instance_key", data=np.array("instance_key", dtype=str_dtype)
         )
 
-        # essential_metadata
         em_group = uns_group.create_group("essential_metadata")
         em_group.attrs["encoding-type"] = "dict"
         em_group.attrs["encoding-version"] = "0.1.0"
@@ -1071,149 +1195,228 @@ class StreamingSpatialDataConverter(BaseSpatialDataConverter):
             "mass_range", data=np.array([mz_values.min(), mz_values.max()])
         )
         em_group.create_array(
-            "source_path", data=np.array(str(self.reader.data_path), dtype=str_dtype)
+            "source_path",
+            data=np.array(str(self.reader.data_path), dtype=str_dtype),
         )
         em_group.create_array(
             "spectrum_type", data=np.array("processed", dtype=str_dtype)
         )
 
-        # ========== SINGLE PASS: Stream and write data ==========
-        logging.info("Streaming data (single pass)...")
-
-        setattr(self.reader, "_quiet_mode", True)
-        total_spectra = self._get_total_spectra_count()
-
-        # Track TIC and total intensity
-        tic_values = np.zeros((n_y, n_x), dtype=np.float64)
-        total_intensity = np.zeros(n_cols, dtype=np.float64)
-
-        # Streaming state
-        current_position = 0
-        indptr_buffer = np.zeros(n_rows + 1, dtype=np.int32)
-        pixel_count = 0
-
-        # Buffers for batched writes
-        buffer_indices: list = []
-        buffer_data: list = []
-        buffer_size = 0
-        max_buffer_size = 500000  # Flush every ~500k values
-
-        with tqdm(
-            total=total_spectra,
-            desc="Streaming",
-            unit="spectrum",
-        ) as pbar:
-            for coords, mzs, intensities in self.reader.iter_spectra(
-                batch_size=self._buffer_size
-            ):
-                x, y, z = coords
-                pixel_idx = z * (n_x * n_y) + y * n_x + x
-
-                # Process spectrum
-                mz_indices, resampled_ints = self._process_spectrum(mzs, intensities)
-                nnz = len(mz_indices)
-
-                # Update TIC
-                if nnz > 0:
-                    tic_value = float(np.sum(resampled_ints))
-                    if 0 <= y < n_y and 0 <= x < n_x:
-                        tic_values[y, x] = tic_value
-
-                    # Accumulate for average spectrum
-                    np.add.at(total_intensity, mz_indices, resampled_ints)
-
-                    # Add to buffer
-                    buffer_indices.append(mz_indices.astype(np.int32))
-                    buffer_data.append(resampled_ints.astype(np.float64))
-                    buffer_size += nnz
-
-                # Update indptr (row pointer)
-                current_position += nnz
-                indptr_buffer[pixel_idx + 1] = current_position
-
-                pixel_count += 1
-
-                # Flush buffer if large enough
-                if buffer_size >= max_buffer_size:
-                    if buffer_indices:
-                        all_indices = np.concatenate(buffer_indices)
-                        all_data = np.concatenate(buffer_data)
-
-                        start_pos = current_position - buffer_size
-                        end_pos = current_position
-
-                        # Resize arrays if needed
-                        if end_pos > indices_arr.shape[0]:
-                            new_size = max(end_pos * 2, indices_arr.shape[0] * 2)
-                            indices_arr.resize((new_size,))
-                            data_arr.resize((new_size,))
-
-                        indices_arr[start_pos:end_pos] = all_indices
-                        data_arr[start_pos:end_pos] = all_data
-
-                        del all_indices, all_data
-
-                    buffer_indices = []
-                    buffer_data = []
-                    buffer_size = 0
-
-                pbar.update(1)
-
-        # Flush remaining buffer
-        if buffer_indices:
-            all_indices = np.concatenate(buffer_indices)
-            all_data = np.concatenate(buffer_data)
-
-            start_pos = current_position - buffer_size
-            end_pos = current_position
-
-            if end_pos > indices_arr.shape[0]:
-                indices_arr.resize((end_pos,))
-                data_arr.resize((end_pos,))
-
-            indices_arr[start_pos:end_pos] = all_indices
-            data_arr[start_pos:end_pos] = all_data
-
-        total_nnz = current_position
-
-        # Resize arrays to final size
-        if total_nnz != indices_arr.shape[0]:
-            indices_arr.resize((max(total_nnz, 1),))
-            data_arr.resize((max(total_nnz, 1),))
-
-        # Forward-fill indptr for empty pixels
-        # CSR format requires indptr to be monotonically non-decreasing.
-        # Empty pixels (not visited during iteration) have indptr=0, but should
-        # inherit the value from the previous pixel (meaning 0 non-zeros for that row).
-        # Use numpy's maximum.accumulate for efficient forward-fill.
-        np.maximum.accumulate(indptr_buffer, out=indptr_buffer)
-
-        # Write indptr
-        indptr_arr[:] = indptr_buffer
-
-        # Update X shape attribute
-        X_group.attrs["shape"] = [n_rows, n_cols]
-
-        logging.info(f"Streaming complete: {total_nnz:,} non-zeros")
-
-        # ========== Add average spectrum ==========
-        avg_spectrum = total_intensity / max(pixel_count, 1)
         uns_group.create_array("average_spectrum", data=avg_spectrum)
 
-        # Skip images and shapes for now - can be added lazily later
-        # Create empty groups so SpatialData doesn't complain
+        # Create empty images and shapes groups (will be populated below)
         store.create_group("images")
         store.create_group("shapes")
 
-        # ========== Consolidate metadata ==========
-        logging.info("Consolidating metadata...")
+        # Consolidate metadata before adding images/shapes
+        logging.info("  Consolidating metadata...")
         zarr.consolidate_metadata(str(self.output_path))
 
-        logging.info(f"Direct Zarr write complete: {self.output_path}")
+        # Add TIC image and pixel shapes using SpatialData
+        logging.info("  Adding TIC image and pixel shapes...")
+        self._add_tic_image_and_shapes_to_store(
+            tic_values, n_rows, n_x, n_y, slice_id, region_key
+        )
 
-        return {
-            "total_nnz": total_nnz,
-            "n_rows": n_rows,
-            "n_cols": n_cols,
-            "pixel_count": pixel_count,
-        }
+    def _add_tic_image_and_shapes_to_store(
+        self,
+        tic_values: NDArray[np.float64],
+        n_rows: int,
+        n_x: int,
+        n_y: int,
+        slice_id: str,
+        region_key: str,
+    ) -> None:
+        """Add TIC image and pixel shapes to the Zarr store using SpatialData.
+
+        This method is called after the main table has been written to Zarr.
+        It uses SpatialData's models to create properly formatted images and
+        shapes, then writes them to the existing store.
+
+        Args:
+            tic_values: 2D array of TIC values (n_y, n_x).
+            n_rows: Total number of pixels.
+            n_x: Number of pixels in x dimension.
+            n_y: Number of pixels in y dimension.
+            slice_id: Identifier for this slice (e.g., "msi_dataset_z0").
+            region_key: Region key for shapes (e.g., "msi_dataset_z0_pixels").
+        """
+        if not SPATIALDATA_AVAILABLE:
+            logging.warning("SpatialData not available, skipping TIC image and shapes")
+            return
+
+        # === Create TIC Image ===
+        y_size, x_size = tic_values.shape
+
+        # Add channel dimension (c, y, x) as required by SpatialData
+        tic_values_3d = tic_values.reshape(1, y_size, x_size)
+
+        tic_xarray = xr.DataArray(
+            tic_values_3d,
+            dims=("c", "y", "x"),
+            coords={
+                "c": [0],
+                "y": np.arange(y_size) * self.pixel_size_um,
+                "x": np.arange(x_size) * self.pixel_size_um,
+            },
+        )
+
+        transform = Identity()
+        tic_image = Image2DModel.parse(
+            tic_xarray,
+            transformations={
+                slice_id: transform,
+                "global": transform,
+            },
+        )
+
+        # === Create Pixel Shapes ===
+        # Generate box geometries for each pixel in physical coordinates
+        # Vectorized approach for better performance with large datasets
+        half_pixel = self.pixel_size_um / 2
+
+        # Create coordinate arrays (row-major order: y slowest, x fastest)
+        y_indices = np.repeat(np.arange(n_y), n_x)
+        x_indices = np.tile(np.arange(n_x), n_y)
+
+        # Convert to physical coordinates
+        spatial_x = x_indices * self.pixel_size_um
+        spatial_y = y_indices * self.pixel_size_um
+
+        # Create boxes using shapely's vectorized constructor
+        from shapely import box as shapely_box_vectorized
+
+        geometries = shapely_box_vectorized(
+            spatial_x - half_pixel,
+            spatial_y - half_pixel,
+            spatial_x + half_pixel,
+            spatial_y + half_pixel,
+        )
+
+        # Create GeoDataFrame with string indices matching obs
+        instance_ids = [str(i) for i in range(n_rows)]
+        gdf = gpd.GeoDataFrame(geometry=geometries, index=instance_ids)
+
+        shapes = ShapesModel.parse(
+            gdf,
+            transformations={
+                self.dataset_id: transform,
+                "global": transform,
+            },
+        )
+
+        # === Write to existing store using SpatialData ===
+        # Open the store and add elements
+        try:
+            # Suppress expected warning about table annotating shapes that don't exist yet.
+            # The shapes are created and written immediately after this read.
+            import warnings
+
+            with warnings.catch_warnings():
+                warnings.filterwarnings(
+                    "ignore",
+                    message="The table is annotating.*which is not present",
+                    category=UserWarning,
+                )
+                sdata = SpatialData.read(str(self.output_path))
+
+            # Add TIC image
+            tic_name = f"{slice_id}_tic"
+            sdata.images[tic_name] = tic_image
+
+            # Add shapes
+            sdata.shapes[region_key] = shapes
+
+            # Write elements to disk
+            sdata.write_element(tic_name, overwrite=True)
+            sdata.write_element(region_key, overwrite=True)
+
+            logging.info(
+                f"  Added TIC image '{tic_name}' ({x_size}x{y_size}) and "
+                f"{n_rows:,} pixel shapes"
+            )
+
+            # Add optical images if available
+            self._add_optical_images_to_sdata(sdata, slice_id)
+
+        except Exception as e:
+            logging.warning(f"Failed to add TIC image and shapes: {e}")
+            import traceback
+
+            logging.debug(f"Traceback:\n{traceback.format_exc()}")
+
+    def _add_optical_images_to_sdata(self, sdata: "SpatialData", slice_id: str) -> None:
+        """Add optical images directly to SpatialData store.
+
+        Args:
+            sdata: SpatialData object to add images to
+            slice_id: Slice identifier for transformations
+        """
+        if not self._include_optical:
+            return
+
+        optical_paths = self.reader.get_optical_image_paths()
+        if not optical_paths:
+            logging.debug("No optical images found")
+            return
+
+        import tifffile
+
+        logging.info(f"  Adding {len(optical_paths)} optical image(s)...")
+
+        for tiff_path in optical_paths:
+            try:
+                # Generate image name
+                stem = tiff_path.stem.replace(" ", "_").replace("-", "_")
+                image_name = f"{self.dataset_id}_optical_{stem}"
+
+                logging.info(f"    Loading: {tiff_path.name} as '{image_name}'")
+
+                # Read TIFF
+                with tifffile.TiffFile(tiff_path) as tif:
+                    img_data = tif.pages[0].asarray()
+
+                    # Convert to (c, y, x) format
+                    if img_data.ndim == 2:
+                        img_data = img_data[np.newaxis, :, :]
+                    elif img_data.ndim == 3:
+                        img_data = np.moveaxis(img_data, -1, 0)
+                    else:
+                        logging.warning(
+                            f"Unexpected dimensions {img_data.ndim} for {tiff_path.name}"
+                        )
+                        continue
+
+                    n_channels, y_size, x_size = img_data.shape
+
+                    # Create xarray DataArray
+                    optical_xarray = xr.DataArray(
+                        img_data,
+                        dims=("c", "y", "x"),
+                        coords={
+                            "c": list(range(n_channels)),
+                            "y": np.arange(y_size),
+                            "x": np.arange(x_size),
+                        },
+                    )
+
+                    # Create Image2DModel
+                    transform = Identity()
+                    optical_image = Image2DModel.parse(
+                        optical_xarray,
+                        transformations={
+                            slice_id: transform,
+                            "global": transform,
+                        },
+                    )
+
+                    # Add to SpatialData and write
+                    sdata.images[image_name] = optical_image
+                    sdata.write_element(image_name, overwrite=True)
+
+                    logging.info(
+                        f"    Added optical image ({x_size}x{y_size}, {n_channels}ch)"
+                    )
+
+            except Exception as e:
+                logging.warning(f"Failed to load optical image {tiff_path.name}: {e}")

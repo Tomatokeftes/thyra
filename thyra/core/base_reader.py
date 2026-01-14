@@ -90,6 +90,24 @@ class BaseMSIReader(ABC):
         """
         pass
 
+    def get_peak_counts_per_pixel(self) -> Optional[NDArray[np.int32]]:
+        """Get per-pixel peak counts for CSR indptr construction.
+
+        This method enables optimized streaming conversion by providing
+        pre-computed peak counts, avoiding the need for a separate counting pass.
+
+        Returns:
+            Array of size n_pixels where arr[pixel_idx] = peak_count.
+            pixel_idx = z * (n_x * n_y) + y * n_x + x
+            Returns None if not supported/available for this reader.
+
+        Note:
+            Override in subclass to enable optimized streaming conversion.
+            The default implementation returns None, which causes the
+            streaming converter to fall back to a two-pass approach.
+        """
+        return None
+
     @staticmethod
     def map_mz_to_common_axis(
         mzs: NDArray[np.float64],
@@ -126,6 +144,17 @@ class BaseMSIReader(ABC):
 
         # Return only the valid indices and their corresponding intensities
         return indices[indices_valid], intensities[indices_valid]
+
+    def reset(self) -> None:
+        """Reset the reader to allow iterating from the beginning again.
+
+        This method should reset any internal state so that iter_spectra()
+        can be called again to iterate from the first spectrum.
+
+        Default implementation does nothing (assumes reader state is stateless).
+        Subclasses should override if they maintain iteration state.
+        """
+        pass
 
     @abstractmethod
     def close(self) -> None:

@@ -2,23 +2,38 @@
 from dataclasses import dataclass
 from typing import Any, Dict, Optional, Tuple
 
+import numpy as np
+from numpy.typing import NDArray
+
 
 @dataclass(frozen=True)
 class EssentialMetadata:
     """Critical metadata for processing decisions and interpolation setup."""
 
-    dimensions: Tuple[int, int, int]  # (x, y, z) grid dimensions
-    coordinate_bounds: Tuple[float, float, float, float]  # min_x, max_x, min_y, max_y
-    mass_range: Tuple[float, float]  # (min_mass, max_mass)
-    pixel_size: Optional[Tuple[float, float]]  # (x_size, y_size) in micrometers
-    n_spectra: int  # Total number of spectra
-    total_peaks: int  # Total number of peaks across all spectra (for COO allocation)
-    estimated_memory_gb: float  # Memory usage estimate
-    source_path: str  # Path to source data
+    # (x, y, z) grid dimensions
+    dimensions: Tuple[int, int, int]
+    # min_x, max_x, min_y, max_y
+    coordinate_bounds: Tuple[float, float, float, float]
+    # (min_mass, max_mass)
+    mass_range: Tuple[float, float]
+    # (x_size, y_size) in micrometers
+    pixel_size: Optional[Tuple[float, float]]
+    # Total number of spectra
+    n_spectra: int
+    # Total number of peaks across all spectra (for COO allocation)
+    total_peaks: int
+    # Memory usage estimate
+    estimated_memory_gb: float
+    # Path to source data
+    source_path: str
     # (x_offset, y_offset, z_offset) for raw coordinate normalization
     coordinate_offsets: Optional[Tuple[int, int, int]] = None
     # Spectrum type for resampling decisions (e.g., "centroid spectrum")
     spectrum_type: Optional[str] = None
+    # Per-pixel peak counts for CSR indptr construction (streaming converter)
+    # Array of size n_pixels where arr[pixel_idx] = peak_count
+    # pixel_idx = z * (n_x * n_y) + y * n_x + x
+    peak_counts_per_pixel: Optional[NDArray[np.int32]] = None
 
     @property
     def has_pixel_size(self) -> bool:

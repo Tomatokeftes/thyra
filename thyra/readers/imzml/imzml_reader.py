@@ -49,7 +49,9 @@ class ImzMLReader(BaseMSIReader):
 
         # Cached properties
         self._common_mass_axis: Optional[NDArray[np.float64]] = None
-        self._coordinates_cache: Dict[int, Tuple[int, int, int]] = {}
+        self._coordinates_array: Optional[NDArray[np.int32]] = (
+            None  # Fast numpy array cache
+        )
 
         # Store path but don't initialize parser yet - wait for first use
         if data_path is not None:
@@ -128,22 +130,28 @@ class ImzMLReader(BaseMSIReader):
         """Cache all coordinates for faster access.
 
         Converts 1-based coordinates from imzML to 0-based coordinates
-        for internal use.
+        for internal use. Uses vectorized numpy operations for speed.
+        Stores as numpy array for O(1) index lookup without dict overhead.
         """
         # Parser should already be initialized when this is called from
         # _initialize_parser
 
-        logging.info("Caching all coordinates for faster access")
-        self._coordinates_cache = {}
+        n_coords = len(self.parser.coordinates)  # type: ignore
+        logging.info(f"Caching {n_coords:,} coordinates...")
 
-        for idx, (x, y, z) in enumerate(self.parser.coordinates):  # type: ignore
-            self._coordinates_cache[idx] = (
-                x - 1,
-                y - 1,
-                z - 1 if z > 0 else 0,
-            )
+        # Vectorized conversion using numpy (much faster than Python loop)
+        # np.array() on the coordinates list is the main cost here
+        self._coordinates_array = np.array(
+            self.parser.coordinates, dtype=np.int32
+        )  # type: ignore
 
-        logging.info(f"Cached {len(self._coordinates_cache)} coordinates")
+        # Convert to 0-based in place (subtract 1, but z minimum is 0)
+        self._coordinates_array[:, :2] -= 1  # x and y
+        self._coordinates_array[:, 2] = np.maximum(
+            self._coordinates_array[:, 2] - 1, 0
+        )  # z
+
+        logging.info(f"Cached {n_coords:,} coordinates as numpy array")
 
     def _create_metadata_extractor(self) -> MetadataExtractor:
         """Create ImzML metadata extractor."""
@@ -253,9 +261,12 @@ class ImzMLReader(BaseMSIReader):
         self, parser: ImzMLParser, idx: int
     ) -> Tuple[int, int, int]:
         """Get 0-based coordinates for a spectrum."""
-        if idx in self._coordinates_cache:
-            return self._coordinates_cache[idx]
+        if self._coordinates_array is not None:
+            # Fast O(1) numpy array lookup
+            row = self._coordinates_array[idx]
+            return (int(row[0]), int(row[1]), int(row[2]))
 
+        # Fallback: compute on the fly
         x, y, z = parser.coordinates[idx]  # type: ignore
         return cast(
             Tuple[int, int, int],
@@ -487,3 +498,18 @@ class ImzMLReader(BaseMSIReader):
         # Get mass range from essential metadata
         essential_metadata = self.get_essential_metadata()
         return essential_metadata.mass_range
+
+    def get_peak_counts_per_pixel(self) -> Optional[NDArray[np.int32]]:
+        """Get per-pixel peak counts for CSR indptr construction.
+
+        Returns peak counts collected during metadata extraction.
+        This enables optimized streaming conversion without a separate
+        counting pass.
+
+        Returns:
+            Array of size n_pixels where arr[pixel_idx] = peak_count.
+            pixel_idx = z * (n_x * n_y) + y * n_x + x
+            Returns None if not available.
+        """
+        essential_metadata = self.get_essential_metadata()
+        return essential_metadata.peak_counts_per_pixel
