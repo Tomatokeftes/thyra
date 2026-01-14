@@ -1,12 +1,12 @@
 # thyra/converters/spatialdata/streaming_converter.py
 
-"""Streaming SpatialData converter with zero-copy direct Zarr write.
+"""Streaming SpatialData converter with direct Zarr write.
 
 This converter processes MSI data in a memory-efficient streaming manner:
-- Two-pass approach: count nnz per row, then write directly to Zarr
-- Zero-copy mode writes directly to final output (no scipy matrix in memory)
-- Memory stays bounded regardless of dataset size
-- Produces identical output to the standard SpatialData2DConverter
+- Two-pass approach: count non-zeros, then write directly to Zarr
+- Writes directly to final output without scipy matrix in memory
+- Memory stays bounded regardless of dataset size (~200MB for any size)
+- Supports both CSR (row-wise) and CSC (column-wise) sparse formats
 """
 
 import gc
@@ -38,18 +38,18 @@ class StreamingSpatialDataConverter(BaseSpatialDataConverter):
     """Memory-efficient streaming converter for MSI data to SpatialData format.
 
     Uses a two-pass approach to keep memory bounded during processing:
-    - Pass 1: Count non-zeros per row to build indptr
+    - Pass 1: Count non-zeros to build sparse matrix structure (indptr)
     - Pass 2: Write indices and data directly to Zarr
 
-    In zero_copy mode (default), writes directly to the final output without
-    ever loading the sparse matrix into scipy. This means memory usage stays
-    bounded regardless of dataset size - even for 1M+ pixels.
+    For large datasets (>50GB), uses CSC format with memory-mapped files
+    to handle datasets of any size with ~200MB RAM. For smaller datasets,
+    uses the simpler CSR approach.
 
     Key advantages:
-    - Memory stays bounded during processing regardless of dataset size
-    - Zero-copy mode: no scipy matrix created during conversion
-    - Handles sparse datasets where not all pixels have spectra
-    - Produces identical output to SpatialData2DConverter
+    - Memory stays bounded (~200MB) regardless of dataset size
+    - Writes directly to Zarr without scipy matrix in memory
+    - CSC format enables efficient ion image extraction
+    - Handles 1M+ pixels without memory issues
     """
 
     # Threshold in GB above which PCS (Pre-calculated Scatter) method is used
@@ -89,6 +89,10 @@ class StreamingSpatialDataConverter(BaseSpatialDataConverter):
         self._use_csc = use_csc
         self._zarr_store: Optional[zarr.Group] = None
         self._temp_path: Optional[Path] = None
+
+    def _suppress_reader_progress(self) -> None:
+        """Suppress progress output from reader during streaming passes."""
+        setattr(self.reader, "_quiet_mode", True)
 
     def _estimate_output_size_gb(self) -> float:
         """Estimate the output dataset size in GB.
@@ -251,7 +255,7 @@ class StreamingSpatialDataConverter(BaseSpatialDataConverter):
             f"Streaming CSR build (two-pass): {n_rows:,} pixels x {n_cols:,} cols"
         )
 
-        setattr(self.reader, "_quiet_mode", True)
+        self._suppress_reader_progress()
         total_spectra = self._get_total_spectra_count()
 
         # Pass 1: Count non-zeros and compute TIC/average spectrum
@@ -412,7 +416,7 @@ class StreamingSpatialDataConverter(BaseSpatialDataConverter):
 
         if hasattr(self.reader, "reset"):
             self.reader.reset()
-        setattr(self.reader, "_quiet_mode", True)
+        self._suppress_reader_progress()
 
         chunk_indices: list = []
         chunk_data: list = []
@@ -496,28 +500,25 @@ class StreamingSpatialDataConverter(BaseSpatialDataConverter):
             intensities: Intensity values
 
         Returns:
-            Tuple of (mz_indices, resampled_intensities)
+            Tuple of (mz_indices, resampled_intensities) with zeros filtered out
         """
-        if self._resampling_config:
-            if hasattr(self, "_resampling_method"):
-                from ...resampling import ResamplingMethod
-
-                if self._resampling_method == ResamplingMethod.NEAREST_NEIGHBOR:
-                    return self._nearest_neighbor_resample(mzs, intensities)
-                else:
-                    resampled_ints = self._resample_spectrum(mzs, intensities)
-                    mz_indices = np.arange(len(self._common_mass_axis))
-                    nonzero = resampled_ints != 0
-                    return mz_indices[nonzero], resampled_ints[nonzero]
-            else:
-                resampled_ints = self._resample_spectrum(mzs, intensities)
-                mz_indices = np.arange(len(self._common_mass_axis))
-                nonzero = resampled_ints != 0
-                return mz_indices[nonzero], resampled_ints[nonzero]
-        else:
-            # No resampling - use original indices
+        if not self._resampling_config:
+            # No resampling - map m/z values to indices directly
             mz_indices = self._map_mass_to_indices(mzs)
             return mz_indices, intensities
+
+        # Check for optimized nearest-neighbor path
+        if hasattr(self, "_resampling_method"):
+            from ...resampling import ResamplingMethod
+
+            if self._resampling_method == ResamplingMethod.NEAREST_NEIGHBOR:
+                return self._nearest_neighbor_resample(mzs, intensities)
+
+        # Fallback: general resampling with zero filtering
+        resampled_ints = self._resample_spectrum(mzs, intensities)
+        mz_indices = np.arange(len(self._common_mass_axis))
+        nonzero = resampled_ints != 0
+        return mz_indices[nonzero], resampled_ints[nonzero]
 
     def _create_data_structures_from_coo(
         self, coo_result: Dict[str, Any]
@@ -861,7 +862,7 @@ class StreamingSpatialDataConverter(BaseSpatialDataConverter):
         total_nnz = 0
         pixel_count = 0
 
-        setattr(self.reader, "_quiet_mode", True)
+        self._suppress_reader_progress()
         total_spectra = self._get_total_spectra_count()
 
         with tqdm(
@@ -942,7 +943,7 @@ class StreamingSpatialDataConverter(BaseSpatialDataConverter):
         if hasattr(self.reader, "reset"):
             self.reader.reset()
 
-        setattr(self.reader, "_quiet_mode", True)
+        self._suppress_reader_progress()
 
         with tqdm(
             total=pixel_count,
