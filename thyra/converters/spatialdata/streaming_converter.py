@@ -471,9 +471,7 @@ class StreamingSpatialDataConverter(BaseSpatialDataConverter):
         chunk_start_pos = 0
         spectra_in_chunk = 0
 
-        with tqdm(
-            total=total_spectra, desc="Pass 2: Writing", unit="spectrum"
-        ) as pbar:
+        with tqdm(total=total_spectra, desc="Pass 2: Writing", unit="spectrum") as pbar:
             for coords, mzs, intensities in self.reader.iter_spectra(
                 batch_size=self._buffer_size
             ):
@@ -487,7 +485,11 @@ class StreamingSpatialDataConverter(BaseSpatialDataConverter):
 
                 if spectra_in_chunk >= self._chunk_size:
                     chunk_start_pos = self._flush_chunk_to_zarr(
-                        chunk_indices, chunk_data, indices_arr, data_arr, chunk_start_pos
+                        chunk_indices,
+                        chunk_data,
+                        indices_arr,
+                        data_arr,
+                        chunk_start_pos,
                     )
                     chunk_indices = []
                     chunk_data = []
