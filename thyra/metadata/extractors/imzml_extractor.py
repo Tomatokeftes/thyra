@@ -132,57 +132,11 @@ class ImzMLMetadataExtractor(MetadataExtractor):
 
             coords = self.parser.coordinates
             n_spectra = len(coords)
-            min_mass = float("inf")
-            max_mass = float("-inf")
-            total_peaks = 0
+            peak_counts = self._init_peak_counts_array(dimensions)
 
-            # Initialize per-pixel peak counts if dimensions provided
-            peak_counts: Optional[NDArray[np.int32]] = None
-            if dimensions is not None:
-                n_x, n_y, n_z = dimensions
-                n_pixels = n_x * n_y * n_z
-                peak_counts = np.zeros(n_pixels, dtype=np.int32)
-                logger.info(f"Collecting per-pixel peak counts ({n_pixels:,} pixels)")
-
-            from tqdm import tqdm
-
-            with tqdm(
-                total=n_spectra,
-                desc="Scanning mass range and counting peaks",
-                unit="spectrum",
-            ) as pbar:
-                for idx in range(n_spectra):
-                    try:
-                        mzs, intensities = self.parser.getspectrum(idx)
-                        n_peaks = len(mzs)
-
-                        if n_peaks > 0:
-                            min_mass = min(min_mass, float(np.min(mzs)))
-                            max_mass = max(max_mass, float(np.max(mzs)))
-                            total_peaks += n_peaks
-
-                        # Store per-pixel count if tracking
-                        if peak_counts is not None and dimensions is not None:
-                            # ImzML coordinates are 1-based
-                            x, y, z = coords[idx]
-                            x, y, z = x - 1, y - 1, max(z - 1, 0)
-                            n_x, n_y, n_z = dimensions
-                            pixel_idx = z * (n_x * n_y) + y * n_x + x
-                            if 0 <= pixel_idx < len(peak_counts):
-                                peak_counts[pixel_idx] = n_peaks
-
-                        # Release references to help GC
-                        del mzs
-                        del intensities
-
-                        # Periodic GC to prevent pyimzML memory accumulation
-                        if idx % 50000 == 0 and idx > 0:
-                            gc.collect()
-
-                    except Exception as e:
-                        logger.debug(f"Failed to read spectrum {idx}: {e}")
-                        continue  # Skip problematic spectra
-                    pbar.update(1)
+            min_mass, max_mass, total_peaks = self._scan_all_spectra(
+                coords, n_spectra, dimensions, peak_counts
+            )
 
             if min_mass == float("inf"):
                 logger.warning("No valid spectra found")
@@ -195,6 +149,138 @@ class ImzMLMetadataExtractor(MetadataExtractor):
         except Exception as e:
             logger.error(f"Complete mass range scan failed: {e}")
             return ((0.0, 1000.0), 0, None)
+
+    def _init_peak_counts_array(
+        self, dimensions: Optional[Tuple[int, int, int]]
+    ) -> Optional[NDArray[np.int32]]:
+        """Initialize per-pixel peak counts array if dimensions provided.
+
+        Args:
+            dimensions: Optional (n_x, n_y, n_z) grid dimensions.
+
+        Returns:
+            Array of zeros or None if dimensions not provided.
+        """
+        if dimensions is None:
+            return None
+        n_x, n_y, n_z = dimensions
+        n_pixels = n_x * n_y * n_z
+        logger.info(f"Collecting per-pixel peak counts ({n_pixels:,} pixels)")
+        return np.zeros(n_pixels, dtype=np.int32)
+
+    def _scan_all_spectra(
+        self,
+        coords: List,
+        n_spectra: int,
+        dimensions: Optional[Tuple[int, int, int]],
+        peak_counts: Optional[NDArray[np.int32]],
+    ) -> Tuple[float, float, int]:
+        """Scan all spectra to find mass range and count peaks.
+
+        Args:
+            coords: List of spectrum coordinates.
+            n_spectra: Total number of spectra.
+            dimensions: Optional grid dimensions for pixel indexing.
+            peak_counts: Optional array to store per-pixel peak counts.
+
+        Returns:
+            Tuple of (min_mass, max_mass, total_peaks).
+        """
+        from tqdm import tqdm
+
+        min_mass = float("inf")
+        max_mass = float("-inf")
+        total_peaks = 0
+
+        with tqdm(
+            total=n_spectra,
+            desc="Scanning mass range and counting peaks",
+            unit="spectrum",
+        ) as pbar:
+            for idx in range(n_spectra):
+                result = self._process_spectrum_for_range(
+                    idx, coords, dimensions, peak_counts
+                )
+                if result is not None:
+                    spec_min, spec_max, n_peaks = result
+                    min_mass = min(min_mass, spec_min)
+                    max_mass = max(max_mass, spec_max)
+                    total_peaks += n_peaks
+
+                if idx % 50000 == 0 and idx > 0:
+                    gc.collect()
+
+                pbar.update(1)
+
+        return min_mass, max_mass, total_peaks
+
+    def _process_spectrum_for_range(
+        self,
+        idx: int,
+        coords: List,
+        dimensions: Optional[Tuple[int, int, int]],
+        peak_counts: Optional[NDArray[np.int32]],
+    ) -> Optional[Tuple[float, float, int]]:
+        """Process a single spectrum for mass range and peak count.
+
+        Args:
+            idx: Spectrum index.
+            coords: List of spectrum coordinates.
+            dimensions: Optional grid dimensions.
+            peak_counts: Optional array for per-pixel counts.
+
+        Returns:
+            Tuple of (min_mz, max_mz, n_peaks) or None if failed.
+        """
+        try:
+            mzs, intensities = self.parser.getspectrum(idx)
+            n_peaks = len(mzs)
+
+            # Store per-pixel count if tracking
+            if peak_counts is not None and dimensions is not None:
+                self._store_pixel_peak_count(
+                    idx, coords, dimensions, peak_counts, n_peaks
+                )
+
+            # Release references
+            del intensities
+
+            if n_peaks > 0:
+                result = (float(np.min(mzs)), float(np.max(mzs)), n_peaks)
+                del mzs
+                return result
+
+            del mzs
+            return None
+
+        except Exception as e:
+            logger.debug(f"Failed to read spectrum {idx}: {e}")
+            return None
+
+    def _store_pixel_peak_count(
+        self,
+        idx: int,
+        coords: List,
+        dimensions: Tuple[int, int, int],
+        peak_counts: NDArray[np.int32],
+        n_peaks: int,
+    ) -> None:
+        """Store peak count for a pixel.
+
+        Args:
+            idx: Spectrum index.
+            coords: List of spectrum coordinates.
+            dimensions: Grid dimensions (n_x, n_y, n_z).
+            peak_counts: Array to store counts.
+            n_peaks: Number of peaks in this spectrum.
+        """
+        # ImzML coordinates are 1-based
+        x, y, z = coords[idx]
+        x, y, z = x - 1, y - 1, max(z - 1, 0)
+        n_x, n_y, n_z = dimensions
+        pixel_idx = z * (n_x * n_y) + y * n_x + x
+        if 0 <= pixel_idx < len(peak_counts):
+            peak_counts[pixel_idx] = n_peaks
 
     def get_mass_range_for_resampling(self) -> Tuple[float, float]:
         """Get accurate mass range required for resampling.
