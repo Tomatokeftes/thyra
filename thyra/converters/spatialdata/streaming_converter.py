@@ -303,27 +303,74 @@ class StreamingSpatialDataConverter(BaseSpatialDataConverter):
             f"Streaming CSR build (two-pass): {n_rows:,} pixels x {n_cols:,} cols"
         )
 
-        # Track TIC values and total intensity for average spectrum
-        tic_values = np.zeros((n_y, n_x), dtype=np.float64)
-        total_intensity = np.zeros(n_cols, dtype=np.float64)
-
-        # Set quiet mode on reader
         setattr(self.reader, "_quiet_mode", True)
-
         total_spectra = self._get_total_spectra_count()
 
-        # ========== PASS 1: Count non-zeros per row ==========
+        # Pass 1: Count non-zeros and compute TIC/average spectrum
+        pass1_result = self._coo_pass1_count_nonzeros(
+            n_x, n_y, n_z, n_rows, n_cols, total_spectra
+        )
+
+        # Setup Zarr arrays
+        indices_arr, data_arr = self._coo_setup_zarr_arrays(
+            n_rows, n_cols, pass1_result["total_nnz"], pass1_result["indptr"]
+        )
+
+        # Pass 2: Write data to Zarr
+        self._coo_pass2_write_data(indices_arr, data_arr, total_spectra)
+
+        logging.info(
+            f"Pass 2 complete: {pass1_result['total_nnz']:,} non-zeros written to Zarr"
+        )
+
+        avg_spectrum = pass1_result["total_intensity"] / max(
+            pass1_result["pixel_count"], 1
+        )
+
+        return {
+            "total_nnz": pass1_result["total_nnz"],
+            "n_rows": n_rows,
+            "n_cols": n_cols,
+            "tic_values": pass1_result["tic_values"],
+            "avg_spectrum": avg_spectrum,
+            "pixel_count": pass1_result["pixel_count"],
+        }
+
+    def _coo_pass1_count_nonzeros(
+        self,
+        n_x: int,
+        n_y: int,
+        n_z: int,
+        n_rows: int,
+        n_cols: int,
+        total_spectra: int,
+    ) -> Dict[str, Any]:
+        """Pass 1: Count non-zeros per row and compute TIC/total intensity.
+
+        Args:
+            n_x: Number of pixels in x dimension.
+            n_y: Number of pixels in y dimension.
+            n_z: Number of pixels in z dimension.
+            n_rows: Total number of rows (pixels).
+            n_cols: Number of columns (m/z bins).
+            total_spectra: Total number of spectra to process.
+
+        Returns:
+            Dictionary with nnz_per_row, total_nnz, tic_values, total_intensity,
+            pixel_count, and indptr.
+        """
         logging.info(
             f"Pass 1: Counting non-zeros per row ({total_spectra:,} spectra)..."
         )
+
+        tic_values = np.zeros((n_y, n_x), dtype=np.float64)
+        total_intensity = np.zeros(n_cols, dtype=np.float64)
         nnz_per_row = np.zeros(n_rows, dtype=np.int64)
         total_nnz = 0
         pixel_count = 0
 
         with tqdm(
-            total=total_spectra,
-            desc="Pass 1: Counting",
-            unit="spectrum",
+            total=total_spectra, desc="Pass 1: Counting", unit="spectrum"
         ) as pbar:
             for coords, mzs, intensities in self.reader.iter_spectra(
                 batch_size=self._buffer_size
@@ -331,19 +378,15 @@ class StreamingSpatialDataConverter(BaseSpatialDataConverter):
                 x, y, z = coords
                 pixel_idx = z * (n_x * n_y) + y * n_x + x
 
-                # Resample to get nnz count
                 mz_indices, resampled_ints = self._process_spectrum(mzs, intensities)
                 nnz = len(mz_indices)
 
                 nnz_per_row[pixel_idx] = nnz
                 total_nnz += nnz
 
-                # Update TIC
-                tic_value = float(np.sum(resampled_ints))
                 if 0 <= y < n_y and 0 <= x < n_x:
-                    tic_values[y, x] = tic_value
+                    tic_values[y, x] = float(np.sum(resampled_ints))
 
-                # Update total intensity for average spectrum
                 if nnz > 0:
                     np.add.at(total_intensity, mz_indices, resampled_ints)
 
@@ -358,16 +401,39 @@ class StreamingSpatialDataConverter(BaseSpatialDataConverter):
         del nnz_per_row
         gc.collect()
 
-        # Create CSR component arrays in Zarr
+        return {
+            "total_nnz": total_nnz,
+            "tic_values": tic_values,
+            "total_intensity": total_intensity,
+            "pixel_count": pixel_count,
+            "indptr": indptr,
+        }
+
+    def _coo_setup_zarr_arrays(
+        self,
+        n_rows: int,
+        n_cols: int,
+        total_nnz: int,
+        indptr: NDArray[np.int64],
+    ) -> Tuple[Any, Any]:
+        """Setup CSR component arrays in Zarr store.
+
+        Args:
+            n_rows: Number of rows in the matrix.
+            n_cols: Number of columns in the matrix.
+            total_nnz: Total number of non-zero entries.
+            indptr: Row pointers array.
+
+        Returns:
+            Tuple of (indices_arr, data_arr) Zarr arrays.
+        """
         X_group = self._zarr_store.create_group("X")
         X_group.attrs["encoding-type"] = "csr_matrix"
         X_group.attrs["encoding-version"] = "0.1.0"
         X_group.attrs["shape"] = [n_rows, n_cols]
 
-        # Write indptr immediately (it's relatively small)
         X_group.create_array("indptr", data=indptr.astype(np.int32))
 
-        # Create indices and data arrays (will fill incrementally)
         chunk_size_zarr = min(total_nnz, 1000000)
         indices_arr = X_group.create_array(
             "indices",
@@ -382,32 +448,35 @@ class StreamingSpatialDataConverter(BaseSpatialDataConverter):
             chunks=(chunk_size_zarr,),
         )
 
-        # ========== PASS 2: Write data directly to Zarr ==========
+        return indices_arr, data_arr
+
+    def _coo_pass2_write_data(
+        self, indices_arr: Any, data_arr: Any, total_spectra: int
+    ) -> None:
+        """Pass 2: Write spectrum data directly to Zarr arrays.
+
+        Args:
+            indices_arr: Zarr array for column indices.
+            data_arr: Zarr array for data values.
+            total_spectra: Total number of spectra to process.
+        """
         logging.info("Pass 2: Writing data directly to Zarr...")
 
-        # Reset reader for second pass
-        # For real readers (ImzML, Bruker), iter_spectra() is a generator factory
-        # that creates a fresh iterator each time - no need to recreate the reader.
-        # For mock readers with random data, we need to reset the random seed.
         if hasattr(self.reader, "reset"):
             self.reader.reset()
         setattr(self.reader, "_quiet_mode", True)
 
-        # Process in chunks to batch Zarr writes
         chunk_indices: list = []
         chunk_data: list = []
         chunk_start_pos = 0
         spectra_in_chunk = 0
 
         with tqdm(
-            total=total_spectra,
-            desc="Pass 2: Writing",
-            unit="spectrum",
+            total=total_spectra, desc="Pass 2: Writing", unit="spectrum"
         ) as pbar:
             for coords, mzs, intensities in self.reader.iter_spectra(
                 batch_size=self._buffer_size
             ):
-                # Resample spectrum
                 mz_indices, resampled_ints = self._process_spectrum(mzs, intensities)
 
                 if len(mz_indices) > 0:
@@ -416,48 +485,56 @@ class StreamingSpatialDataConverter(BaseSpatialDataConverter):
 
                 spectra_in_chunk += 1
 
-                # Write chunk when full
                 if spectra_in_chunk >= self._chunk_size:
-                    if chunk_indices:
-                        all_indices = np.concatenate(chunk_indices)
-                        all_data = np.concatenate(chunk_data)
-
-                        end_pos = chunk_start_pos + len(all_indices)
-                        indices_arr[chunk_start_pos:end_pos] = all_indices
-                        data_arr[chunk_start_pos:end_pos] = all_data
-
-                        chunk_start_pos = end_pos
-                        del all_indices, all_data
-
+                    chunk_start_pos = self._flush_chunk_to_zarr(
+                        chunk_indices, chunk_data, indices_arr, data_arr, chunk_start_pos
+                    )
                     chunk_indices = []
                     chunk_data = []
                     spectra_in_chunk = 0
-                    gc.collect()
 
                 pbar.update(1)
 
         # Write final chunk
         if chunk_indices:
-            all_indices = np.concatenate(chunk_indices)
-            all_data = np.concatenate(chunk_data)
+            self._flush_chunk_to_zarr(
+                chunk_indices, chunk_data, indices_arr, data_arr, chunk_start_pos
+            )
 
-            end_pos = chunk_start_pos + len(all_indices)
-            indices_arr[chunk_start_pos:end_pos] = all_indices
-            data_arr[chunk_start_pos:end_pos] = all_data
+    def _flush_chunk_to_zarr(
+        self,
+        chunk_indices: list,
+        chunk_data: list,
+        indices_arr: Any,
+        data_arr: Any,
+        chunk_start_pos: int,
+    ) -> int:
+        """Flush accumulated chunk data to Zarr arrays.
 
-        logging.info(f"Pass 2 complete: {total_nnz:,} non-zeros written to Zarr")
+        Args:
+            chunk_indices: List of index arrays to concatenate.
+            chunk_data: List of data arrays to concatenate.
+            indices_arr: Zarr array for indices.
+            data_arr: Zarr array for data.
+            chunk_start_pos: Current position in arrays.
 
-        # Calculate average spectrum
-        avg_spectrum = total_intensity / max(pixel_count, 1)
+        Returns:
+            New position after writing.
+        """
+        if not chunk_indices:
+            return chunk_start_pos
 
-        return {
-            "total_nnz": total_nnz,
-            "n_rows": n_rows,
-            "n_cols": n_cols,
-            "tic_values": tic_values,
-            "avg_spectrum": avg_spectrum,
-            "pixel_count": pixel_count,
-        }
+        all_indices = np.concatenate(chunk_indices)
+        all_data = np.concatenate(chunk_data)
+
+        end_pos = chunk_start_pos + len(all_indices)
+        indices_arr[chunk_start_pos:end_pos] = all_indices
+        data_arr[chunk_start_pos:end_pos] = all_data
+
+        del all_indices, all_data
+        gc.collect()
+
+        return end_pos
 
     def _process_spectrum(
         self, mzs: np.ndarray, intensities: np.ndarray
