@@ -61,7 +61,6 @@ class StreamingSpatialDataConverter(BaseSpatialDataConverter):
         *args,
         chunk_size: int = 5000,
         temp_dir: Optional[Path] = None,
-        zero_copy: bool = True,
         use_csc: Union[bool, Literal["auto"]] = "auto",
         **kwargs,
     ):
@@ -74,9 +73,6 @@ class StreamingSpatialDataConverter(BaseSpatialDataConverter):
                 Default: 5000 spectra per chunk.
             temp_dir: Directory for temporary Zarr files. If None, uses
                 system temp directory. Cleaned up after conversion.
-            zero_copy: If True (default), writes directly to final output
-                without creating scipy sparse matrix. This avoids the final
-                memory spike but may be slightly slower due to more disk I/O.
             use_csc: Controls CSC format conversion method:
                 - "auto" (default): Use PCS method for large datasets (>50GB),
                   standard method for smaller datasets
@@ -90,7 +86,6 @@ class StreamingSpatialDataConverter(BaseSpatialDataConverter):
         self._chunk_size = chunk_size
         self._temp_dir = temp_dir
         self._cleanup_temp = temp_dir is None
-        self._zero_copy = zero_copy
         self._use_csc = use_csc
         self._zarr_store: Optional[zarr.Group] = None
         self._temp_path: Optional[Path] = None
@@ -159,23 +154,8 @@ class StreamingSpatialDataConverter(BaseSpatialDataConverter):
     def convert(self) -> bool:
         """Stream-convert MSI data to SpatialData format.
 
-        Overrides the base convert() method. Uses zero-copy mode by default
-        to avoid memory spikes during conversion.
-
-        Returns:
-            True if conversion was successful, False otherwise
-        """
-        if self._zero_copy:
-            return self._convert_zero_copy()
-        else:
-            return self._convert_with_scipy()
-
-    def _convert_zero_copy(self) -> bool:
-        """Convert using zero-copy direct Zarr write (no scipy matrix).
-
-        This method writes directly to the final output Zarr without ever
-        creating a scipy sparse matrix in memory. Memory stays bounded
-        regardless of dataset size.
+        Overrides the base convert() method. Writes directly to final output
+        Zarr without creating scipy sparse matrix, keeping memory bounded.
 
         For large datasets (>50GB by default), uses the Pre-calculated Scatter
         (PCS) approach for CSC format:
@@ -183,8 +163,10 @@ class StreamingSpatialDataConverter(BaseSpatialDataConverter):
         - ~200 MB memory regardless of dataset size
         - CSC format for efficient ion image access
 
-        For smaller datasets, uses the standard COO approach which is simpler
-        but requires more memory for the scipy conversion step.
+        For smaller datasets, uses the standard COO approach which is simpler.
+
+        Returns:
+            True if conversion was successful, False otherwise
         """
         try:
             # Initialize (loads metadata, mass axis, etc.)
@@ -219,40 +201,6 @@ class StreamingSpatialDataConverter(BaseSpatialDataConverter):
 
         finally:
             self.reader.close()
-
-    def _convert_with_scipy(self) -> bool:
-        """Convert using scipy sparse matrix (original approach with memory spike)."""
-        try:
-            # Initialize (loads metadata, mass axis, etc.)
-            self._initialize_conversion()
-
-            # Set up temporary storage
-            self._setup_temp_storage()
-
-            # Stream process and build CSR in temp storage
-            coo_result = self._stream_build_coo()
-
-            # Create data structures from CSR (loads into scipy - causes spike)
-            data_structures = self._create_data_structures_from_coo(coo_result)
-
-            # Finalize (create tables, shapes, images)
-            self._finalize_data(data_structures)
-
-            # Save output
-            success = self._save_output(data_structures)
-
-            return success
-
-        except Exception as e:
-            logging.error(f"Error during streaming conversion: {e}")
-            import traceback
-
-            logging.error(f"Detailed traceback:\n{traceback.format_exc()}")
-            return False
-
-        finally:
-            self.reader.close()
-            self._cleanup_temp_storage()
 
     def _setup_temp_storage(self) -> None:
         """Set up temporary Zarr storage for COO components."""
