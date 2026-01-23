@@ -1,4 +1,5 @@
 # thyra/core/base_reader.py
+import logging
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import TYPE_CHECKING, Generator, List, Optional, Tuple
@@ -15,15 +16,31 @@ if TYPE_CHECKING:
 class BaseMSIReader(ABC):
     """Abstract base class for reading MSI data formats."""
 
-    def __init__(self, data_path: Path, **kwargs):
+    def __init__(
+        self,
+        data_path: Path,
+        intensity_threshold: Optional[float] = None,
+        **kwargs,
+    ):
         """Initialize the reader with the path to the data.
 
         Args:
             data_path: Path to the data file or directory
+            intensity_threshold: Minimum intensity value to include.
+                Values below this threshold are filtered out during iteration.
+                Useful for removing detector noise in continuous mode data.
+                Default: None (no filtering, include all values).
             **kwargs: Additional reader-specific parameters
         """
         self.data_path = Path(data_path)
+        self._intensity_threshold = intensity_threshold
         self._metadata_extractor: Optional["MetadataExtractor"] = None
+
+        if intensity_threshold is not None:
+            logging.info(
+                f"Intensity threshold active: values < {intensity_threshold} "
+                "will be filtered out"
+            )
 
     @abstractmethod
     def _create_metadata_extractor(self) -> "MetadataExtractor":
@@ -87,8 +104,33 @@ class BaseMSIReader(ABC):
                 - m/z values array
 
                 - Intensity values array
+
+        Note:
+            Subclasses should apply intensity threshold filtering by calling
+            _apply_intensity_filter() on the intensities before yielding.
         """
         pass
+
+    def _apply_intensity_filter(
+        self,
+        mzs: NDArray[np.float64],
+        intensities: NDArray[np.float64],
+    ) -> Tuple[NDArray[np.float64], NDArray[np.float64]]:
+        """Apply intensity threshold filtering to spectrum data.
+
+        Args:
+            mzs: m/z values array
+            intensities: Intensity values array
+
+        Returns:
+            Tuple of (filtered_mzs, filtered_intensities) with values below
+            threshold removed. Returns original arrays if no threshold is set.
+        """
+        if self._intensity_threshold is None:
+            return mzs, intensities
+
+        mask = intensities >= self._intensity_threshold
+        return mzs[mask], intensities[mask]
 
     def get_peak_counts_per_pixel(self) -> Optional[NDArray[np.int32]]:
         """Get per-pixel peak counts for CSR indptr construction.
@@ -105,6 +147,13 @@ class BaseMSIReader(ABC):
             Override in subclass to enable optimized streaming conversion.
             The default implementation returns None, which causes the
             streaming converter to fall back to a two-pass approach.
+
+        Warning:
+            When intensity_threshold is set, the actual peak counts after
+            filtering may be lower than the values returned here, since this
+            method typically returns pre-computed counts from metadata that
+            don't account for intensity filtering. The streaming converter
+            handles this gracefully by using a two-pass approach.
         """
         return None
 

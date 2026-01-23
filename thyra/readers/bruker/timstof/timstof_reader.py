@@ -574,6 +574,9 @@ class BrukerReader(BrukerBaseMSIReader):
                         buffer_size_hint=buffer_size_hint,
                     )
 
+                    # Apply intensity threshold filtering if configured
+                    mzs, intensities = self._apply_intensity_filter(mzs, intensities)
+
                     if mzs.size > 0 and intensities.size > 0:
                         yield coords, mzs, intensities
 
@@ -715,6 +718,9 @@ class BrukerReader(BrukerBaseMSIReader):
             mzs, intensities = self.sdk.read_spectrum(
                 self.handle, frame_id, buffer_size_hint=buffer_size_hint
             )
+
+            # Apply intensity threshold filtering if configured
+            mzs, intensities = self._apply_intensity_filter(mzs, intensities)
 
             if mzs.size > 0 and intensities.size > 0:
                 return mzs, intensities

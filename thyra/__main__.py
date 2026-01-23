@@ -343,6 +343,16 @@ def _build_resampling_config(
     default=True,
     help="Include optical images (TIFF) in output (default: True)",
 )
+# Noise filtering options
+@click.option(
+    "--intensity-threshold",
+    type=float,
+    default=None,
+    help="Minimum intensity value to include. Values below this threshold "
+    "are filtered out during reading. Useful for continuous mode data "
+    "(e.g., Rapiflex) where most values are detector noise. "
+    "Default: None (no filtering).",
+)
 def main(
     input: Path,
     output: Path,
@@ -365,6 +375,7 @@ def main(
     mass_axis_type: str,
     sparse_format: str,
     include_optical: bool,
+    intensity_threshold: Optional[float],
 ):
     """Convert MSI data to SpatialData format.
 
@@ -379,6 +390,9 @@ def main(
         resample_max_mz,
         resample_width_at_mz,
         resample_reference_mz,
+    )
+    _validate_positive_float(
+        intensity_threshold, "intensity_threshold", "Intensity threshold"
     )
     _validate_input_path(input)
     _validate_output_path(output)
@@ -405,8 +419,10 @@ def main(
         else None
     )
 
-    # Build reader options for format-specific settings (Bruker calibration)
+    # Build reader options for format-specific settings
     reader_options = {"use_recalibrated_state": use_recalibrated}
+    if intensity_threshold is not None:
+        reader_options["intensity_threshold"] = intensity_threshold
 
     # Perform conversion
     success = convert_msi(

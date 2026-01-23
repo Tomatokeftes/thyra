@@ -306,3 +306,87 @@ class TestReaderInterface:
             for method_name in required_methods:
                 assert hasattr(reader, method_name)
                 assert callable(getattr(reader, method_name))
+
+
+class TestIntensityThresholdFiltering:
+    """Test intensity threshold filtering in BrukerReader."""
+
+    @patch("thyra.readers.bruker.timstof.timstof_reader.DLLManager")
+    @patch("thyra.readers.bruker.timstof.timstof_reader.SDKFunctions")
+    def test_intensity_threshold_filtering(self, mock_sdk_functions, mock_dll_manager):
+        """Test that intensity_threshold filters low values during iteration."""
+        mock_data_path = Path("/fake/bruker.d")
+
+        # Mock the required components
+        mock_dll_manager.return_value = MagicMock()
+        mock_sdk = MagicMock()
+        mock_sdk_functions.return_value = mock_sdk
+        mock_sdk.open_file.return_value = MagicMock()
+
+        with patch("sqlite3.connect") as mock_connect, patch.object(
+            Path, "exists", return_value=True
+        ), patch.object(Path, "is_dir", return_value=True):
+
+            mock_conn = MagicMock()
+            mock_connect.return_value = mock_conn
+
+            # Create reader WITH threshold
+            threshold = 15.0
+            reader = BrukerReader(mock_data_path, intensity_threshold=threshold)
+
+            # Verify threshold is stored
+            assert reader._intensity_threshold == threshold
+
+            # Test _apply_intensity_filter directly
+            mzs = np.array([100.0, 200.0, 300.0, 400.0])
+            intensities = np.array([10.0, 20.0, 5.0, 30.0])
+
+            filtered_mzs, filtered_intensities = reader._apply_intensity_filter(
+                mzs, intensities
+            )
+
+            # Only values >= 15.0 should remain (20.0, 30.0)
+            expected_mzs = np.array([200.0, 400.0])
+            expected_intensities = np.array([20.0, 30.0])
+
+            np.testing.assert_array_equal(filtered_mzs, expected_mzs)
+            np.testing.assert_array_equal(filtered_intensities, expected_intensities)
+
+    @patch("thyra.readers.bruker.timstof.timstof_reader.DLLManager")
+    @patch("thyra.readers.bruker.timstof.timstof_reader.SDKFunctions")
+    def test_intensity_threshold_none_returns_all(
+        self, mock_sdk_functions, mock_dll_manager
+    ):
+        """Test that intensity_threshold=None returns all values."""
+        mock_data_path = Path("/fake/bruker.d")
+
+        # Mock the required components
+        mock_dll_manager.return_value = MagicMock()
+        mock_sdk = MagicMock()
+        mock_sdk_functions.return_value = mock_sdk
+        mock_sdk.open_file.return_value = MagicMock()
+
+        with patch("sqlite3.connect") as mock_connect, patch.object(
+            Path, "exists", return_value=True
+        ), patch.object(Path, "is_dir", return_value=True):
+
+            mock_conn = MagicMock()
+            mock_connect.return_value = mock_conn
+
+            # Create reader WITHOUT threshold
+            reader = BrukerReader(mock_data_path, intensity_threshold=None)
+
+            # Verify threshold is None
+            assert reader._intensity_threshold is None
+
+            # Test _apply_intensity_filter returns original arrays
+            mzs = np.array([100.0, 200.0, 300.0, 400.0])
+            intensities = np.array([10.0, 20.0, 5.0, 30.0])
+
+            filtered_mzs, filtered_intensities = reader._apply_intensity_filter(
+                mzs, intensities
+            )
+
+            # All values should be returned
+            np.testing.assert_array_equal(filtered_mzs, mzs)
+            np.testing.assert_array_equal(filtered_intensities, intensities)

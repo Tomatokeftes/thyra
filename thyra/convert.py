@@ -291,8 +291,13 @@ def convert_msi(
         pixel_size_um: Pixel size in micrometers (None for auto-detection)
         handle_3d: Whether to process as 3D data (default: False)
         resampling_config: Optional resampling configuration
-        reader_options: Optional format-specific reader options. For Bruker data:
-            - use_recalibrated_state: bool - Use active/recalibrated calibration (default True)
+        reader_options: Optional format-specific reader options:
+            - intensity_threshold: float - Minimum intensity value to include.
+              Values below this threshold are filtered out during reading.
+              Useful for continuous mode data where most values are noise.
+              Default: None (no filtering).
+            - use_recalibrated_state: bool - For Bruker data, use active/recalibrated
+              calibration (default True).
         sparse_format: Sparse matrix format for output ('csc' or 'csr', default: 'csc')
         include_optical: Whether to include optical images in output (default: True)
         streaming: Use memory-efficient streaming converter for large datasets.

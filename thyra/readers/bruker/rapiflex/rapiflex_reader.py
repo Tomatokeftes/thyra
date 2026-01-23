@@ -629,14 +629,20 @@ class RapiflexReader(BrukerBaseMSIReader):
         try:
             for idx in pbar:
                 coords = self._get_normalized_coordinates(idx)
-                intensities = self._read_spectrum(idx)
+                intensities = self._read_spectrum(idx).astype(np.float64)
 
-                # Return cached m/z axis (same reference) and convert intensities
-                yield (
-                    coords,
-                    mz_axis,  # Same array reference for all spectra
-                    intensities.astype(np.float64),
+                # Apply intensity threshold filtering if configured
+                filtered_mzs, filtered_intensities = self._apply_intensity_filter(
+                    mz_axis, intensities
                 )
+
+                # Only yield if we have data after filtering
+                if filtered_mzs.size > 0 and filtered_intensities.size > 0:
+                    yield (
+                        coords,
+                        filtered_mzs,
+                        filtered_intensities,
+                    )
 
                 if self.progress_callback:
                     self.progress_callback(idx, len(self._valid_indices))

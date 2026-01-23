@@ -329,6 +329,60 @@ class TestRapiflexReader:
 
         reader.close()
 
+    def test_intensity_threshold_filtering(self, create_mock_rapiflex_data):
+        """Test that intensity_threshold filters low values during iteration."""
+        folder, n_spots, n_datapoints, _, _, expected_spectra = (
+            create_mock_rapiflex_data
+        )
+
+        # Calculate max intensity to set a reasonable threshold
+        max_intensity = max(s.max() for s in expected_spectra)
+        threshold = max_intensity * 0.5  # Filter out bottom 50%
+
+        # First, read without threshold to get baseline
+        reader_no_thresh = RapiflexReader(folder)
+        total_values_no_thresh = 0
+        for _, _, intensities in reader_no_thresh.iter_spectra():
+            total_values_no_thresh += len(intensities)
+        reader_no_thresh.close()
+
+        # Now read with threshold
+        reader_with_thresh = RapiflexReader(folder, intensity_threshold=threshold)
+        total_values_with_thresh = 0
+        for _, _, intensities in reader_with_thresh.iter_spectra():
+            # All returned intensities should be >= threshold
+            assert np.all(intensities >= threshold), (
+                f"Found intensities below threshold: "
+                f"{intensities[intensities < threshold]}"
+            )
+            total_values_with_thresh += len(intensities)
+        reader_with_thresh.close()
+
+        # With threshold, we should have fewer values (continuous mode = same m/z count)
+        # Note: Rapiflex is continuous mode, so filtering reduces values per spectrum
+        assert total_values_with_thresh < total_values_no_thresh, (
+            f"Expected fewer values with threshold. "
+            f"No threshold: {total_values_no_thresh}, "
+            f"With threshold: {total_values_with_thresh}"
+        )
+
+    def test_intensity_threshold_none_returns_all(self, create_mock_rapiflex_data):
+        """Test that intensity_threshold=None returns all values."""
+        folder, n_spots, n_datapoints, _, _, _ = create_mock_rapiflex_data
+
+        # Read with explicit None threshold
+        reader = RapiflexReader(folder, intensity_threshold=None)
+
+        count = 0
+        for _, mz, intensities in reader.iter_spectra():
+            # Should return all n_datapoints values per spectrum
+            assert len(mz) == n_datapoints
+            assert len(intensities) == n_datapoints
+            count += 1
+
+        assert count == n_spots, f"Expected {n_spots} spectra, got {count}"
+        reader.close()
+
 
 class TestRapiflexFormatDetection:
     """Test format detection for Rapiflex data."""

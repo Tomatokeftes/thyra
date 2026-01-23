@@ -81,6 +81,11 @@ class StreamingSpatialDataConverter(BaseSpatialDataConverter):
                 - True: Always use PCS method for memory-efficient CSC
                 - False: Use CSR format instead
             **kwargs: Keyword arguments passed to BaseSpatialDataConverter
+
+        Note:
+            Intensity thresholding (filtering noise below a minimum value) is
+            handled at the reader level via the `intensity_threshold` parameter
+            passed to the reader constructor.
         """
         kwargs["handle_3d"] = False  # Force 2D mode for now
         super().__init__(*args, **kwargs)
@@ -505,9 +510,12 @@ class StreamingSpatialDataConverter(BaseSpatialDataConverter):
     ) -> Tuple[np.ndarray, np.ndarray]:
         """Process a single spectrum - resample and return indices/values.
 
+        Note: Intensity thresholding is handled at the reader level before data
+        reaches this method. This method only handles resampling and zero filtering.
+
         Args:
-            mzs: Mass values
-            intensities: Intensity values
+            mzs: Mass values (already filtered by reader if threshold is set)
+            intensities: Intensity values (already filtered by reader if threshold is set)
 
         Returns:
             Tuple of (mz_indices, resampled_intensities) with zeros filtered out
@@ -522,13 +530,16 @@ class StreamingSpatialDataConverter(BaseSpatialDataConverter):
             from ...resampling import ResamplingMethod
 
             if self._resampling_method == ResamplingMethod.NEAREST_NEIGHBOR:
-                return self._nearest_neighbor_resample(mzs, intensities)
+                mz_indices, resampled = self._nearest_neighbor_resample(
+                    mzs, intensities
+                )
+                return mz_indices, resampled
 
         # Fallback: general resampling with zero filtering
         resampled_ints = self._resample_spectrum(mzs, intensities)
         mz_indices = np.arange(len(self._common_mass_axis))
-        nonzero = resampled_ints != 0
-        return mz_indices[nonzero], resampled_ints[nonzero]
+        mask = resampled_ints != 0
+        return mz_indices[mask], resampled_ints[mask]
 
     def _create_data_structures_from_coo(
         self, coo_result: Dict[str, Any]
