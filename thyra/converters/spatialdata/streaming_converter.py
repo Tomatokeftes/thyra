@@ -54,7 +54,9 @@ class StreamingSpatialDataConverter(BaseSpatialDataConverter):
 
     # Threshold in GB above which PCS (Pre-calculated Scatter) method is used
     # for memory-efficient CSC conversion. Below this, standard COO approach is used.
-    PCS_SIZE_THRESHOLD_GB: float = 50.0
+    # Set to 30 GB to catch continuous mode datasets that would cause memory spikes
+    # (the standard method can use 2-3x the dataset size in peak memory).
+    PCS_SIZE_THRESHOLD_GB: float = 30.0
 
     def __init__(
         self,
