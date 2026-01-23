@@ -3,7 +3,7 @@ import logging
 import traceback
 import warnings
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple, Union
+from typing import Any, Dict, Literal, Optional, Tuple, Union
 
 from .core.base_converter import PixelSizeSource
 from .core.registry import detect_format, get_converter_class, get_reader_class
@@ -155,6 +155,31 @@ def _determine_pixel_size(
     return final_pixel_size, PixelSizeSource.AUTO_DETECTED, pixel_size_detection_info
 
 
+def _should_use_streaming(streaming: Union[bool, Literal["auto"]], reader: Any) -> bool:
+    """Determine if streaming converter should be used."""
+    if streaming is True:
+        return True
+    if streaming != "auto":
+        return False
+
+    # Auto-detect based on estimated dataset size (>10GB)
+    try:
+        essential_meta = reader.get_essential_metadata()
+        dims = essential_meta.dimensions
+        n_pixels = dims[0] * dims[1] * dims[2]
+        # Rough estimate: assume average 10k peaks per spectrum, 8 bytes each
+        estimated_gb = (n_pixels * 10000 * 8) / (1024**3)
+        if estimated_gb > 10:
+            logging.info(
+                f"Auto-detected large dataset (~{estimated_gb:.1f} GB), "
+                "using streaming converter"
+            )
+            return True
+    except Exception as e:
+        logging.debug(f"Could not estimate dataset size for auto-streaming: {e}")
+    return False
+
+
 def _create_converter(
     format_type: str,
     reader: Any,
@@ -167,9 +192,37 @@ def _create_converter(
     resampling_config: Optional[Dict[str, Any]] = None,
     sparse_format: str = "csc",
     include_optical: bool = True,
+    streaming: Union[bool, Literal["auto"]] = False,
     **kwargs: Any,
 ) -> Any:
     """Create and return a converter for the specified format."""
+    converter_kwargs = {
+        "dataset_id": dataset_id,
+        "pixel_size_um": pixel_size_um,
+        "pixel_size_source": pixel_size_source,
+        "handle_3d": handle_3d,
+        "pixel_size_detection_info": pixel_size_detection_info,
+        "resampling_config": resampling_config,
+        "include_optical": include_optical,
+        **kwargs,
+    }
+
+    # Try streaming converter if requested
+    if (
+        _should_use_streaming(streaming, reader)
+        and "spatialdata" in format_type.lower()
+    ):
+        try:
+            from .converters.spatialdata import StreamingSpatialDataConverter
+
+            logging.info("Using streaming converter for memory-efficient processing")
+            return StreamingSpatialDataConverter(
+                reader, output_path, **converter_kwargs
+            )
+        except ImportError as e:
+            logging.warning(f"Streaming converter not available: {e}")
+            logging.warning("Falling back to standard converter")
+
     try:
         converter_class = get_converter_class(format_type.lower())
         logging.info(f"Using converter: {converter_class.__name__}")
@@ -223,6 +276,7 @@ def convert_msi(
     reader_options: Optional[Dict[str, Any]] = None,
     sparse_format: str = "csc",
     include_optical: bool = True,
+    streaming: Union[bool, Literal["auto"]] = False,
     **kwargs: Any,
 ) -> bool:
     """Convert MSI data to the specified format with enhanced error handling.
@@ -241,6 +295,10 @@ def convert_msi(
             - use_recalibrated_state: bool - Use active/recalibrated calibration (default True)
         sparse_format: Sparse matrix format for output ('csc' or 'csr', default: 'csc')
         include_optical: Whether to include optical images in output (default: True)
+        streaming: Use memory-efficient streaming converter for large datasets.
+            - False: Use standard converter (default)
+            - True: Force streaming converter
+            - "auto": Auto-detect based on estimated dataset size (>10GB)
         **kwargs: Additional keyword arguments
 
     Returns:
@@ -287,6 +345,7 @@ def convert_msi(
             resampling_config,
             sparse_format,
             include_optical=include_optical,
+            streaming=streaming,
             **kwargs,
         )
 
