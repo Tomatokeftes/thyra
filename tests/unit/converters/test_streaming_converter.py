@@ -779,3 +779,115 @@ def test_larger_chunk_write():
         adata = sdata.tables[table_key]
 
         assert adata.shape[0] == 225, "All 225 pixels should be present"
+
+
+class MockMSIReaderWithControlledIntensities(MockMSIReader):
+    """Mock reader that generates controlled intensities for threshold testing.
+
+    Uses the same m/z values from get_common_mass_axis() to ensure consistency.
+    Supports intensity_threshold filtering at the reader level (like real readers).
+    """
+
+    def __init__(self, *args, intensity_threshold=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Pre-compute fixed m/z values from common mass axis
+        self._fixed_mzs = self.get_common_mass_axis()[: self.peaks_per_spectrum]
+        self._intensity_threshold = intensity_threshold
+
+    def iter_spectra(self, batch_size=None):
+        """Generate spectra with alternating low/high intensities.
+
+        Applies intensity_threshold filtering if set (simulating reader-level filtering).
+        """
+        n_x, n_y, n_z = self.dimensions
+
+        for z in range(n_z):
+            for y in range(n_y):
+                for x in range(n_x):
+                    # Create intensities where ~50% are below threshold (0.5)
+                    # and ~50% are above (10.0)
+                    intensities = np.where(
+                        np.arange(self.peaks_per_spectrum) % 2 == 0,
+                        0.5,  # Below threshold of 1.0
+                        10.0,  # Above threshold
+                    )
+                    mzs = self._fixed_mzs.copy()
+                    intensities = intensities.astype(np.float64)
+
+                    # Apply intensity threshold filtering (like real readers do)
+                    if self._intensity_threshold is not None:
+                        mask = intensities >= self._intensity_threshold
+                        mzs = mzs[mask]
+                        intensities = intensities[mask]
+
+                    yield (x, y, z), mzs, intensities
+
+
+@pytest.mark.skipif(
+    not SPATIALDATA_AVAILABLE,
+    reason="SpatialData dependencies not available",
+)
+def test_intensity_threshold_filtering():
+    """Test that intensity_threshold filters out low intensity values.
+
+    Note: As of v1.13.0, intensity_threshold is handled at the reader level,
+    not the converter level. This test verifies that reader-level filtering works.
+    """
+    with tempfile.TemporaryDirectory() as tmpdir:
+        # First, convert WITHOUT threshold (threshold passed to reader)
+        reader_no_thresh = MockMSIReaderWithControlledIntensities(
+            dimensions=(3, 3, 1),  # 9 pixels
+            peaks_per_spectrum=100,
+            mass_range=(100.0, 500.0),
+            intensity_threshold=None,  # No filtering at reader level
+        )
+        output_no_thresh = Path(tmpdir) / "no_threshold.zarr"
+        converter_no_thresh = StreamingSpatialDataConverter(
+            reader=reader_no_thresh,
+            output_path=output_no_thresh,
+            dataset_id="no_threshold_test",
+            use_csc=True,
+        )
+        success = converter_no_thresh.convert()
+        assert success, "Conversion without threshold should succeed"
+
+        # Then convert WITH threshold (threshold passed to reader)
+        reader_with_thresh = MockMSIReaderWithControlledIntensities(
+            dimensions=(3, 3, 1),
+            peaks_per_spectrum=100,
+            mass_range=(100.0, 500.0),
+            intensity_threshold=1.0,  # Filter values < 1.0 at reader level
+        )
+        output_with_thresh = Path(tmpdir) / "with_threshold.zarr"
+        converter_with_thresh = StreamingSpatialDataConverter(
+            reader=reader_with_thresh,
+            output_path=output_with_thresh,
+            dataset_id="threshold_test",
+            use_csc=True,
+        )
+        success = converter_with_thresh.convert()
+        assert success, "Conversion with threshold should succeed"
+
+        # Compare results
+        from spatialdata import SpatialData
+
+        sdata_no_thresh = SpatialData.read(str(output_no_thresh))
+        sdata_with_thresh = SpatialData.read(str(output_with_thresh))
+
+        adata_no_thresh = sdata_no_thresh.tables[list(sdata_no_thresh.tables.keys())[0]]
+        adata_with_thresh = sdata_with_thresh.tables[
+            list(sdata_with_thresh.tables.keys())[0]
+        ]
+
+        # With threshold, we should have roughly half the non-zero entries
+        nnz_no_thresh = adata_no_thresh.X.nnz
+        nnz_with_thresh = adata_with_thresh.X.nnz
+
+        # The threshold version should have fewer entries
+        assert (
+            nnz_with_thresh < nnz_no_thresh
+        ), f"Threshold should reduce entries: {nnz_with_thresh} >= {nnz_no_thresh}"
+
+        # Should be roughly half (with some tolerance for edge effects)
+        ratio = nnz_with_thresh / nnz_no_thresh
+        assert 0.4 < ratio < 0.6, f"Expected ~50% reduction, got {ratio:.2%}"

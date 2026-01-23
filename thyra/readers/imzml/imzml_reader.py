@@ -283,6 +283,9 @@ class ImzMLReader(BaseMSIReader):
             coords = self._get_spectrum_coordinates(parser, idx)
             mzs, intensities = parser.getspectrum(idx)  # type: ignore
 
+            # Apply intensity threshold filtering if configured
+            mzs, intensities = self._apply_intensity_filter(mzs, intensities)
+
             if mzs.size > 0 and intensities.size > 0:
                 pbar.update(1)
                 return coords, mzs, intensities
