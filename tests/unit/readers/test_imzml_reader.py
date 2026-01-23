@@ -172,3 +172,53 @@ class TestImzMLReader:
         reader = ImzMLReader(imzml_path)
         # Close should work without errors
         reader.close()
+
+    def test_intensity_threshold_filtering(self, create_minimal_imzml):
+        """Test that intensity_threshold filters low values during iteration."""
+        imzml_path, _, _, intensities = create_minimal_imzml
+
+        # The test data has intensities [100, 200, 300, 400, 500, ...]
+        # Set threshold to filter out values below 250
+        threshold = 250.0
+
+        # First, read without threshold to get baseline
+        reader_no_thresh = ImzMLReader(imzml_path)
+        total_values_no_thresh = 0
+        for _, _, spectrum_intensities in reader_no_thresh.iter_spectra():
+            total_values_no_thresh += len(spectrum_intensities)
+        reader_no_thresh.close()
+
+        # Now read with threshold
+        reader_with_thresh = ImzMLReader(imzml_path, intensity_threshold=threshold)
+        total_values_with_thresh = 0
+        for _, _, spectrum_intensities in reader_with_thresh.iter_spectra():
+            # All returned intensities should be >= threshold
+            assert np.all(spectrum_intensities >= threshold), (
+                f"Found intensities below threshold: "
+                f"{spectrum_intensities[spectrum_intensities < threshold]}"
+            )
+            total_values_with_thresh += len(spectrum_intensities)
+        reader_with_thresh.close()
+
+        # With threshold, we should have fewer values
+        assert total_values_with_thresh < total_values_no_thresh, (
+            f"Expected fewer values with threshold. "
+            f"No threshold: {total_values_no_thresh}, "
+            f"With threshold: {total_values_with_thresh}"
+        )
+
+    def test_intensity_threshold_none_returns_all(self, create_minimal_imzml):
+        """Test that intensity_threshold=None returns all values."""
+        imzml_path, _, _, _ = create_minimal_imzml
+
+        # Read with explicit None threshold
+        reader = ImzMLReader(imzml_path, intensity_threshold=None)
+
+        # Should return all 4 spectra with all their values
+        count = 0
+        for _, _, spectrum_intensities in reader.iter_spectra():
+            assert len(spectrum_intensities) > 0
+            count += 1
+
+        assert count == 4, f"Expected 4 spectra, got {count}"
+        reader.close()

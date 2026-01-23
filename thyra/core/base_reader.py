@@ -147,6 +147,13 @@ class BaseMSIReader(ABC):
             Override in subclass to enable optimized streaming conversion.
             The default implementation returns None, which causes the
             streaming converter to fall back to a two-pass approach.
+
+        Warning:
+            When intensity_threshold is set, the actual peak counts after
+            filtering may be lower than the values returned here, since this
+            method typically returns pre-computed counts from metadata that
+            don't account for intensity filtering. The streaming converter
+            handles this gracefully by using a two-pass approach.
         """
         return None
 
