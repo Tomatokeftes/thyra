@@ -115,7 +115,9 @@ class StreamingSpatialDataConverter(BaseSpatialDataConverter):
                 n_mz_bins = self._resampling_config.get("target_bins", 10000)
             else:
                 # ResamplingConfig dataclass
-                n_mz_bins = getattr(self._resampling_config, "target_bins", None) or 10000
+                n_mz_bins = (
+                    getattr(self._resampling_config, "target_bins", None) or 10000
+                )
         else:
             # Estimate from mass range with ~0.01 Da resolution
             min_mass, max_mass = metadata.mass_range
@@ -388,7 +390,9 @@ class StreamingSpatialDataConverter(BaseSpatialDataConverter):
         X_group.attrs["encoding-version"] = "0.1.0"
         X_group.attrs["shape"] = [n_rows, n_cols]
 
-        X_group.create_array("indptr", data=indptr.astype(np.int32))
+        # Use int64 for indptr if total_nnz exceeds int32 max
+        indptr_dtype = np.int64 if total_nnz > np.iinfo(np.int32).max else np.int32
+        X_group.create_array("indptr", data=indptr.astype(indptr_dtype))
 
         chunk_size_zarr = min(total_nnz, 1000000)
         indices_arr = X_group.create_array(
@@ -551,6 +555,12 @@ class StreamingSpatialDataConverter(BaseSpatialDataConverter):
         data = X_group["data"][:]
 
         logging.info(f"Loaded CSR components: {len(data):,} entries")
+
+        # For large datasets (>2.1B entries), ensure 64-bit indices for scipy
+        if len(data) > np.iinfo(np.int32).max:
+            logging.info("Large dataset detected, using 64-bit sparse matrix indices")
+            indptr = indptr.astype(np.int64)
+            indices = indices.astype(np.int64)
 
         # Create CSR matrix directly (no COO intermediate)
         sparse_matrix = sparse.csr_matrix(
