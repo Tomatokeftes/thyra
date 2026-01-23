@@ -10,7 +10,7 @@ Thyra transforms Mass Spectrometry Imaging data through a **4-phase pipeline**:
 
 ## Architecture Components
 
-### 🏗️ Core Framework
+### Core Framework
 ```
 thyra/core/
 ├── registry.py          # Plugin registration system
@@ -19,7 +19,7 @@ thyra/core/
 └── base_extractor.py    # Abstract metadata extractor
 ```
 
-### 📖 Format Readers
+### Format Readers
 ```
 thyra/readers/
 ├── imzml_reader.py      # ImzML format support
@@ -29,7 +29,7 @@ thyra/readers/
     └── utils/           # Batch processing, caching
 ```
 
-### 📊 Metadata System
+### Metadata System
 ```
 thyra/metadata/
 ├── extractors/
@@ -39,7 +39,7 @@ thyra/metadata/
 └── ontology/            # Ontology validation
 ```
 
-### 🔄 Converters
+### Converters
 ```
 thyra/converters/
 └── spatialdata_converter.py # SpatialData/Zarr output
@@ -47,7 +47,7 @@ thyra/converters/
 
 ## Detailed Conversion Flow
 
-### 🚀 **Phase 1: CLI Entry Point** (`__main__.py`)
+### Phase 1: CLI Entry Point (`__main__.py`)
 
 ```python
 def main():
@@ -82,7 +82,7 @@ def main():
 
 ---
 
-### 🔍 **Phase 2: Format Detection & Reader Creation** (`convert.py`)
+### Phase 2: Format Detection & Reader Creation (`convert.py`)
 
 ```python
 def convert_msi(input_path, output_path, **kwargs):
@@ -122,7 +122,7 @@ def detect_format(path):
 
 ---
 
-### 📖 **Phase 3: Reader Initialization & Metadata Extraction**
+### Phase 3: Reader Initialization & Metadata Extraction
 
 #### ImzML Reader Flow (`readers/imzml_reader.py`)
 ```python
@@ -199,7 +199,7 @@ class MetadataExtractor(ABC):
 
 ---
 
-### 🔄 **Phase 4: Conversion Processing** (`converters/spatialdata_converter.py`)
+### Phase 4: Conversion Processing (`converters/spatialdata_converter.py`)
 
 ```python
 class SpatialDataConverter(BaseThyra):
@@ -370,19 +370,19 @@ def _save_output(self, final_data):
 
 ## Key Technical Details
 
-### 🧠 **Memory Management Strategy**
+### Memory Management Strategy
 - **Sparse Matrices**: Only store non-zero intensities (~1-5% of total matrix)
 - **Batch Processing**: Process spectra in configurable batches (default: 1000)
 - **Lazy Loading**: Load data only when needed
 - **Progressive Cleanup**: Release memory after each phase
 
-### ⚡ **Performance Optimizations**
+### Performance Optimizations
 - **Mass Axis Mapping**: Use `np.searchsorted()` for O(log n) m/z mapping
 - **Efficient Data Types**: Float32 for intensities, appropriate integer types for indices
 - **Chunked Zarr Storage**: Optimized for both random and sequential access
 - **Coordinate Caching**: Cache frequently accessed coordinate calculations
 
-### 🔍 **Pixel Size Detection**
+### Pixel Size Detection
 ```python
 # ImzML: Extract from XML metadata
 def detect_imzml_pixel_size(parser):
@@ -410,7 +410,7 @@ def detect_bruker_pixel_size(conn):
     return (float(result[0]), float(result[1])) if result else None
 ```
 
-### 📊 **Data Type Specifications**
+### Data Type Specifications
 
 **EssentialMetadata** (Fast extraction for conversion setup):
 ```python
@@ -437,10 +437,10 @@ class ComprehensiveMetadata:
 ```
 
 This architecture enables Thyra to:
-- ✅ Handle datasets from MBs to 100+ GBs efficiently
-- ✅ Support multiple input formats with consistent interface
-- ✅ Provide rich metadata preservation and validation
-- ✅ Generate cloud-ready, standardized output formats
-- ✅ Maintain extensibility for new formats and features
+- Handle datasets from MBs to 100+ GBs efficiently
+- Support multiple input formats with consistent interface
+- Provide rich metadata preservation and validation
+- Generate cloud-ready, standardized output formats
+- Maintain extensibility for new formats and features
 
 The plugin-based registry system and template method pattern ensure that adding new formats requires minimal code changes while maintaining consistency across the conversion pipeline.

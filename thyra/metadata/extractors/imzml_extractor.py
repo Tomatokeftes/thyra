@@ -1,4 +1,5 @@
 # thyra/metadata/extractors/imzml_extractor.py
+import gc
 import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -37,7 +38,10 @@ class ImzMLMetadataExtractor(MetadataExtractor):
 
         dimensions = self._calculate_dimensions(coords)
         coordinate_bounds = self._calculate_bounds(coords)
-        mass_range, total_peaks = self._get_mass_range_complete()
+        # Pass dimensions to collect per-pixel peak counts during scan
+        mass_range, total_peaks, peak_counts = self._get_mass_range_complete(
+            dimensions=dimensions
+        )
         pixel_size = self._extract_pixel_size_fast()
         n_spectra = len(coords)
         estimated_memory = self._estimate_memory(n_spectra)
@@ -54,8 +58,8 @@ class ImzMLMetadataExtractor(MetadataExtractor):
             total_peaks=total_peaks,
             estimated_memory_gb=estimated_memory,
             source_path=str(self.imzml_path),
-            spectrum_type=spectrum_type,  # Add spectrum type to essential
-            # metadata
+            spectrum_type=spectrum_type,
+            peak_counts_per_pixel=peak_counts,
         )
 
     def _extract_comprehensive_impl(self) -> ComprehensiveMetadata:
@@ -103,55 +107,180 @@ class ImzMLMetadataExtractor(MetadataExtractor):
             float(np.max(y_coords)),
         )
 
-    def _get_mass_range_complete(self) -> Tuple[Tuple[float, float], int]:
+    def _get_mass_range_complete(
+        self,
+        dimensions: Optional[Tuple[int, int, int]] = None,
+    ) -> Tuple[Tuple[float, float], int, Optional[NDArray[np.int32]]]:
         """Complete mass range extraction by scanning ALL spectra.
 
         Required for resampling to ensure no m/z values are missed.
-        Also counts total peaks for COO matrix pre-allocation.
+        Also counts total peaks for COO matrix pre-allocation and
+        optionally collects per-pixel peak counts for streaming conversion.
+
+        Args:
+            dimensions: Optional (n_x, n_y, n_z) grid dimensions.
+                If provided, per-pixel peak counts will be collected.
 
         Returns:
-            Tuple of ((min_mass, max_mass), total_peaks)
+            Tuple of ((min_mass, max_mass), total_peaks, peak_counts_per_pixel)
+            peak_counts_per_pixel is None if dimensions not provided.
         """
         try:
             logger.info(
                 "Scanning ALL spectra for complete mass range and peak count..."
             )
 
-            n_spectra = len(self.parser.coordinates)
-            min_mass = float("inf")
-            max_mass = float("-inf")
-            total_peaks = 0
+            coords = self.parser.coordinates
+            n_spectra = len(coords)
+            peak_counts = self._init_peak_counts_array(dimensions)
 
-            from tqdm import tqdm
-
-            with tqdm(
-                total=n_spectra,
-                desc="Scanning mass range and counting peaks",
-                unit="spectrum",
-            ) as pbar:
-                for idx in range(n_spectra):
-                    try:
-                        mzs, _ = self.parser.getspectrum(idx)
-                        if len(mzs) > 0:
-                            min_mass = min(min_mass, float(np.min(mzs)))
-                            max_mass = max(max_mass, float(np.max(mzs)))
-                            total_peaks += len(mzs)
-                    except Exception as e:
-                        logger.debug(f"Failed to read spectrum {idx}: {e}")
-                        continue  # Skip problematic spectra
-                    pbar.update(1)
+            min_mass, max_mass, total_peaks = self._scan_all_spectra(
+                coords, n_spectra, dimensions, peak_counts
+            )
 
             if min_mass == float("inf"):
                 logger.warning("No valid spectra found")
-                return ((0.0, 1000.0), 0)
+                return ((0.0, 1000.0), 0, None)
 
             logger.info(f"Complete mass range: {min_mass:.2f} - {max_mass:.2f} m/z")
             logger.info(f"Total peaks: {total_peaks:,}")
-            return ((min_mass, max_mass), total_peaks)
+            return ((min_mass, max_mass), total_peaks, peak_counts)
 
         except Exception as e:
             logger.error(f"Complete mass range scan failed: {e}")
-            return ((0.0, 1000.0), 0)
+            return ((0.0, 1000.0), 0, None)
+
+    def _init_peak_counts_array(
+        self, dimensions: Optional[Tuple[int, int, int]]
+    ) -> Optional[NDArray[np.int32]]:
+        """Initialize per-pixel peak counts array if dimensions provided.
+
+        Args:
+            dimensions: Optional (n_x, n_y, n_z) grid dimensions.
+
+        Returns:
+            Array of zeros or None if dimensions not provided.
+        """
+        if dimensions is None:
+            return None
+        n_x, n_y, n_z = dimensions
+        n_pixels = n_x * n_y * n_z
+        logger.info(f"Collecting per-pixel peak counts ({n_pixels:,} pixels)")
+        return np.zeros(n_pixels, dtype=np.int32)
+
+    def _scan_all_spectra(
+        self,
+        coords: List,
+        n_spectra: int,
+        dimensions: Optional[Tuple[int, int, int]],
+        peak_counts: Optional[NDArray[np.int32]],
+    ) -> Tuple[float, float, int]:
+        """Scan all spectra to find mass range and count peaks.
+
+        Args:
+            coords: List of spectrum coordinates.
+            n_spectra: Total number of spectra.
+            dimensions: Optional grid dimensions for pixel indexing.
+            peak_counts: Optional array to store per-pixel peak counts.
+
+        Returns:
+            Tuple of (min_mass, max_mass, total_peaks).
+        """
+        from tqdm import tqdm
+
+        min_mass = float("inf")
+        max_mass = float("-inf")
+        total_peaks = 0
+
+        with tqdm(
+            total=n_spectra,
+            desc="Scanning mass range and counting peaks",
+            unit="spectrum",
+        ) as pbar:
+            for idx in range(n_spectra):
+                result = self._process_spectrum_for_range(
+                    idx, coords, dimensions, peak_counts
+                )
+                if result is not None:
+                    spec_min, spec_max, n_peaks = result
+                    min_mass = min(min_mass, spec_min)
+                    max_mass = max(max_mass, spec_max)
+                    total_peaks += n_peaks
+
+                if idx % 50000 == 0 and idx > 0:
+                    gc.collect()
+
+                pbar.update(1)
+
+        return min_mass, max_mass, total_peaks
+
+    def _process_spectrum_for_range(
+        self,
+        idx: int,
+        coords: List,
+        dimensions: Optional[Tuple[int, int, int]],
+        peak_counts: Optional[NDArray[np.int32]],
+    ) -> Optional[Tuple[float, float, int]]:
+        """Process a single spectrum for mass range and peak count.
+
+        Args:
+            idx: Spectrum index.
+            coords: List of spectrum coordinates.
+            dimensions: Optional grid dimensions.
+            peak_counts: Optional array for per-pixel counts.
+
+        Returns:
+            Tuple of (min_mz, max_mz, n_peaks) or None if failed.
+        """
+        try:
+            mzs, intensities = self.parser.getspectrum(idx)
+            n_peaks = len(mzs)
+
+            # Store per-pixel count if tracking
+            if peak_counts is not None and dimensions is not None:
+                self._store_pixel_peak_count(
+                    idx, coords, dimensions, peak_counts, n_peaks
+                )
+
+            # Release references
+            del intensities
+
+            if n_peaks > 0:
+                result = (float(np.min(mzs)), float(np.max(mzs)), n_peaks)
+                del mzs
+                return result
+
+            del mzs
+            return None
+
+        except Exception as e:
+            logger.debug(f"Failed to read spectrum {idx}: {e}")
+            return None
+
+    def _store_pixel_peak_count(
+        self,
+        idx: int,
+        coords: List,
+        dimensions: Tuple[int, int, int],
+        peak_counts: NDArray[np.int32],
+        n_peaks: int,
+    ) -> None:
+        """Store peak count for a pixel.
+
+        Args:
+            idx: Spectrum index.
+            coords: List of spectrum coordinates.
+            dimensions: Grid dimensions (n_x, n_y, n_z).
+            peak_counts: Array to store counts.
+            n_peaks: Number of peaks in this spectrum.
+        """
+        # ImzML coordinates are 1-based
+        x, y, z = coords[idx]
+        x, y, z = x - 1, y - 1, max(z - 1, 0)
+        n_x, n_y, n_z = dimensions
+        pixel_idx = z * (n_x * n_y) + y * n_x + x
+        if 0 <= pixel_idx < len(peak_counts):
+            peak_counts[pixel_idx] = n_peaks
 
     def get_mass_range_for_resampling(self) -> Tuple[float, float]:
         """Get accurate mass range required for resampling.
@@ -159,7 +288,7 @@ class ImzMLMetadataExtractor(MetadataExtractor):
         This performs a complete scan of all spectra to ensure no m/z
         values are missed when building the resampled axis.
         """
-        mass_range, _ = self._get_mass_range_complete()
+        mass_range, _, _ = self._get_mass_range_complete()
         return mass_range
 
     def _extract_pixel_size_fast(self) -> Optional[Tuple[float, float]]:
@@ -304,13 +433,13 @@ class ImzMLMetadataExtractor(MetadataExtractor):
     def _detect_centroid_spectrum(self) -> Optional[str]:
         """Detect if this is a centroid spectrum by looking for MS:1000127."""
         try:
-            # Method 1: Parse XML directly from file for MS:1000127
-            result = self._check_xml_for_centroid()
+            # Method 1: Check parser metadata first (no XML parsing needed)
+            result = self._check_parser_metadata_for_centroid()
             if result:
                 return result
 
-            # Method 2: Check if parser metadata has processed flag
-            result = self._check_parser_metadata_for_centroid()
+            # Method 2: Stream-parse XML for MS:1000127 (memory efficient)
+            result = self._check_xml_for_centroid()
             if result:
                 return result
 
@@ -320,22 +449,47 @@ class ImzMLMetadataExtractor(MetadataExtractor):
             return None
 
     def _check_xml_for_centroid(self) -> Optional[str]:
-        """Check XML for MS:1000127 centroid spectrum marker."""
-        try:
-            ET = self._get_xml_parser()
-            tree = ET.parse(self.imzml_path)  # nosec B314
-            root = tree.getroot()
+        """Check XML for MS:1000127 centroid spectrum marker using streaming parser.
 
-            # Look for cvParam with accession MS:1000127
-            for elem in root.iter():
+        Uses iterparse for memory-efficient streaming - stops as soon as the
+        centroid marker is found, avoiding full file load for large datasets.
+        """
+        try:
+            import xml.etree.ElementTree as ET  # nosec B405
+
+            # Use iterparse for streaming - only parses until we find what we need
+            # The centroid spectrum cvParam is typically in the fileDescription
+            # section near the beginning of the file
+            context = ET.iterparse(str(self.imzml_path), events=("end",))
+
+            elements_checked = 0
+            max_elements = 10000  # Limit search to first 10k elements
+
+            for event, elem in context:
+                elements_checked += 1
+
                 if elem.tag.endswith("cvParam"):
                     accession = elem.get("accession", "")
                     name = elem.get("name", "")
                     if accession == "MS:1000127" and name == "centroid spectrum":
                         logger.info("Detected centroid spectrum from MS:1000127")
+                        # Clean up iterator
+                        del context
                         return "centroid spectrum"
+
+                # Clear processed elements to save memory
+                elem.clear()
+
+                # Stop after checking enough elements - centroid info is at the start
+                if elements_checked >= max_elements:
+                    logger.debug(
+                        f"Centroid marker not found in first {max_elements} elements"
+                    )
+                    break
+
+            del context
         except Exception as e:
-            logger.debug(f"XML parsing method failed: {e}")
+            logger.debug(f"XML streaming parse failed: {e}")
         return None
 
     def _get_xml_parser(self):
