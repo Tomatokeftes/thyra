@@ -65,16 +65,16 @@ class TestBasicFunctionality:
     """Test basic functionality works."""
 
     def test_decision_tree_basic(self):
-        """Test decision tree throws NotImplementedError for unsupported cases."""
+        """Test decision tree basic behavior."""
         tree = ResamplingDecisionTree()
 
         # No metadata should raise NotImplementedError
         with pytest.raises(NotImplementedError):
             tree.select_strategy(None)
 
-        # Non-timsTOF should raise NotImplementedError
-        with pytest.raises(NotImplementedError):
-            tree.select_strategy({"instrument_name": "Orbitrap Fusion"})
+        # Unknown instruments fall through to DefaultDetector (returns NEAREST_NEIGHBOR)
+        method = tree.select_strategy({"instrument_name": "Orbitrap Fusion"})
+        assert method == ResamplingMethod.NEAREST_NEIGHBOR
 
     def test_axis_builder_uniform(self):
         """Test uniform axis building."""

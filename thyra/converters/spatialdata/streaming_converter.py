@@ -119,7 +119,7 @@ class StreamingSpatialDataConverter(BaseSpatialDataConverter):
         # Estimate number of m/z bins after resampling
         if self._resampling_config:
             if isinstance(self._resampling_config, dict):
-                n_mz_bins = self._resampling_config.get("target_bins", 10000)
+                n_mz_bins = self._resampling_config.get("target_bins") or 10000
             else:
                 # ResamplingConfig dataclass
                 n_mz_bins = (
@@ -128,7 +128,11 @@ class StreamingSpatialDataConverter(BaseSpatialDataConverter):
         else:
             # Estimate from mass range with ~0.01 Da resolution
             min_mass, max_mass = metadata.mass_range
-            n_mz_bins = int((max_mass - min_mass) / 0.01)
+            if min_mass is not None and max_mass is not None:
+                n_mz_bins = int((max_mass - min_mass) / 0.01)
+            else:
+                # Fallback estimate if mass range not available
+                n_mz_bins = 100000
 
         # Dense matrix size in bytes (float32 = 4 bytes)
         dense_bytes = n_pixels * n_mz_bins * 4
@@ -801,7 +805,7 @@ class StreamingSpatialDataConverter(BaseSpatialDataConverter):
 
         # Create temp directory for memmap files only (no cache file)
         temp_dir = self.output_path.parent / f".streaming_csc_{uuid4().hex[:8]}"
-        temp_dir.mkdir(exist_ok=True)
+        temp_dir.mkdir(parents=True, exist_ok=True)
 
         try:
             # Step 1: Pre-scan - count entries per column (no caching)
