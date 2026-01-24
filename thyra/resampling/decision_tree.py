@@ -8,7 +8,6 @@ instrument detection.
 import logging
 from typing import Any, Dict, Optional
 
-from .constants import SpectrumType
 from .data_characteristics import DataCharacteristics
 from .instrument_detectors import InstrumentDetectorChain
 from .types import AxisType, ResamplingMethod
@@ -62,9 +61,6 @@ class ResamplingDecisionTree:
         # Convert metadata to DataCharacteristics
         characteristics = DataCharacteristics.from_metadata(metadata)
 
-        # Also check legacy metadata format for backwards compatibility
-        self._enhance_characteristics_from_legacy(characteristics, metadata)
-
         # Use detector chain to find matching instrument
         return self._detector_chain.get_resampling_method(characteristics)
 
@@ -88,45 +84,5 @@ class ResamplingDecisionTree:
         # Convert metadata to DataCharacteristics
         characteristics = DataCharacteristics.from_metadata(metadata)
 
-        # Also check legacy metadata format for backwards compatibility
-        self._enhance_characteristics_from_legacy(characteristics, metadata)
-
         # Use detector chain to find matching instrument
         return self._detector_chain.get_axis_type(characteristics)
-
-    def _enhance_characteristics_from_legacy(
-        self, characteristics: DataCharacteristics, metadata: Dict[str, Any]
-    ) -> None:
-        """Enhance DataCharacteristics from legacy metadata formats.
-
-        Only handles truly legacy formats not covered by DataCharacteristics.from_metadata():
-        - cvParams list format for spectrum type
-        - Root level spectrum_type (without essential_metadata wrapper)
-        """
-        if characteristics.spectrum_type is None:
-            characteristics.spectrum_type = self._detect_spectrum_type_legacy(metadata)
-
-    def _detect_spectrum_type_legacy(
-        self, metadata: Dict[str, Any]
-    ) -> Optional[str]:
-        """Detect spectrum type from legacy metadata formats.
-
-        Checks cvParams list and root-level spectrum_type key.
-        """
-        # Check cvParams list (legacy ImzML format)
-        cv_params = metadata.get("cvParams")
-        if isinstance(cv_params, list):
-            for param in cv_params:
-                if isinstance(param, dict):
-                    name = param.get("name")
-                    if name == SpectrumType.CENTROID:
-                        return SpectrumType.CENTROID
-                    if name == SpectrumType.PROFILE:
-                        return SpectrumType.PROFILE
-
-        # Check root level spectrum_type
-        spectrum_type = metadata.get("spectrum_type")
-        if spectrum_type in (SpectrumType.CENTROID, SpectrumType.PROFILE):
-            return spectrum_type
-
-        return None

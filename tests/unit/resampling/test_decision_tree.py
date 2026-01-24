@@ -56,9 +56,12 @@ class TestResamplingDecisionTree:
         method = self.tree.select_strategy(metadata)
         assert method == ResamplingMethod.NEAREST_NEIGHBOR
 
-    def test_centroid_spectrum_detection_root_level(self):
-        """Test centroid spectrum detection from root level metadata."""
-        metadata = {"spectrum_type": SpectrumType.CENTROID}
+    def test_centroid_spectrum_detection_in_instrument_info(self):
+        """Test centroid spectrum detection via instrument info."""
+        metadata = {
+            "essential_metadata": {"spectrum_type": SpectrumType.CENTROID},
+            "instrument_info": {"instrument_type": "Q-TOF"},
+        }
         method = self.tree.select_strategy(metadata)
         assert method == ResamplingMethod.NEAREST_NEIGHBOR
 
@@ -98,15 +101,6 @@ class TestResamplingDecisionTree:
         """Test axis type selection with no metadata uses default."""
         axis_type = self.tree.select_axis_type(None)
         assert axis_type == AxisType.CONSTANT
-
-    def test_legacy_cv_params_centroid_detection(self):
-        """Test legacy cvParams format for centroid detection."""
-        metadata = {
-            "cvParams": [{"name": SpectrumType.CENTROID, "accession": "MS:1000127"}]
-        }
-        method = self.tree.select_strategy(metadata)
-        assert method == ResamplingMethod.NEAREST_NEIGHBOR
-
 
 class TestInstrumentDetectorChain:
     """Test InstrumentDetectorChain behavior."""
@@ -350,39 +344,3 @@ class TestDataCharacteristics:
         assert chars.is_maldi_tof
 
 
-class TestDecisionTreeLegacyMethods:
-    """Test legacy spectrum type detection."""
-
-    def setup_method(self):
-        """Setup test fixtures."""
-        self.tree = ResamplingDecisionTree()
-
-    def test_detect_spectrum_type_from_cvparams(self):
-        """Test spectrum type detection from cvParams list."""
-        # Centroid from cvParams
-        metadata = {"cvParams": [{"name": SpectrumType.CENTROID}]}
-        assert self.tree._detect_spectrum_type_legacy(metadata) == SpectrumType.CENTROID
-
-        # Profile from cvParams
-        metadata = {"cvParams": [{"name": SpectrumType.PROFILE}]}
-        assert self.tree._detect_spectrum_type_legacy(metadata) == SpectrumType.PROFILE
-
-    def test_detect_spectrum_type_from_root_level(self):
-        """Test spectrum type detection from root level metadata."""
-        metadata = {"spectrum_type": SpectrumType.CENTROID}
-        assert self.tree._detect_spectrum_type_legacy(metadata) == SpectrumType.CENTROID
-
-        metadata = {"spectrum_type": SpectrumType.PROFILE}
-        assert self.tree._detect_spectrum_type_legacy(metadata) == SpectrumType.PROFILE
-
-    def test_detect_spectrum_type_returns_none_for_empty(self):
-        """Test that empty metadata returns None."""
-        assert self.tree._detect_spectrum_type_legacy({}) is None
-
-    def test_detect_spectrum_type_ignores_invalid_cvparams(self):
-        """Test that invalid cvParams formats are handled."""
-        metadata = {"cvParams": "not a list"}
-        assert self.tree._detect_spectrum_type_legacy(metadata) is None
-
-        metadata = {"cvParams": [{"other": "value"}]}
-        assert self.tree._detect_spectrum_type_legacy(metadata) is None
