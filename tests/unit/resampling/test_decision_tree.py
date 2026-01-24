@@ -351,72 +351,38 @@ class TestDataCharacteristics:
 
 
 class TestDecisionTreeLegacyMethods:
-    """Test legacy methods still work for backwards compatibility."""
+    """Test legacy spectrum type detection."""
 
     def setup_method(self):
         """Setup test fixtures."""
         self.tree = ResamplingDecisionTree()
 
-    def test_detect_timstof_from_bruker_metadata(self):
-        """Test timsTOF detection from Bruker metadata."""
-        # Test with exact instrument name "timsTOF Maldi 2"
-        timstof_maldi_metadata = {
-            "GlobalMetadata": {"InstrumentName": "timsTOF Maldi 2"}
-        }
-        assert self.tree._detect_timstof_from_bruker_metadata(timstof_maldi_metadata)
-
-        # Test with other instrument names should NOT be detected
-        other_metadata = {"GlobalMetadata": {"InstrumentName": "timsTOF Pro 2"}}
-        assert not self.tree._detect_timstof_from_bruker_metadata(other_metadata)
-
-        non_timstof_metadata = {
-            "GlobalMetadata": {"InstrumentName": "Quadrupole LC-MS"}
-        }
-        assert not self.tree._detect_timstof_from_bruker_metadata(non_timstof_metadata)
-
-        # Test without InstrumentName should not detect
-        empty_metadata = {"GlobalMetadata": {"SomeOtherKey": "value"}}
-        assert not self.tree._detect_timstof_from_bruker_metadata(empty_metadata)
-
-    def test_is_imzml_centroid_spectrum_legacy(self):
-        """Test legacy ImzML centroid spectrum detection."""
-        # Test essential_metadata format
-        metadata = {"essential_metadata": {"spectrum_type": SpectrumType.CENTROID}}
-        assert self.tree._is_imzml_centroid_spectrum_legacy(metadata)
-
-        # Test root level spectrum_type
-        metadata = {"spectrum_type": SpectrumType.CENTROID}
-        assert self.tree._is_imzml_centroid_spectrum_legacy(metadata)
-
-        # Test cvParams format
+    def test_detect_spectrum_type_from_cvparams(self):
+        """Test spectrum type detection from cvParams list."""
+        # Centroid from cvParams
         metadata = {"cvParams": [{"name": SpectrumType.CENTROID}]}
-        assert self.tree._is_imzml_centroid_spectrum_legacy(metadata)
+        assert self.tree._detect_spectrum_type_legacy(metadata) == SpectrumType.CENTROID
 
-        # Test profile should return False
-        metadata = {"spectrum_type": SpectrumType.PROFILE}
-        assert not self.tree._is_imzml_centroid_spectrum_legacy(metadata)
+        # Profile from cvParams
+        metadata = {"cvParams": [{"name": SpectrumType.PROFILE}]}
+        assert self.tree._detect_spectrum_type_legacy(metadata) == SpectrumType.PROFILE
 
-    def test_is_profile_spectrum_legacy(self):
-        """Test legacy profile spectrum detection."""
-        # Test essential_metadata format
-        metadata = {"essential_metadata": {"spectrum_type": SpectrumType.PROFILE}}
-        assert self.tree._is_profile_spectrum_legacy(metadata)
-
-        # Test root level spectrum_type
-        metadata = {"spectrum_type": SpectrumType.PROFILE}
-        assert self.tree._is_profile_spectrum_legacy(metadata)
-
-        # Test centroid should return False
+    def test_detect_spectrum_type_from_root_level(self):
+        """Test spectrum type detection from root level metadata."""
         metadata = {"spectrum_type": SpectrumType.CENTROID}
-        assert not self.tree._is_profile_spectrum_legacy(metadata)
+        assert self.tree._detect_spectrum_type_legacy(metadata) == SpectrumType.CENTROID
 
-    def test_check_rapiflex_format_legacy(self):
-        """Test legacy Rapiflex format detection."""
-        metadata = {"format_specific": {"format": "Rapiflex"}}
-        assert self.tree._check_rapiflex_format_legacy(metadata)
+        metadata = {"spectrum_type": SpectrumType.PROFILE}
+        assert self.tree._detect_spectrum_type_legacy(metadata) == SpectrumType.PROFILE
 
-        metadata = {"format_specific": {"format": "Other"}}
-        assert not self.tree._check_rapiflex_format_legacy(metadata)
+    def test_detect_spectrum_type_returns_none_for_empty(self):
+        """Test that empty metadata returns None."""
+        assert self.tree._detect_spectrum_type_legacy({}) is None
 
-        metadata = {}
-        assert not self.tree._check_rapiflex_format_legacy(metadata)
+    def test_detect_spectrum_type_ignores_invalid_cvparams(self):
+        """Test that invalid cvParams formats are handled."""
+        metadata = {"cvParams": "not a list"}
+        assert self.tree._detect_spectrum_type_legacy(metadata) is None
+
+        metadata = {"cvParams": [{"other": "value"}]}
+        assert self.tree._detect_spectrum_type_legacy(metadata) is None

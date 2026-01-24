@@ -99,90 +99,34 @@ class ResamplingDecisionTree:
     ) -> None:
         """Enhance DataCharacteristics from legacy metadata formats.
 
-        This provides backwards compatibility with existing metadata structures
-        that may not match the new DataCharacteristics format.
+        Only handles truly legacy formats not covered by DataCharacteristics.from_metadata():
+        - cvParams list format for spectrum type
+        - Root level spectrum_type (without essential_metadata wrapper)
         """
-        # Check for legacy centroid spectrum detection
         if characteristics.spectrum_type is None:
-            if self._is_imzml_centroid_spectrum_legacy(metadata):
-                characteristics.spectrum_type = SpectrumType.CENTROID
-            elif self._is_profile_spectrum_legacy(metadata):
-                characteristics.spectrum_type = SpectrumType.PROFILE
+            characteristics.spectrum_type = self._detect_spectrum_type_legacy(metadata)
 
-        # Check for legacy timsTOF detection
-        if not characteristics.is_timstof:
-            if self._detect_timstof_from_bruker_metadata(metadata):
-                characteristics.is_timstof = True
-                characteristics.instrument_name = "timsTOF Maldi 2"
+    def _detect_spectrum_type_legacy(
+        self, metadata: Dict[str, Any]
+    ) -> Optional[str]:
+        """Detect spectrum type from legacy metadata formats.
 
-        # Check for legacy Rapiflex detection
-        if not characteristics.is_rapiflex_format:
-            if self._check_rapiflex_format_legacy(metadata):
-                characteristics.is_rapiflex_format = True
+        Checks cvParams list and root-level spectrum_type key.
+        """
+        # Check cvParams list (legacy ImzML format)
+        cv_params = metadata.get("cvParams")
+        if isinstance(cv_params, list):
+            for param in cv_params:
+                if isinstance(param, dict):
+                    name = param.get("name")
+                    if name == SpectrumType.CENTROID:
+                        return SpectrumType.CENTROID
+                    if name == SpectrumType.PROFILE:
+                        return SpectrumType.PROFILE
 
-        # Extract peak statistics if not present
-        if characteristics.total_peaks is None or characteristics.n_spectra is None:
-            essential = metadata.get("essential_metadata", {})
-            if isinstance(essential, dict):
-                if characteristics.total_peaks is None:
-                    characteristics.total_peaks = essential.get("total_peaks")
-                if characteristics.n_spectra is None:
-                    characteristics.n_spectra = essential.get("n_spectra")
+        # Check root level spectrum_type
+        spectrum_type = metadata.get("spectrum_type")
+        if spectrum_type in (SpectrumType.CENTROID, SpectrumType.PROFILE):
+            return spectrum_type
 
-    # =========================================================================
-    # Legacy detection methods (for backwards compatibility)
-    # =========================================================================
-
-    def _is_imzml_centroid_spectrum_legacy(self, metadata: Dict[str, Any]) -> bool:
-        """Check for ImzML centroid spectrum from legacy metadata formats."""
-        # Check essential metadata for spectrum_type
-        if "essential_metadata" in metadata:
-            essential = metadata["essential_metadata"]
-            if isinstance(essential, dict) and "spectrum_type" in essential:
-                return bool(essential["spectrum_type"] == SpectrumType.CENTROID)
-
-        # Fallback: Look for cvParam with exact name
-        if "cvParams" in metadata:
-            cv_params = metadata["cvParams"]
-            if isinstance(cv_params, list):
-                for param in cv_params:
-                    if (
-                        isinstance(param, dict)
-                        and param.get("name") == SpectrumType.CENTROID
-                    ):
-                        return True
-
-        # Also check for spectrum_type at root level
-        if "spectrum_type" in metadata:
-            return bool(metadata["spectrum_type"] == SpectrumType.CENTROID)
-
-        return False
-
-    def _is_profile_spectrum_legacy(self, metadata: Dict[str, Any]) -> bool:
-        """Check for profile spectrum from legacy metadata formats."""
-        if "essential_metadata" in metadata:
-            essential = metadata["essential_metadata"]
-            if isinstance(essential, dict) and "spectrum_type" in essential:
-                return bool(essential["spectrum_type"] == SpectrumType.PROFILE)
-
-        if "spectrum_type" in metadata:
-            return bool(metadata["spectrum_type"] == SpectrumType.PROFILE)
-
-        return False
-
-    def _detect_timstof_from_bruker_metadata(self, metadata: Dict[str, Any]) -> bool:
-        """Detect timsTOF from Bruker-specific metadata structure."""
-        if "GlobalMetadata" in metadata:
-            global_meta = metadata["GlobalMetadata"]
-            if "InstrumentName" in global_meta:
-                instrument_name = str(global_meta["InstrumentName"]).strip()
-                if instrument_name == "timsTOF Maldi 2":
-                    return True
-        return False
-
-    def _check_rapiflex_format_legacy(self, metadata: Dict[str, Any]) -> bool:
-        """Check if format_specific indicates Rapiflex."""
-        format_specific = metadata.get("format_specific", {})
-        if isinstance(format_specific, dict):
-            return bool(format_specific.get("format") == "Rapiflex")
-        return False
+        return None
