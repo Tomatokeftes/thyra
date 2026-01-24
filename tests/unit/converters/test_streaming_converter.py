@@ -57,6 +57,7 @@ class MockMSIReader:
         self.mass_range = mass_range
         self.n_spectra = dimensions[0] * dimensions[1] * dimensions[2]
         self.data_path = Path("/mock/path.imzML")
+        self.has_shared_mass_axis = False  # Mock data is processed mode
 
         # Generate consistent random data
         np.random.seed(42)
