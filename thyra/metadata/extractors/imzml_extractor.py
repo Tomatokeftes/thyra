@@ -9,6 +9,7 @@ from numpy.typing import NDArray
 from pyimzml.ImzMLParser import ImzMLParser
 
 from ...core.base_extractor import MetadataExtractor
+from ...resampling.constants import ImzMLAccessions, SpectrumType
 from ..types import ComprehensiveMetadata, EssentialMetadata
 
 logger = logging.getLogger(__name__)
@@ -107,13 +108,42 @@ class ImzMLMetadataExtractor(MetadataExtractor):
             float(np.max(y_coords)),
         )
 
+    def _is_continuous_mode(self) -> bool:
+        """Check if the ImzML file is in continuous mode.
+
+        Continuous mode means all spectra share the same m/z axis.
+        Detection checks file_description.param_by_name for "continuous" key.
+
+        Returns:
+            True if continuous mode, False otherwise (processed mode).
+        """
+        try:
+            if not hasattr(self.parser, "metadata"):
+                return False
+            if self.parser.metadata is None:
+                return False
+
+            file_desc = getattr(self.parser.metadata, "file_description", None)
+            if file_desc is None:
+                return False
+
+            param_by_name = getattr(file_desc, "param_by_name", None)
+            if param_by_name is None or not isinstance(param_by_name, dict):
+                return False
+
+            return "continuous" in param_by_name
+        except Exception:
+            return False
+
     def _get_mass_range_complete(
         self,
         dimensions: Optional[Tuple[int, int, int]] = None,
     ) -> Tuple[Tuple[float, float], int, Optional[NDArray[np.int32]]]:
-        """Complete mass range extraction by scanning ALL spectra.
+        """Complete mass range extraction.
 
-        Required for resampling to ensure no m/z values are missed.
+        For continuous mode: reads only the first spectrum (all share same m/z axis).
+        For processed mode: scans ALL spectra to find complete mass range.
+
         Also counts total peaks for COO matrix pre-allocation and
         optionally collects per-pixel peak counts for streaming conversion.
 
@@ -126,29 +156,90 @@ class ImzMLMetadataExtractor(MetadataExtractor):
             peak_counts_per_pixel is None if dimensions not provided.
         """
         try:
-            logger.info(
-                "Scanning ALL spectra for complete mass range and peak count..."
-            )
-
             coords = self.parser.coordinates
             n_spectra = len(coords)
-            peak_counts = self._init_peak_counts_array(dimensions)
 
-            min_mass, max_mass, total_peaks = self._scan_all_spectra(
-                coords, n_spectra, dimensions, peak_counts
-            )
+            # Check if continuous mode - all spectra share the same m/z axis
+            # Detection: check file_description.param_by_name for "continuous" key
+            is_continuous = self._is_continuous_mode()
 
-            if min_mass == float("inf"):
-                logger.warning("No valid spectra found")
-                return ((0.0, 1000.0), 0, None)
-
-            logger.info(f"Complete mass range: {min_mass:.2f} - {max_mass:.2f} m/z")
-            logger.info(f"Total peaks: {total_peaks:,}")
-            return ((min_mass, max_mass), total_peaks, peak_counts)
+            if is_continuous:
+                return self._get_mass_range_continuous(n_spectra, dimensions)
+            else:
+                return self._get_mass_range_processed(coords, n_spectra, dimensions)
 
         except Exception as e:
-            logger.error(f"Complete mass range scan failed: {e}")
+            logger.error(f"Mass range extraction failed: {e}")
             return ((0.0, 1000.0), 0, None)
+
+    def _get_mass_range_continuous(
+        self,
+        n_spectra: int,
+        dimensions: Optional[Tuple[int, int, int]] = None,
+    ) -> Tuple[Tuple[float, float], int, Optional[NDArray[np.int32]]]:
+        """Get mass range for continuous mode - read only first spectrum.
+
+        In continuous mode, all spectra share the same m/z axis, so we only
+        need to read one spectrum to get the mass range and peak count.
+        """
+        logger.info(
+            "Continuous mode detected - reading m/z axis from first spectrum only"
+        )
+
+        # Read first spectrum to get shared m/z axis
+        mzs, _ = self.parser.getspectrum(0)
+        n_peaks_per_spectrum = len(mzs)
+
+        if n_peaks_per_spectrum == 0:
+            logger.warning("First spectrum has no peaks")
+            return ((0.0, 1000.0), 0, None)
+
+        min_mass = float(np.min(mzs))
+        max_mass = float(np.max(mzs))
+        total_peaks = n_peaks_per_spectrum * n_spectra
+
+        # For continuous mode, all pixels have the same peak count
+        peak_counts = None
+        if dimensions is not None:
+            n_x, n_y, n_z = dimensions
+            n_pixels = n_x * n_y * n_z
+            peak_counts = np.full(n_pixels, n_peaks_per_spectrum, dtype=np.int32)
+            logger.info(
+                f"All {n_pixels:,} pixels have {n_peaks_per_spectrum:,} peaks (continuous mode)"
+            )
+
+        logger.info(f"Mass range: {min_mass:.2f} - {max_mass:.2f} m/z")
+        logger.info(
+            f"Total peaks: {total_peaks:,} ({n_peaks_per_spectrum:,} per spectrum)"
+        )
+        return ((min_mass, max_mass), total_peaks, peak_counts)
+
+    def _get_mass_range_processed(
+        self,
+        coords: List,
+        n_spectra: int,
+        dimensions: Optional[Tuple[int, int, int]] = None,
+    ) -> Tuple[Tuple[float, float], int, Optional[NDArray[np.int32]]]:
+        """Get mass range for processed mode - scan all spectra.
+
+        In processed mode, each spectrum can have different m/z values,
+        so we must scan all spectra to find the complete mass range.
+        """
+        logger.info("Processed mode - scanning ALL spectra for complete mass range...")
+
+        peak_counts = self._init_peak_counts_array(dimensions)
+
+        min_mass, max_mass, total_peaks = self._scan_all_spectra(
+            coords, n_spectra, dimensions, peak_counts
+        )
+
+        if min_mass == float("inf"):
+            logger.warning("No valid spectra found")
+            return ((0.0, 1000.0), 0, None)
+
+        logger.info(f"Complete mass range: {min_mass:.2f} - {max_mass:.2f} m/z")
+        logger.info(f"Total peaks: {total_peaks:,}")
+        return ((min_mass, max_mass), total_peaks, peak_counts)
 
     def _init_peak_counts_array(
         self, dimensions: Optional[Tuple[int, int, int]]
@@ -431,36 +522,40 @@ class ImzMLMetadataExtractor(MetadataExtractor):
             return None
 
     def _detect_centroid_spectrum(self) -> Optional[str]:
-        """Detect if this is a centroid spectrum by looking for MS:1000127."""
+        """Detect spectrum type by looking for MS:1000127 (centroid) or MS:1000128 (profile)."""
         try:
             # Method 1: Check parser metadata first (no XML parsing needed)
             result = self._check_parser_metadata_for_centroid()
             if result:
                 return result
 
-            # Method 2: Stream-parse XML for MS:1000127 (memory efficient)
-            result = self._check_xml_for_centroid()
+            # Method 2: Stream-parse XML for spectrum type markers (memory efficient)
+            result = self._check_xml_for_spectrum_type()
             if result:
                 return result
 
             return None
         except Exception as e:
-            logger.debug(f"Could not detect centroid spectrum: {e}")
+            logger.debug(f"Could not detect spectrum type: {e}")
             return None
 
-    def _check_xml_for_centroid(self) -> Optional[str]:
-        """Check XML for MS:1000127 centroid spectrum marker using streaming parser.
+    def _check_xml_for_spectrum_type(self) -> Optional[str]:
+        """Check XML for spectrum type markers using streaming parser.
 
-        Uses iterparse for memory-efficient streaming - stops as soon as the
-        centroid marker is found, avoiding full file load for large datasets.
+        Looks for PSI-MS controlled vocabulary accession codes:
+        - MS:1000127 = centroid spectrum
+        - MS:1000128 = profile spectrum
+
+        Uses iterparse for memory-efficient streaming - stops as soon as a
+        spectrum type marker is found, avoiding full file load for large datasets.
         """
         try:
             import xml.etree.ElementTree as ET  # nosec B405
 
             # Use iterparse for streaming - only parses until we find what we need
-            # The centroid spectrum cvParam is typically in the fileDescription
+            # The spectrum type cvParam is typically in the fileDescription
             # section near the beginning of the file
-            context = ET.iterparse(str(self.imzml_path), events=("end",))
+            context = ET.iterparse(str(self.imzml_path), events=("end",))  # nosec B314
 
             elements_checked = 0
             max_elements = 10000  # Limit search to first 10k elements
@@ -470,20 +565,26 @@ class ImzMLMetadataExtractor(MetadataExtractor):
 
                 if elem.tag.endswith("cvParam"):
                     accession = elem.get("accession", "")
-                    name = elem.get("name", "")
-                    if accession == "MS:1000127" and name == "centroid spectrum":
-                        logger.info("Detected centroid spectrum from MS:1000127")
-                        # Clean up iterator
+                    if accession == ImzMLAccessions.CENTROID_SPECTRUM:
+                        logger.info(
+                            f"Detected centroid spectrum from {ImzMLAccessions.CENTROID_SPECTRUM}"
+                        )
                         del context
-                        return "centroid spectrum"
+                        return SpectrumType.CENTROID
+                    if accession == ImzMLAccessions.PROFILE_SPECTRUM:
+                        logger.info(
+                            f"Detected profile spectrum from {ImzMLAccessions.PROFILE_SPECTRUM}"
+                        )
+                        del context
+                        return SpectrumType.PROFILE
 
                 # Clear processed elements to save memory
                 elem.clear()
 
-                # Stop after checking enough elements - centroid info is at the start
+                # Stop after checking enough elements - spectrum type info is at the start
                 if elements_checked >= max_elements:
                     logger.debug(
-                        f"Centroid marker not found in first {max_elements} elements"
+                        f"Spectrum type marker not found in first {max_elements} elements"
                     )
                     break
 
@@ -522,7 +623,7 @@ class ImzMLMetadataExtractor(MetadataExtractor):
         # If it's processed data, it's likely centroided
         if params.get("processed", False):
             logger.info("Assuming centroid spectrum for processed ImzML data")
-            return "centroid spectrum"
+            return SpectrumType.CENTROID
 
         return None
 

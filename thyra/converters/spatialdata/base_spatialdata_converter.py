@@ -258,6 +258,8 @@ class BaseSpatialDataConverter(BaseMSIConverter, ABC):
                 "dimensions": essential.dimensions,
                 "mass_range": essential.mass_range,
                 "source_path": str(essential.source_path),
+                "total_peaks": getattr(essential, "total_peaks", None),
+                "n_spectra": getattr(essential, "n_spectra", None),
             }
         except Exception as e:
             logging.debug(f"Could not extract essential metadata: {e}")
@@ -622,10 +624,17 @@ class BaseSpatialDataConverter(BaseMSIConverter, ABC):
                 )
             else:
                 # No resampling - load raw mass axis as usual
-                logging.warning(
-                    "Building RAW mass axis (no resampling) - "
-                    "WILL iterate through ALL spectra. This is slow for large datasets!"
-                )
+                if self.reader.has_shared_mass_axis:
+                    logging.info(
+                        "Loading RAW mass axis (no resampling) - "
+                        "continuous mode, reading m/z from first spectrum only"
+                    )
+                else:
+                    logging.warning(
+                        "Building RAW mass axis (no resampling) - "
+                        "processed mode, iterating ALL spectra to collect unique m/z values. "
+                        "This is slow for large datasets!"
+                    )
                 self._common_mass_axis = self.reader.get_common_mass_axis()
                 if len(self._common_mass_axis) == 0:
                     raise ValueError(

@@ -6,7 +6,7 @@ import os  # noqa: E402
 import sqlite3  # noqa: E402
 import warnings  # noqa: E402
 from pathlib import Path  # noqa: E402
-from typing import Optional  # noqa: E402
+from typing import Literal, Optional  # noqa: E402
 
 import click  # noqa: E402
 
@@ -353,6 +353,15 @@ def _build_resampling_config(
     "(e.g., Rapiflex) where most values are detector noise. "
     "Default: None (no filtering).",
 )
+# Memory/performance options
+@click.option(
+    "--streaming",
+    type=click.Choice(["auto", "true", "false"]),
+    default="false",
+    help="Use memory-efficient streaming converter for large datasets. "
+    "'auto' enables streaming for datasets >10GB, 'true' forces streaming, "
+    "'false' uses standard converter (default).",
+)
 def main(
     input: Path,
     output: Path,
@@ -376,6 +385,7 @@ def main(
     sparse_format: str,
     include_optical: bool,
     intensity_threshold: Optional[float],
+    streaming: str,
 ):
     """Convert MSI data to SpatialData format.
 
@@ -420,9 +430,20 @@ def main(
     )
 
     # Build reader options for format-specific settings
-    reader_options = {"use_recalibrated_state": use_recalibrated}
+    reader_options: dict[str, bool | float] = {
+        "use_recalibrated_state": use_recalibrated
+    }
     if intensity_threshold is not None:
         reader_options["intensity_threshold"] = intensity_threshold
+
+    # Convert streaming option from string to appropriate type
+    streaming_value: bool | Literal["auto"]
+    if streaming == "true":
+        streaming_value = True
+    elif streaming == "false":
+        streaming_value = False
+    else:
+        streaming_value = "auto"
 
     # Perform conversion
     success = convert_msi(
@@ -436,6 +457,7 @@ def main(
         reader_options=reader_options,
         sparse_format=sparse_format,
         include_optical=include_optical,
+        streaming=streaming_value,
     )
 
     # Optimize chunks if requested and conversion succeeded

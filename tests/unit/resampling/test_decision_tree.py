@@ -1,263 +1,346 @@
 """
-Tests for simplified DecisionTree with only timsTOF support - Phase 3.
+Tests for ResamplingDecisionTree with Strategy pattern for instrument detection.
 """
 
 import pytest
 
+from thyra.resampling.constants import SpectrumType
+from thyra.resampling.data_characteristics import DataCharacteristics
 from thyra.resampling.decision_tree import ResamplingDecisionTree
-from thyra.resampling.types import ResamplingMethod
+from thyra.resampling.instrument_detectors import (
+    CentroidImzMLDetector,
+    DefaultDetector,
+    FTICRDetector,
+    InstrumentDetectorChain,
+    OrbitrapDetector,
+    RapiflexDetector,
+    TimsTOFDetector,
+)
+from thyra.resampling.types import AxisType, ResamplingMethod
 
 
-class TestSimplifiedDecisionTree:
-    """Test simplified decision tree with only timsTOF support."""
+class TestResamplingDecisionTree:
+    """Test ResamplingDecisionTree with Strategy pattern."""
 
     def setup_method(self):
         """Setup test fixtures."""
         self.tree = ResamplingDecisionTree()
 
     def test_no_metadata_raises_error(self):
-        """Test that no metadata raises NotImplementedError."""
+        """Test that None metadata raises NotImplementedError."""
         with pytest.raises(NotImplementedError) as exc_info:
             self.tree.select_strategy(None)
 
-        assert "metadata not yet implemented" in str(exc_info.value)
-        assert "timsTOF detection is supported" in str(exc_info.value)
+        assert "metadata" in str(exc_info.value).lower()
 
-        with pytest.raises(NotImplementedError):
-            self.tree.select_strategy({})
-
-    def test_timstof_detection_only_bruker_metadata(self):
-        """Test that timsTOF detection only works via Bruker metadata."""
-        # These should NOT be detected as timsTOF (only Bruker metadata detection)
-        timstof_names = [
-            "timsTOF Pro 2",
-            "Bruker timsTOF",
-            "TIMS-TOF CCS",
-            "tims tof flex",
-            "TimsTOF Impact II",
-        ]
-
-        for name in timstof_names:
-            metadata = {"instrument_name": name}
-            with pytest.raises(NotImplementedError) as exc_info:
-                self.tree.select_strategy(metadata)
-            assert name in str(exc_info.value)
-            assert "not yet implemented" in str(exc_info.value)
-
-    def test_imzml_centroid_spectrum_detection(self):
-        """Test exact ImzML centroid spectrum detection."""
-        # Test exact spectrum_type match
-        metadata = {"spectrum_type": "centroid spectrum"}
-        method = self.tree.select_strategy(metadata)
+    def test_empty_metadata_uses_default(self):
+        """Test that empty metadata uses default detector."""
+        # With the Strategy pattern, empty metadata falls through to DefaultDetector
+        method = self.tree.select_strategy({})
         assert method == ResamplingMethod.NEAREST_NEIGHBOR
 
-        # Test cvParam match
-        metadata = {
-            "cvParams": [
-                {
-                    "accession": "MS:1000127",
-                    "cvRef": "MS",
-                    "name": "centroid spectrum",
-                }
-            ]
-        }
-        method = self.tree.select_strategy(metadata)
-        assert method == ResamplingMethod.NEAREST_NEIGHBOR
-
-    def test_non_exact_spectrum_types_raise_error(self):
-        """Test that non-exact spectrum types raise NotImplementedError."""
-        non_exact_types = [
-            "profile spectrum",
-            "profile",
-            "continuum",
-            "raw",
-            "continuous",
-            "unprocessed",
-            "centroided",
-            "peak picked",
-            "peaks",
-        ]
-
-        for spec_type in non_exact_types:
-            metadata = {"spectrum_type": spec_type}
-            with pytest.raises(NotImplementedError) as exc_info:
-                self.tree.select_strategy(metadata)
-
-            assert "not yet implemented" in str(exc_info.value)
-
-    def test_non_timstof_instruments_raise_error(self):
-        """Test that non-timsTOF instruments raise NotImplementedError."""
-        non_timstof_instruments = [
-            "Orbitrap Fusion Lumos",
-            "Q Exactive HF-X",
-            "LTQ Orbitrap Velos",
-            "Waters Synapt G2-Si",
-            "Bruker 12T FT-ICR",
-            "Unknown MS Instrument",
-        ]
-
-        for instrument in non_timstof_instruments:
-            metadata = {"instrument_name": instrument}
-            with pytest.raises(NotImplementedError) as exc_info:
-                self.tree.select_strategy(metadata)
-
-            assert instrument in str(exc_info.value)
-            assert "not yet implemented" in str(exc_info.value)
-            assert "timsTOF detection is supported" in str(exc_info.value)
-
-    def test_bruker_metadata_timstof_detection(self):
-        """Test timsTOF detection from Bruker-specific metadata."""
-        # Test with exact instrument name "timsTOF Maldi 2"
+    def test_timstof_detection_from_bruker_metadata(self):
+        """Test timsTOF detection from Bruker GlobalMetadata."""
         bruker_timstof_metadata = {
             "GlobalMetadata": {"InstrumentName": "timsTOF Maldi 2"}
         }
-
         method = self.tree.select_strategy(bruker_timstof_metadata)
         assert method == ResamplingMethod.NEAREST_NEIGHBOR
 
-        # Test with other timsTOF variants should NOT be detected via Bruker metadata
-        other_timstof_metadata = {
-            "GlobalMetadata": {"InstrumentName": "timsTOF Pro 2"}  # Different variant
+        axis_type = self.tree.select_axis_type(bruker_timstof_metadata)
+        assert axis_type == AxisType.REFLECTOR_TOF
+
+    def test_centroid_spectrum_detection(self):
+        """Test centroid spectrum detection from essential_metadata."""
+        metadata = {"essential_metadata": {"spectrum_type": SpectrumType.CENTROID}}
+        method = self.tree.select_strategy(metadata)
+        assert method == ResamplingMethod.NEAREST_NEIGHBOR
+
+    def test_centroid_spectrum_detection_in_instrument_info(self):
+        """Test centroid spectrum detection via instrument info."""
+        metadata = {
+            "essential_metadata": {"spectrum_type": SpectrumType.CENTROID},
+            "instrument_info": {"instrument_type": "Q-TOF"},
         }
-        with pytest.raises(NotImplementedError):
-            self.tree.select_strategy(other_timstof_metadata)
+        method = self.tree.select_strategy(metadata)
+        assert method == ResamplingMethod.NEAREST_NEIGHBOR
 
-    def test_non_bruker_metadata_raises_error(self):
-        """Test that non-Bruker metadata without timsTOF raises error."""
-        non_bruker_metadata = {
-            "instrument_name": "Q Exactive",
-            "file_format": "mzML",
-            "acquisition_mode": "profile",
+    def test_profile_spectrum_with_high_density_uses_tic_preserving(self):
+        """Test that profile spectrum with high peak density uses TIC preserving."""
+        metadata = {
+            "essential_metadata": {
+                "spectrum_type": SpectrumType.PROFILE,
+                "total_peaks": 10000000,  # 10 million peaks
+                "n_spectra": 1000,  # 10000 peaks per spectrum
+            }
         }
+        method = self.tree.select_strategy(metadata)
+        assert method == ResamplingMethod.TIC_PRESERVING
 
-        with pytest.raises(NotImplementedError):
-            self.tree.select_strategy(non_bruker_metadata)
+    def test_rapiflex_format_detection(self):
+        """Test Rapiflex format detection."""
+        metadata = {"format_specific": {"format": "Rapiflex"}}
+        method = self.tree.select_strategy(metadata)
+        assert method == ResamplingMethod.TIC_PRESERVING
 
-    def test_metadata_key_variants_raise_error(self):
-        """Test different metadata key variants for instrument name all raise error."""
-        instrument_key_variants = [
-            "instrument_name",
-            "instrument",
-            "instrument_model",
-            "InstrumentName",
-            "Instrument",
-            "InstrumentModel",
-            "ms_instrument_name",
-            "device_name",
-        ]
+        axis_type = self.tree.select_axis_type(metadata)
+        assert axis_type == AxisType.CONSTANT
 
-        for key in instrument_key_variants:
-            metadata = {key: "timsTOF Pro"}
-            with pytest.raises(NotImplementedError):
-                self.tree.select_strategy(metadata)
+    def test_bruker_maldi_tof_detection(self):
+        """Test Bruker MALDI-TOF detection."""
+        metadata = {
+            "instrument_info": {
+                "instrument_type": "MALDI-TOF",
+                "manufacturer": "Bruker",
+            }
+        }
+        method = self.tree.select_strategy(metadata)
+        assert method == ResamplingMethod.TIC_PRESERVING
 
-    def test_empty_instrument_name_raises_error(self):
-        """Test that empty instrument names raise NotImplementedError."""
-        empty_names = ["", "   ", None]
+    def test_axis_type_selection_no_metadata(self):
+        """Test axis type selection with no metadata uses default."""
+        axis_type = self.tree.select_axis_type(None)
+        assert axis_type == AxisType.CONSTANT
 
-        for name in empty_names:
-            metadata = {"instrument_name": name}
-            with pytest.raises(NotImplementedError):
-                self.tree.select_strategy(metadata)
-
-
-class TestDecisionTreeHelperMethods:
-    """Test helper methods of simplified DecisionTree."""
+class TestInstrumentDetectorChain:
+    """Test InstrumentDetectorChain behavior."""
 
     def setup_method(self):
         """Setup test fixtures."""
-        self.tree = ResamplingDecisionTree()
+        self.chain = InstrumentDetectorChain()
 
-    def test_extract_instrument_name(self):
-        """Test instrument name extraction."""
-        metadata = {"instrument_name": "  timsTOF Pro 2  "}
-        name = self.tree._extract_instrument_name(metadata)
-        assert name == "timsTOF Pro 2"  # Should be stripped
-
-        # Test None values
-        metadata = {"instrument_name": None}
-        name = self.tree._extract_instrument_name(metadata)
-        assert name is None
-
-        # Test empty metadata
-        name = self.tree._extract_instrument_name({})
-        assert name is None
-
-    def test_extract_spectrum_type(self):
-        """Test spectrum type extraction."""
-        metadata = {"spectrum_type": "  centroid spectrum  "}
-        spec_type = self.tree._extract_spectrum_type(metadata)
-        assert spec_type == "centroid spectrum"  # Should be stripped and lowercased
-
-        # Test None values
-        metadata = {"spectrum_type": None}
-        spec_type = self.tree._extract_spectrum_type(metadata)
-        assert spec_type is None
-
-        # Test empty metadata
-        spec_type = self.tree._extract_spectrum_type({})
-        assert spec_type is None
-
-    def test_is_imzml_centroid_spectrum(self):
-        """Test exact ImzML centroid spectrum detection."""
-        # Test exact spectrum_type match
-        metadata = {"spectrum_type": "centroid spectrum"}
-        assert self.tree._is_imzml_centroid_spectrum(metadata)
-
-        # Test cvParam match
-        metadata = {
-            "cvParams": [
-                {
-                    "accession": "MS:1000127",
-                    "cvRef": "MS",
-                    "name": "centroid spectrum",
-                }
-            ]
-        }
-        assert self.tree._is_imzml_centroid_spectrum(metadata)
-
-        # Test non-exact matches should return False
-        non_exact_metadata = [
-            {"spectrum_type": "centroided"},
-            {"spectrum_type": "profile spectrum"},
-            {"cvParams": [{"name": "profile spectrum"}]},
-            {},
+    def test_default_chain_order(self):
+        """Test that default chain has correct order."""
+        detector_types = [type(d).__name__ for d in self.chain.detectors]
+        assert detector_types == [
+            "TimsTOFDetector",
+            "RapiflexDetector",
+            "FTICRDetector",
+            "OrbitrapDetector",
+            "CentroidImzMLDetector",
+            "DefaultDetector",
         ]
 
-        for metadata in non_exact_metadata:
-            assert not self.tree._is_imzml_centroid_spectrum(metadata)
+    def test_timstof_takes_priority(self):
+        """Test that TimsTOF detector takes priority over others."""
+        characteristics = DataCharacteristics(is_timstof=True)
+        detector = self.chain.detect(characteristics)
+        assert isinstance(detector, TimsTOFDetector)
 
-    def test_is_bruker_metadata(self):
-        """Test Bruker metadata detection."""
-        bruker_metadata = {
-            "GlobalMetadata": {"InstrumentName": "timsTOF"},
-            "AcquisitionKeys": {},
+    def test_rapiflex_detected_before_centroid(self):
+        """Test Rapiflex detection takes priority over generic centroid."""
+        characteristics = DataCharacteristics(
+            is_rapiflex_format=True,
+            spectrum_type=SpectrumType.CENTROID,
+        )
+        detector = self.chain.detect(characteristics)
+        assert isinstance(detector, RapiflexDetector)
+
+    def test_fallback_to_default(self):
+        """Test fallback to DefaultDetector when nothing matches."""
+        characteristics = DataCharacteristics()
+        detector = self.chain.detect(characteristics)
+        assert isinstance(detector, DefaultDetector)
+
+
+class TestInstrumentDetectors:
+    """Test individual instrument detectors."""
+
+    def test_timstof_detector(self):
+        """Test TimsTOF detector matching."""
+        detector = TimsTOFDetector()
+        assert detector.name == "timsTOF"
+
+        # Should match when is_timstof is True
+        chars = DataCharacteristics(is_timstof=True)
+        assert detector.matches(chars)
+
+        # Should not match when is_timstof is False
+        chars = DataCharacteristics(is_timstof=False)
+        assert not detector.matches(chars)
+
+        assert detector.get_resampling_method() == ResamplingMethod.NEAREST_NEIGHBOR
+        assert detector.get_axis_type() == AxisType.REFLECTOR_TOF
+
+    def test_rapiflex_detector(self):
+        """Test Rapiflex detector matching."""
+        detector = RapiflexDetector()
+        assert detector.name == "Rapiflex MALDI-TOF"
+
+        # Should match Rapiflex format
+        chars = DataCharacteristics(is_rapiflex_format=True)
+        assert detector.matches(chars)
+
+        # Should match Bruker MALDI-TOF
+        chars = DataCharacteristics(
+            instrument_type="MALDI-TOF",
+            manufacturer="Bruker",
+        )
+        assert detector.matches(chars)
+
+        # Should match high-density profile data
+        chars = DataCharacteristics(
+            spectrum_type=SpectrumType.PROFILE,
+            total_peaks=10000000,
+            n_spectra=1000,
+        )
+        assert detector.matches(chars)
+
+        assert detector.get_resampling_method() == ResamplingMethod.TIC_PRESERVING
+        assert detector.get_axis_type() == AxisType.CONSTANT
+
+    def test_centroid_imzml_detector(self):
+        """Test CentroidImzML detector matching."""
+        detector = CentroidImzMLDetector()
+
+        # Should match centroid data
+        chars = DataCharacteristics(spectrum_type=SpectrumType.CENTROID)
+        assert detector.matches(chars)
+
+        # Should not match profile data
+        chars = DataCharacteristics(spectrum_type=SpectrumType.PROFILE)
+        assert not detector.matches(chars)
+
+        assert detector.get_resampling_method() == ResamplingMethod.NEAREST_NEIGHBOR
+        assert detector.get_axis_type() == AxisType.REFLECTOR_TOF
+
+    def test_fticr_detector(self):
+        """Test FTICR detector matching."""
+        detector = FTICRDetector()
+
+        chars = DataCharacteristics(instrument_type="FT-ICR")
+        assert detector.matches(chars)
+
+        chars = DataCharacteristics(instrument_type="Orbitrap")
+        assert not detector.matches(chars)
+
+        assert detector.get_axis_type() == AxisType.FTICR
+
+    def test_orbitrap_detector(self):
+        """Test Orbitrap detector matching."""
+        detector = OrbitrapDetector()
+
+        chars = DataCharacteristics(instrument_type="Orbitrap")
+        assert detector.matches(chars)
+
+        chars = DataCharacteristics(instrument_type="FT-ICR")
+        assert not detector.matches(chars)
+
+        assert detector.get_axis_type() == AxisType.ORBITRAP
+
+    def test_default_detector(self):
+        """Test DefaultDetector always matches."""
+        detector = DefaultDetector()
+        assert detector.name == "Unknown (default)"
+
+        # Should always match
+        chars = DataCharacteristics()
+        assert detector.matches(chars)
+
+        chars = DataCharacteristics(
+            instrument_type="Unknown Instrument",
+            spectrum_type="unknown",
+        )
+        assert detector.matches(chars)
+
+        assert detector.get_resampling_method() == ResamplingMethod.NEAREST_NEIGHBOR
+        assert detector.get_axis_type() == AxisType.CONSTANT
+
+
+class TestDataCharacteristics:
+    """Test DataCharacteristics dataclass."""
+
+    def test_from_metadata_essential(self):
+        """Test creating from essential metadata."""
+        metadata = {
+            "essential_metadata": {
+                "spectrum_type": SpectrumType.CENTROID,
+                "total_peaks": 1000000,
+                "n_spectra": 500,
+            }
         }
-        assert self.tree._is_bruker_metadata(bruker_metadata)
+        chars = DataCharacteristics.from_metadata(metadata)
 
-        non_bruker_metadata = {
-            "instrument_name": "Orbitrap",
-            "file_format": "mzML",
+        assert chars.spectrum_type == SpectrumType.CENTROID
+        assert chars.total_peaks == 1000000
+        assert chars.n_spectra == 500
+        assert chars.is_centroid_data
+
+    def test_from_metadata_instrument_info(self):
+        """Test extracting instrument info from metadata."""
+        metadata = {
+            "instrument_info": {
+                "instrument_type": "MALDI-TOF",
+                "manufacturer": "Bruker",
+            }
         }
-        assert not self.tree._is_bruker_metadata(non_bruker_metadata)
+        chars = DataCharacteristics.from_metadata(metadata)
 
-    def test_detect_timstof_from_bruker_metadata(self):
-        """Test timsTOF detection from Bruker metadata."""
-        # Test with exact instrument name "timsTOF Maldi 2"
-        timstof_maldi_metadata = {
-            "GlobalMetadata": {"InstrumentName": "timsTOF Maldi 2"}
-        }
-        assert self.tree._detect_timstof_from_bruker_metadata(timstof_maldi_metadata)
+        assert chars.instrument_type == "MALDI-TOF"
+        assert chars.manufacturer == "Bruker"
 
-        # Test with other instrument names should NOT be detected
-        other_metadata = {"GlobalMetadata": {"InstrumentName": "timsTOF Pro 2"}}
-        assert not self.tree._detect_timstof_from_bruker_metadata(other_metadata)
+    def test_from_metadata_global_metadata(self):
+        """Test extracting from GlobalMetadata."""
+        metadata = {"GlobalMetadata": {"InstrumentName": "timsTOF Maldi 2"}}
+        chars = DataCharacteristics.from_metadata(metadata)
 
-        non_timstof_metadata = {
-            "GlobalMetadata": {"InstrumentName": "Quadrupole LC-MS"}
-        }
-        assert not self.tree._detect_timstof_from_bruker_metadata(non_timstof_metadata)
+        assert chars.instrument_name == "timsTOF Maldi 2"
+        assert chars.is_timstof
 
-        # Test without InstrumentName should not detect
-        empty_metadata = {"GlobalMetadata": {"SomeOtherKey": "value"}}
-        assert not self.tree._detect_timstof_from_bruker_metadata(empty_metadata)
+    def test_is_high_density_profile(self):
+        """Test high density profile detection."""
+        # High density profile (>5000 peaks per spectrum)
+        chars = DataCharacteristics(
+            spectrum_type=SpectrumType.PROFILE,
+            total_peaks=10000000,
+            n_spectra=1000,
+        )
+        assert chars.is_high_density_profile
+        assert chars.avg_peaks_per_spectrum == 10000.0
+
+        # Low density profile
+        chars = DataCharacteristics(
+            spectrum_type=SpectrumType.PROFILE,
+            total_peaks=1000,
+            n_spectra=1000,
+        )
+        assert not chars.is_high_density_profile
+
+        # Centroid data should not be high density profile
+        chars = DataCharacteristics(
+            spectrum_type=SpectrumType.CENTROID,
+            total_peaks=10000000,
+            n_spectra=1000,
+        )
+        assert not chars.is_high_density_profile
+
+    def test_needs_resampling(self):
+        """Test needs_resampling property."""
+        # Continuous data doesn't need resampling
+        chars = DataCharacteristics(has_shared_mass_axis=True)
+        assert not chars.needs_resampling
+
+        # Processed data needs resampling
+        chars = DataCharacteristics(has_shared_mass_axis=False)
+        assert chars.needs_resampling
+
+    def test_is_maldi_tof(self):
+        """Test MALDI-TOF detection."""
+        # Rapiflex format
+        chars = DataCharacteristics(is_rapiflex_format=True)
+        assert chars.is_maldi_tof
+
+        # Explicit MALDI-TOF type
+        chars = DataCharacteristics(instrument_type="MALDI-TOF")
+        assert chars.is_maldi_tof
+
+        # Bruker with high-density profile
+        chars = DataCharacteristics(
+            manufacturer="Bruker",
+            spectrum_type=SpectrumType.PROFILE,
+            total_peaks=10000000,
+            n_spectra=1000,
+        )
+        assert chars.is_maldi_tof
+
+

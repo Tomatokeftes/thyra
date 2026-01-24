@@ -90,6 +90,9 @@ class MockMSIReader:
         # Mock data path for compatibility
         self.data_path = Path("mock_msi_data")
 
+        # Mock has_shared_mass_axis for continuous mode detection
+        self.has_shared_mass_axis = False  # Mock data is processed mode
+
     def get_essential_metadata(self):
         """Return metadata matching the EssentialMetadata interface."""
 

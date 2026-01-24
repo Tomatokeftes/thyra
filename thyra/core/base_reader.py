@@ -86,6 +86,23 @@ class BaseMSIReader(ABC):
         """
         pass
 
+    @property
+    def has_shared_mass_axis(self) -> bool:
+        """Check if all spectra share the same m/z axis.
+
+        For continuous ImzML data, all spectra have identical m/z values,
+        so get_common_mass_axis() only needs to read the first spectrum.
+        For processed/centroid data, each spectrum may have different m/z
+        values, requiring iteration through all spectra.
+
+        Returns:
+            True if all spectra share the same m/z axis (continuous mode),
+            False if each spectrum has different m/z values (processed mode).
+        """
+        # Default implementation returns False (conservative assumption)
+        # Subclasses should override if they can detect shared mass axis
+        return False
+
     @abstractmethod
     def iter_spectra(self, batch_size: Optional[int] = None) -> Generator[
         Tuple[Tuple[int, int, int], NDArray[np.float64], NDArray[np.float64]],

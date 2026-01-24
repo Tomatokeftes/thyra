@@ -162,6 +162,15 @@ class ImzMLReader(BaseMSIReader):
 
         return ImzMLMetadataExtractor(self.parser, self.imzml_path)
 
+    @property
+    def has_shared_mass_axis(self) -> bool:
+        """Check if all spectra share the same m/z axis.
+
+        Returns True for continuous ImzML (all pixels have same m/z values),
+        False for processed ImzML (each pixel has different m/z values).
+        """
+        return self.is_continuous
+
     def get_common_mass_axis(self) -> NDArray[np.float64]:
         """Return the common mass axis composed of all unique m/z values.
 
