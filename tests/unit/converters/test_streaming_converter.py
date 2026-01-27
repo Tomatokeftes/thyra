@@ -892,3 +892,120 @@ def test_intensity_threshold_filtering():
         # Should be roughly half (with some tolerance for edge effects)
         ratio = nnz_with_thresh / nnz_no_thresh
         assert 0.4 < ratio < 0.6, f"Expected ~50% reduction, got {ratio:.2%}"
+
+
+@pytest.mark.skipif(
+    not SPATIALDATA_AVAILABLE,
+    reason="SpatialData dependencies not available",
+)
+def test_encoding_metadata_for_lazy_loading():
+    """Test that zarr arrays have proper encoding metadata for anndata lazy loading.
+
+    This test verifies that all arrays written by the streaming converter have
+    the required 'encoding-type' and 'encoding-version' attributes that are
+    needed by anndata.experimental.read_lazy() to correctly interpret the data.
+
+    The encoding spec is defined by anndata:
+    - Numeric arrays: encoding-type='array', encoding-version='0.2.0'
+    - String arrays: encoding-type='string-array', encoding-version='0.2.0'
+    - Categorical: encoding-type='categorical', encoding-version='0.2.0'
+    - Sparse matrices: encoding-type='csc_matrix'/'csr_matrix', encoding-version='0.1.0'
+    """
+    import zarr
+
+    reader = MockMSIReader(
+        dimensions=(3, 3, 1),  # 9 pixels
+        peaks_per_spectrum=50,
+        mass_range=(100.0, 500.0),
+    )
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        output_path = Path(tmpdir) / "test_encoding.zarr"
+
+        converter = StreamingSpatialDataConverter(
+            reader=reader,
+            output_path=output_path,
+            dataset_id="encoding_test",
+            use_csc=True,
+        )
+
+        success = converter.convert()
+        assert success, "Conversion should succeed"
+
+        # Open the zarr store directly to inspect encoding attributes
+        store = zarr.open(str(output_path), mode="r")
+
+        # Find the table group
+        table_group = store["tables/encoding_test_z0"]
+
+        # Check obs group arrays
+        obs_group = table_group["obs"]
+
+        # Numeric arrays in obs
+        for array_name in ["y", "x", "spatial_x", "spatial_y"]:
+            arr = obs_group[array_name]
+            assert (
+                "encoding-type" in arr.attrs
+            ), f"obs/{array_name} missing encoding-type"
+            assert (
+                arr.attrs["encoding-type"] == "array"
+            ), f"obs/{array_name} should be 'array' type"
+            assert (
+                "encoding-version" in arr.attrs
+            ), f"obs/{array_name} missing encoding-version"
+            assert (
+                arr.attrs["encoding-version"] == "0.2.0"
+            ), f"obs/{array_name} should have version 0.2.0"
+
+        # String arrays in obs
+        for array_name in ["instance_id", "instance_key"]:
+            arr = obs_group[array_name]
+            assert (
+                "encoding-type" in arr.attrs
+            ), f"obs/{array_name} missing encoding-type"
+            assert (
+                arr.attrs["encoding-type"] == "string-array"
+            ), f"obs/{array_name} should be 'string-array' type"
+            assert (
+                arr.attrs["encoding-version"] == "0.2.0"
+            ), f"obs/{array_name} should have version 0.2.0"
+
+        # Categorical region group
+        region_group = obs_group["region"]
+        assert region_group.attrs["encoding-type"] == "categorical"
+        assert region_group.attrs["encoding-version"] == "0.2.0"
+        # Check categorical components
+        assert (
+            region_group["categories"].attrs["encoding-type"] == "string-array"
+        ), "region/categories should be string-array"
+        assert (
+            region_group["codes"].attrs["encoding-type"] == "array"
+        ), "region/codes should be array"
+
+        # Check var group arrays
+        var_group = table_group["var"]
+        assert var_group["_index"].attrs["encoding-type"] == "string-array"
+        assert var_group["mz"].attrs["encoding-type"] == "array"
+
+        # Check uns group arrays
+        uns_group = table_group["uns"]
+        sd_attrs = uns_group["spatialdata_attrs"]
+        assert sd_attrs["region"].attrs["encoding-type"] == "string-array"
+        assert sd_attrs["region_key"].attrs["encoding-type"] == "string-array"
+        assert sd_attrs["instance_key"].attrs["encoding-type"] == "string-array"
+
+        em_group = uns_group["essential_metadata"]
+        assert em_group["dimensions"].attrs["encoding-type"] == "array"
+        assert em_group["mass_range"].attrs["encoding-type"] == "array"
+        assert em_group["source_path"].attrs["encoding-type"] == "string-array"
+        assert em_group["spectrum_type"].attrs["encoding-type"] == "string-array"
+
+        assert uns_group["average_spectrum"].attrs["encoding-type"] == "array"
+
+        # Verify the sparse matrix X also has proper encoding
+        x_group = table_group["X"]
+        assert "encoding-type" in x_group.attrs, "X group missing encoding-type"
+        assert x_group.attrs["encoding-type"] in [
+            "csc_matrix",
+            "csr_matrix",
+        ], "X should be sparse matrix type"

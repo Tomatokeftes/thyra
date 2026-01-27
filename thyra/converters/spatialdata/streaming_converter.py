@@ -25,6 +25,25 @@ from tqdm import tqdm
 
 from .base_spatialdata_converter import SPATIALDATA_AVAILABLE, BaseSpatialDataConverter
 
+
+def _set_encoding_attrs(
+    zarr_array: zarr.Array, is_string: bool = False, version: str = "0.2.0"
+) -> None:
+    """Set anndata-compatible encoding attributes on a zarr array.
+
+    This enables lazy loading via anndata.experimental.read_lazy() by providing
+    the required encoding metadata that anndata uses to interpret array types.
+
+    Args:
+        zarr_array: The zarr array to add attributes to.
+        is_string: If True, use 'string-array' encoding; otherwise 'array'.
+        version: Encoding version (default '0.2.0' per anndata spec).
+    """
+    encoding_type = "string-array" if is_string else "array"
+    zarr_array.attrs["encoding-type"] = encoding_type
+    zarr_array.attrs["encoding-version"] = version
+
+
 if SPATIALDATA_AVAILABLE:
     import geopandas as gpd
     import xarray as xr
@@ -1203,22 +1222,33 @@ class StreamingSpatialDataConverter(BaseSpatialDataConverter):
         spatial_x = x_values.astype(np.float64) * self.pixel_size_um
         spatial_y = y_values.astype(np.float64) * self.pixel_size_um
 
-        obs_group.create_array("y", data=y_values)
-        obs_group.create_array("x", data=x_values)
-        obs_group.create_array("spatial_x", data=spatial_x)
-        obs_group.create_array("spatial_y", data=spatial_y)
-        obs_group.create_array("instance_id", data=instance_ids)
-        obs_group.create_array("instance_key", data=instance_ids)
+        # Create obs arrays with proper encoding for anndata lazy loading
+        obs_y = obs_group.create_array("y", data=y_values)
+        _set_encoding_attrs(obs_y, is_string=False)
+        obs_x = obs_group.create_array("x", data=x_values)
+        _set_encoding_attrs(obs_x, is_string=False)
+        obs_spatial_x = obs_group.create_array("spatial_x", data=spatial_x)
+        _set_encoding_attrs(obs_spatial_x, is_string=False)
+        obs_spatial_y = obs_group.create_array("spatial_y", data=spatial_y)
+        _set_encoding_attrs(obs_spatial_y, is_string=False)
+        obs_instance_id = obs_group.create_array("instance_id", data=instance_ids)
+        _set_encoding_attrs(obs_instance_id, is_string=True)
+        obs_instance_key = obs_group.create_array("instance_key", data=instance_ids)
+        _set_encoding_attrs(obs_instance_key, is_string=True)
 
         # Region as categorical
         region_group = obs_group.create_group("region")
         region_group.attrs["encoding-type"] = "categorical"
         region_group.attrs["encoding-version"] = "0.2.0"
         region_group.attrs["ordered"] = False
-        region_group.create_array(
+        region_categories = region_group.create_array(
             "categories", data=np.array([region_key], dtype=str_dtype)
         )
-        region_group.create_array("codes", data=np.zeros(n_rows, dtype=np.int8))
+        _set_encoding_attrs(region_categories, is_string=True)
+        region_codes = region_group.create_array(
+            "codes", data=np.zeros(n_rows, dtype=np.int8)
+        )
+        _set_encoding_attrs(region_codes, is_string=False)
 
         # var (mass axis)
         var_group = table_group.create_group("var")
@@ -1229,8 +1259,10 @@ class StreamingSpatialDataConverter(BaseSpatialDataConverter):
 
         mz_values = self._common_mass_axis
         mz_index = np.array([f"mz_{i}" for i in range(n_cols)], dtype=str_dtype)
-        var_group.create_array("_index", data=mz_index)
-        var_group.create_array("mz", data=mz_values)
+        var_index = var_group.create_array("_index", data=mz_index)
+        _set_encoding_attrs(var_index, is_string=True)
+        var_mz = var_group.create_array("mz", data=mz_values)
+        _set_encoding_attrs(var_mz, is_string=False)
 
         # uns (metadata)
         uns_group = table_group.create_group("uns")
@@ -1240,28 +1272,42 @@ class StreamingSpatialDataConverter(BaseSpatialDataConverter):
         sd_attrs = uns_group.create_group("spatialdata_attrs")
         sd_attrs.attrs["encoding-type"] = "dict"
         sd_attrs.attrs["encoding-version"] = "0.1.0"
-        sd_attrs.create_array("region", data=np.array(region_key, dtype=str_dtype))
-        sd_attrs.create_array("region_key", data=np.array("region", dtype=str_dtype))
-        sd_attrs.create_array(
+        sd_region = sd_attrs.create_array(
+            "region", data=np.array(region_key, dtype=str_dtype)
+        )
+        _set_encoding_attrs(sd_region, is_string=True)
+        sd_region_key = sd_attrs.create_array(
+            "region_key", data=np.array("region", dtype=str_dtype)
+        )
+        _set_encoding_attrs(sd_region_key, is_string=True)
+        sd_instance_key = sd_attrs.create_array(
             "instance_key", data=np.array("instance_key", dtype=str_dtype)
         )
+        _set_encoding_attrs(sd_instance_key, is_string=True)
 
         em_group = uns_group.create_group("essential_metadata")
         em_group.attrs["encoding-type"] = "dict"
         em_group.attrs["encoding-version"] = "0.1.0"
-        em_group.create_array("dimensions", data=np.array(self._dimensions))
-        em_group.create_array(
+        em_dimensions = em_group.create_array(
+            "dimensions", data=np.array(self._dimensions)
+        )
+        _set_encoding_attrs(em_dimensions, is_string=False)
+        em_mass_range = em_group.create_array(
             "mass_range", data=np.array([mz_values.min(), mz_values.max()])
         )
-        em_group.create_array(
+        _set_encoding_attrs(em_mass_range, is_string=False)
+        em_source_path = em_group.create_array(
             "source_path",
             data=np.array(str(self.reader.data_path), dtype=str_dtype),
         )
-        em_group.create_array(
+        _set_encoding_attrs(em_source_path, is_string=True)
+        em_spectrum_type = em_group.create_array(
             "spectrum_type", data=np.array("processed", dtype=str_dtype)
         )
+        _set_encoding_attrs(em_spectrum_type, is_string=True)
 
-        uns_group.create_array("average_spectrum", data=avg_spectrum)
+        uns_avg_spectrum = uns_group.create_array("average_spectrum", data=avg_spectrum)
+        _set_encoding_attrs(uns_avg_spectrum, is_string=False)
 
         # Create empty images and shapes groups (will be populated below)
         store.create_group("images")
