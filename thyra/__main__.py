@@ -213,6 +213,43 @@ def _build_resampling_config(
     }
 
 
+def _build_reader_options(
+    use_recalibrated: bool,
+    intensity_threshold: Optional[float],
+) -> dict[str, bool | float]:
+    """Build reader options dictionary from CLI parameters."""
+    options: dict[str, bool | float] = {"use_recalibrated_state": use_recalibrated}
+    if intensity_threshold is not None:
+        options["intensity_threshold"] = intensity_threshold
+    return options
+
+
+def _parse_streaming_option(streaming: str) -> bool | Literal["auto"]:
+    """Convert the streaming CLI string to a typed value."""
+    if streaming == "true":
+        return True
+    if streaming == "false":
+        return False
+    return "auto"
+
+
+def _handle_post_conversion(
+    success: bool,
+    optimize_chunks: bool,
+    format: str,
+    output: Path,
+    dataset_id: str,
+) -> None:
+    """Handle chunk optimization and result logging after conversion."""
+    if success and optimize_chunks and format == "spatialdata":
+        optimize_zarr_chunks(str(output), f"tables/{dataset_id}/X")
+
+    if success:
+        logging.info(f"Conversion completed successfully. Output stored at {output}")
+    else:
+        logging.error("Conversion failed.")
+
+
 @click.command()
 @click.argument("input", type=click.Path(exists=True, path_type=Path))
 @click.argument("output", type=click.Path(path_type=Path))
@@ -430,20 +467,7 @@ def main(
     )
 
     # Build reader options for format-specific settings
-    reader_options: dict[str, bool | float] = {
-        "use_recalibrated_state": use_recalibrated
-    }
-    if intensity_threshold is not None:
-        reader_options["intensity_threshold"] = intensity_threshold
-
-    # Convert streaming option from string to appropriate type
-    streaming_value: bool | Literal["auto"]
-    if streaming == "true":
-        streaming_value = True
-    elif streaming == "false":
-        streaming_value = False
-    else:
-        streaming_value = "auto"
+    reader_options = _build_reader_options(use_recalibrated, intensity_threshold)
 
     # Perform conversion
     success = convert_msi(
@@ -457,18 +481,10 @@ def main(
         reader_options=reader_options,
         sparse_format=sparse_format,
         include_optical=include_optical,
-        streaming=streaming_value,
+        streaming=_parse_streaming_option(streaming),
     )
 
-    # Optimize chunks if requested and conversion succeeded
-    if success and optimize_chunks and format == "spatialdata":
-        optimize_zarr_chunks(str(output), f"tables/{dataset_id}/X")
-
-    # Log final result
-    if success:
-        logging.info(f"Conversion completed successfully. Output stored at {output}")
-    else:
-        logging.error("Conversion failed.")
+    _handle_post_conversion(success, optimize_chunks, format, output, dataset_id)
 
 
 if __name__ == "__main__":

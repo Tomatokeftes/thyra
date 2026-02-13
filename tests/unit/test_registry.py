@@ -161,6 +161,38 @@ class TestRegistry:
         with pytest.raises(ValueError, match="Input path does not exist"):
             detect_format(nonexistent)
 
+    def test_detect_format_waters(self, tmp_path):
+        """Test Waters format detection via .raw directory with _FUNC*.DAT."""
+        raw_dir = tmp_path / "test.raw"
+        raw_dir.mkdir()
+        (raw_dir / "_FUNC001.DAT").write_bytes(b"\x00" * 16)
+
+        assert detect_format(raw_dir) == "waters"
+
+    def test_waters_not_directory(self, tmp_path):
+        """Test error for .raw file instead of directory."""
+        fake_raw = tmp_path / "test.raw"
+        fake_raw.touch()
+
+        with pytest.raises(ValueError, match="requires .raw directory"):
+            detect_format(fake_raw)
+
+    def test_waters_missing_func_files(self, tmp_path):
+        """Test error for .raw directory without _FUNC*.DAT files."""
+        raw_dir = tmp_path / "test.raw"
+        raw_dir.mkdir()
+
+        with pytest.raises(ValueError, match="_FUNC.*DAT"):
+            detect_format(raw_dir)
+
+    def test_detect_format_waters_generic_directory(self, tmp_path):
+        """Test Waters detection from a generic directory (no .raw extension)."""
+        some_dir = tmp_path / "my_data"
+        some_dir.mkdir()
+        (some_dir / "_FUNC001.DAT").write_bytes(b"\x00" * 16)
+
+        assert detect_format(some_dir) == "waters"
+
     def test_get_nonexistent_reader(self):
         """Test getting a non-existent reader class."""
         with pytest.raises(ValueError, match="No reader for format"):

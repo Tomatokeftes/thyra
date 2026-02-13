@@ -129,3 +129,16 @@ def mock_bruker_data(temp_dir):
         f.write("Mock SQLite DB file")
 
     return bruker_dir
+
+
+@pytest.fixture
+def mock_waters_data(temp_dir):
+    """Create a mock Waters .raw directory structure.
+
+    Creates the minimal structure needed for WatersReader validation:
+    a directory with a _FUNC001.DAT file.
+    """
+    raw_dir = temp_dir / "mock.raw"
+    raw_dir.mkdir()
+    (raw_dir / "_FUNC001.DAT").write_bytes(b"\x00" * 64)
+    return raw_dir
