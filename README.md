@@ -10,7 +10,7 @@
 
 ## Features
 
-- **Multiple Input Formats**: ImzML, Bruker (.d directories)
+- **Multiple Input Formats**: ImzML, Bruker (.d directories), Waters (.raw directories)
 - **SpatialData Output**: Modern, cloud-ready format with Zarr backend
 - **Memory Efficient**: Handles large datasets (100+ GB) through streaming processing
 - **Metadata Preservation**: Extracts and maintains all acquisition parameters
@@ -44,8 +44,11 @@ poetry install
 # Basic conversion
 thyra input.imzML output.zarr
 
-# With custom parameters
+# Bruker data with custom parameters
 thyra data.d output.zarr --pixel-size 50 --dataset-id "experiment_001"
+
+# Waters data
+thyra data.raw output.zarr
 
 # 3D volume processing
 thyra volume.imzML output.zarr --handle-3d
@@ -78,8 +81,9 @@ success = convert_msi(
 ### Input Formats
 | Format | Extension | Description | Status |
 |--------|-----------|-------------|--------|
-| ImzML | `.imzML` | Open standard for MS imaging | ✅ Full support |
-| Bruker | `.d` | Bruker proprietary format | ✅ Full support |
+| ImzML | `.imzML` | Open standard for MS imaging | Full support |
+| Bruker | `.d` | Bruker proprietary format | Full support |
+| Waters | `.raw` | Waters MassLynx imaging format | Full support |
 
 ### Output Formats
 | Format | Description | Benefits |
