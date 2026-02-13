@@ -54,22 +54,23 @@ jobs:
       - name: Create Release
         id: release
         run: |
-          if semantic-release version --no-push; then
-            echo "released=true" >> $GITHUB_OUTPUT
-            echo "version=$(semantic-release version --print)" >> $GITHUB_OUTPUT
-          else
+          # Check if a new version is pending
+          NEXT=$(semantic-release version --print 2>/dev/null || true)
+          if [ -z "$NEXT" ]; then
+            echo "No release needed"
             echo "released=false" >> $GITHUB_OUTPUT
+            exit 0
           fi
+
+          echo "Creating release: $NEXT"
+
+          # Run semantic-release (creates commit, tag, and GitHub release)
+          semantic-release version
+          echo "released=true" >> $GITHUB_OUTPUT
+          echo "version=$NEXT" >> $GITHUB_OUTPUT
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Push changes
-        if: steps.release.outputs.released == 'true'
-        run: |
-          git push origin main --follow-tags
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   publish:
     name: Publish to PyPI
