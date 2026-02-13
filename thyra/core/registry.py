@@ -1,8 +1,9 @@
 # thyra/core/registry.py
 import logging
+import re
 from pathlib import Path
 from threading import RLock
-from typing import Dict, Type
+from typing import Dict, NoReturn, Type
 
 from .base_converter import BaseMSIConverter
 from .base_reader import BaseMSIReader
@@ -34,7 +35,11 @@ class MSIRegistry:
         self._readers: Dict[str, Type[BaseMSIReader]] = {}
         self._converters: Dict[str, Type[BaseMSIConverter]] = {}
         # Extension mapping for file-based formats
-        self._extension_to_format = {".imzml": "imzml", ".d": "bruker"}
+        self._extension_to_format = {
+            ".imzml": "imzml",
+            ".d": "bruker",
+            ".raw": "waters",
+        }
 
     def register_reader(
         self, format_name: str, reader_class: Type[BaseMSIReader]
@@ -84,6 +89,27 @@ class MSIRegistry:
 
         return ""
 
+    def _detect_waters_format(self, path: Path) -> bool:
+        """Check if path contains Waters .raw data.
+
+        Waters .raw directories contain _FUNC[0-9]{3}.DAT files
+        for each acquisition function.
+
+        Args:
+            path: Directory path to check
+
+        Returns:
+            True if Waters _FUNC*.DAT files are found
+        """
+        func_pattern = re.compile(r"_FUNC\d{3}\.DAT", re.IGNORECASE)
+        try:
+            for item in path.iterdir():
+                if func_pattern.match(item.name):
+                    return True
+        except PermissionError:
+            pass
+        return False
+
     def detect_format(self, input_path: Path) -> str:
         """Detect MSI format from input path.
 
@@ -91,6 +117,7 @@ class MSIRegistry:
         - .imzml files (ImzML format)
         - .d directories (Bruker timsTOF)
         - Folders with .dat + _poslog.txt (Bruker Rapiflex)
+        - .raw directories (Waters MassLynx)
         """
         if not input_path.exists():
             raise ValueError(f"Input path does not exist: {input_path}")
@@ -101,34 +128,57 @@ class MSIRegistry:
 
     def _detect_format_name(self, input_path: Path) -> str:
         """Detect format name from path extension or directory structure."""
-        # Check ImzML by extension first
         extension = input_path.suffix.lower()
         if extension == ".imzml":
             return "imzml"
-
-        # For .d paths, check if it's a valid Bruker format
         if extension == ".d":
-            # .d extension indicates Bruker intent, provide specific errors
-            if not input_path.is_dir():
-                raise ValueError(
-                    f"Bruker format requires .d directory, got file: {input_path}"
-                )
-            bruker_format = self._detect_bruker_format(input_path)
-            if bruker_format:
-                return bruker_format
-            # .d directory without valid Bruker content
-            raise ValueError(
-                f"Bruker .d directory missing analysis files: {input_path}"
-            )
-
-        # For other directories, check for Bruker formats
+            return self._detect_bruker_d_format(input_path)
+        if extension == ".raw":
+            return self._detect_waters_raw_format(input_path)
         if input_path.is_dir():
-            bruker_format = self._detect_bruker_format(input_path)
-            if bruker_format:
-                return bruker_format
+            return self._detect_directory_format(input_path)
+        self._raise_unsupported_format(input_path)
 
-        # If still no match, raise error
-        available = [".imzml", ".d (timsTOF)", "folder (Rapiflex)"]
+    def _detect_bruker_d_format(self, input_path: Path) -> str:
+        """Validate and detect Bruker format from .d directory."""
+        if not input_path.is_dir():
+            raise ValueError(
+                "Bruker format requires .d directory, " f"got file: {input_path}"
+            )
+        bruker_format = self._detect_bruker_format(input_path)
+        if bruker_format:
+            return bruker_format
+        raise ValueError("Bruker .d directory missing analysis " f"files: {input_path}")
+
+    def _detect_waters_raw_format(self, input_path: Path) -> str:
+        """Validate and detect Waters format from .raw directory."""
+        if not input_path.is_dir():
+            raise ValueError(
+                "Waters format requires .raw directory, " f"got file: {input_path}"
+            )
+        if self._detect_waters_format(input_path):
+            return "waters"
+        raise ValueError(
+            "Waters .raw directory missing " f"_FUNC*.DAT files: {input_path}"
+        )
+
+    def _detect_directory_format(self, input_path: Path) -> str:
+        """Detect vendor format from generic directory structure."""
+        bruker_format = self._detect_bruker_format(input_path)
+        if bruker_format:
+            return bruker_format
+        if self._detect_waters_format(input_path):
+            return "waters"
+        self._raise_unsupported_format(input_path)
+
+    def _raise_unsupported_format(self, input_path: Path) -> NoReturn:
+        """Raise error for unsupported format."""
+        available = [
+            ".imzml",
+            ".d (timsTOF)",
+            "folder (Rapiflex)",
+            ".raw (Waters)",
+        ]
         raise ValueError(
             f"Unsupported format for '{input_path}'. "
             f"Supported: {', '.join(available)}"
@@ -183,7 +233,9 @@ class MSIRegistry:
             if format_name not in self._readers:
                 available = list(self._readers.keys())
                 raise ValueError(
-                    f"No reader for format '{format_name}'. Available: " f"{available}"
+                    f"No reader for format "
+                    f"'{format_name}'. "
+                    f"Available: {available}"
                 )
             return self._readers[format_name]
 
@@ -211,7 +263,8 @@ def detect_format(input_path: Path) -> str:
         input_path: Path to MSI data file or directory
 
     Returns:
-        Format name ('imzml', 'bruker', or 'rapiflex')
+        Format name ('imzml', 'bruker', 'rapiflex',
+        or 'waters')
     """
     return _registry.detect_format(input_path)
 

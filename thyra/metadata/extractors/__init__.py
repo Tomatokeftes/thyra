@@ -9,6 +9,7 @@ comprehensive).
 Available Extractors:
 - ImzMLMetadataExtractor: For ImzML format files
 - BrukerMetadataExtractor: For Bruker TSF/TDF format files
+- WatersMetadataExtractor: For Waters .raw imaging files
 
 Example usage:
     >>> from thyra.metadata.extractors import \
@@ -29,11 +30,13 @@ Example usage:
 
 from .bruker_extractor import BrukerMetadataExtractor
 from .imzml_extractor import ImzMLMetadataExtractor
+from .waters_extractor import WatersMetadataExtractor
 
 # Public API
 __all__ = [
     "BrukerMetadataExtractor",
     "ImzMLMetadataExtractor",
+    "WatersMetadataExtractor",
 ]
 
 # Format mapping for dynamic extraction
@@ -42,6 +45,7 @@ FORMAT_EXTRACTORS = {
     "bruker": BrukerMetadataExtractor,
     "tsf": BrukerMetadataExtractor,
     "tdf": BrukerMetadataExtractor,
+    "waters": WatersMetadataExtractor,
 }
 
 

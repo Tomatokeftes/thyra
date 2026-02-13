@@ -1,0 +1,160 @@
+# thyra/readers/waters/imaging_grid.py
+"""Imaging grid reconstruction from Waters laser position metadata.
+
+Translates the logic from mzmine's ImagingMetadata.java to reconstruct
+a pixel coordinate grid from the laser X/Y positions stored in each scan's
+ScanInfo struct. Waters .raw imaging files do not store grid dimensions
+explicitly -- they must be derived from the set of unique laser positions.
+"""
+
+import logging
+from dataclasses import dataclass, field
+from typing import Dict, Optional, Tuple
+
+from .masslynx_lib import FunctionType, MassLynxLib, ScanInfoData
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class ImagingGrid:
+    """Reconstructed imaging grid from Waters laser coordinates.
+
+    Built by scanning all functions/scans and collecting unique laser
+    positions. Provides O(1) coordinate lookup during spectrum iteration.
+    """
+
+    x_index_map: Dict[float, int]  # position (um) -> 0-based x index
+    y_index_map: Dict[float, int]  # position (um) -> 0-based y index
+    pixel_count_x: int
+    pixel_count_y: int
+    pixel_size_x: float  # in micrometers
+    pixel_size_y: float  # in micrometers
+    lateral_width: float  # max_x - min_x in micrometers
+    lateral_height: float  # max_y - min_y in micrometers
+    scan_map: Dict[Tuple[int, int], ScanInfoData] = field(repr=False)
+
+    @property
+    def dimensions(self) -> Tuple[int, int, int]:
+        """Grid dimensions as (n_x, n_y, n_z). z is always 1 for 2D imaging."""
+        return (self.pixel_count_x, self.pixel_count_y, 1)
+
+    def get_coordinates(
+        self, scan_info: ScanInfoData
+    ) -> Optional[Tuple[int, int, int]]:
+        """Map laser position (mm from DLL) to 0-based pixel coordinates.
+
+        The DLL returns positions in mm. We multiply by 1000 to get um,
+        matching the keys stored in x_index_map/y_index_map (which were
+        also built from mm * 1000).
+        """
+        if not scan_info.has_position:
+            return None
+
+        x_um = _mm_to_um_key(scan_info.laser_x_pos)
+        y_um = _mm_to_um_key(scan_info.laser_y_pos)
+
+        x_idx = self.x_index_map.get(x_um)
+        y_idx = self.y_index_map.get(y_um)
+
+        if x_idx is not None and y_idx is not None:
+            return (x_idx, y_idx, 0)
+
+        logger.warning(
+            f"No index found for laser position x={scan_info.laser_x_pos:.4f}mm "
+            f"({x_um:.1f}um) -> {x_idx}, y={scan_info.laser_y_pos:.4f}mm "
+            f"({y_um:.1f}um) -> {y_idx}"
+        )
+        return None
+
+
+def _mm_to_um_key(mm_value: float) -> float:
+    """Convert mm to um and round for use as dict key.
+
+    Rounding to 2 decimal places (0.01 um precision) avoids floating-point
+    comparison issues when using floats as dictionary keys. The mzmine Java
+    code uses Float.compare() which does exact bitwise comparison, but
+    Python float arithmetic from c_float -> Python float conversion can
+    introduce tiny differences.
+    """
+    return round(mm_value * 1000.0, 2)
+
+
+def build_imaging_grid(
+    ml: MassLynxLib,
+    handle,
+    function_types: Dict[int, FunctionType],
+) -> ImagingGrid:
+    """Build imaging grid by scanning all functions/scans for laser coordinates.
+
+    Translates ImagingMetadata.java constructor logic (lines 56-149).
+
+    Args:
+        ml: MassLynxLib instance with open handle.
+        handle: The opaque file handle from ml.open_file().
+        function_types: Pre-classified function types for all functions.
+
+    Returns:
+        ImagingGrid with coordinate maps and pixel metadata.
+    """
+    x_positions: set = set()
+    y_positions: set = set()
+    scan_map: Dict[Tuple[int, int], ScanInfoData] = {}
+
+    n_functions = ml.get_number_of_functions(handle)
+    total_scans = 0
+
+    for func in range(n_functions):
+        n_scans = ml.get_number_of_scans_in_function(handle, func)
+        for scan in range(n_scans):
+            scan_info = ml.get_scan_info(handle, func, scan)
+            scan_map[(func, scan)] = scan_info
+
+            if not scan_info.has_position:
+                continue
+
+            x_um = _mm_to_um_key(scan_info.laser_x_pos)
+            y_um = _mm_to_um_key(scan_info.laser_y_pos)
+            x_positions.add(x_um)
+            y_positions.add(y_um)
+            total_scans += 1
+
+    if not x_positions or not y_positions:
+        raise ValueError("No valid laser positions found in Waters imaging data")
+
+    # Build sorted index maps (position_um -> 0-based index)
+    sorted_x = sorted(x_positions)
+    sorted_y = sorted(y_positions)
+    x_index_map = {val: idx for idx, val in enumerate(sorted_x)}
+    y_index_map = {val: idx for idx, val in enumerate(sorted_y)}
+
+    pixel_count_x = len(sorted_x)
+    pixel_count_y = len(sorted_y)
+
+    # Calculate pixel sizes (from ImagingMetadata.java lines 146-148)
+    lateral_width = sorted_x[-1] - sorted_x[0] if pixel_count_x > 1 else 0.0
+    lateral_height = sorted_y[-1] - sorted_y[0] if pixel_count_y > 1 else 0.0
+
+    pixel_size_x = lateral_width / pixel_count_x if pixel_count_x > 1 else lateral_width
+    pixel_size_y = (
+        lateral_height / pixel_count_y if pixel_count_y > 1 else lateral_height
+    )
+
+    logger.info(
+        f"Built imaging grid: {pixel_count_x}x{pixel_count_y} pixels, "
+        f"pixel size: {pixel_size_x:.1f}x{pixel_size_y:.1f} um, "
+        f"lateral: {lateral_width:.1f}x{lateral_height:.1f} um, "
+        f"{total_scans} positioned scans in {len(scan_map)} total scans"
+    )
+
+    return ImagingGrid(
+        x_index_map=x_index_map,
+        y_index_map=y_index_map,
+        pixel_count_x=pixel_count_x,
+        pixel_count_y=pixel_count_y,
+        pixel_size_x=pixel_size_x,
+        pixel_size_y=pixel_size_y,
+        lateral_width=lateral_width,
+        lateral_height=lateral_height,
+        scan_map=scan_map,
+    )

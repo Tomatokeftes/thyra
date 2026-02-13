@@ -12,6 +12,11 @@ repos:
       - id: check-json
       - id: check-added-large-files
         args: [--maxkb=1000]
+        exclude: >-
+          (?x)^(
+            thyra/readers/bruker/timstof/sdk/dll/|
+            thyra/readers/waters/lib/
+          )
       - id: check-merge-conflict
       - id: debug-statements
       - id: check-docstring-first
