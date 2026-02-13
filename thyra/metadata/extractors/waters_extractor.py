@@ -111,6 +111,47 @@ class WatersMetadataExtractor(MetadataExtractor):
             return "centroid spectrum"
         return None
 
+    def _read_scan_mzs(self, func: int, scan: int) -> Optional[NDArray[np.floating]]:
+        """Read m/z array for a single scan, returning None on failure."""
+        scan_info = self._imaging_grid.scan_map.get((func, scan))
+        if scan_info is None or not scan_info.has_position:
+            return None
+
+        coords = self._imaging_grid.get_coordinates(scan_info)
+        if coords is None:
+            return None
+
+        try:
+            mzs, _ = self._ml.read_spectrum(self._handle, func, scan)
+        except Exception as e:
+            logger.debug(f"Failed to read spectrum func={func} scan={scan}: {e}")
+            return None
+
+        return mzs if len(mzs) > 0 else None
+
+    def _update_scan_stats(
+        self,
+        func: int,
+        scan: int,
+        mzs: NDArray[np.floating],
+        stats: Dict[str, Any],
+    ) -> None:
+        """Update running statistics with data from one scan."""
+        n_peaks = len(mzs)
+        stats["min_mass"] = min(stats["min_mass"], float(mzs[0]))
+        stats["max_mass"] = max(stats["max_mass"], float(mzs[-1]))
+        stats["total_peaks"] += n_peaks
+        stats["n_spectra"] += 1
+
+        coords = self._imaging_grid.get_coordinates(
+            self._imaging_grid.scan_map[(func, scan)]
+        )
+        x, y, z = coords
+        n_x, n_y = stats["n_x"], stats["n_y"]
+        pixel_idx = z * (n_x * n_y) + y * n_x + x
+        if 0 <= pixel_idx < stats["n_pixels"]:
+            stats["peak_counts"][pixel_idx] = n_peaks
+
     def _scan_all_ms_spectra(
         self,
         dimensions: Tuple[int, int, int],
@@ -122,14 +163,18 @@ class WatersMetadataExtractor(MetadataExtractor):
         """
         n_x, n_y, n_z = dimensions
         n_pixels = n_x * n_y * n_z
-        peak_counts = np.zeros(n_pixels, dtype=np.int32)
 
-        min_mass = float("inf")
-        max_mass = float("-inf")
-        total_peaks = 0
-        n_spectra = 0
+        stats: Dict[str, Any] = {
+            "min_mass": float("inf"),
+            "max_mass": float("-inf"),
+            "total_peaks": 0,
+            "n_spectra": 0,
+            "peak_counts": np.zeros(n_pixels, dtype=np.int32),
+            "n_x": n_x,
+            "n_y": n_y,
+            "n_pixels": n_pixels,
+        }
 
-        # Count total scans for progress bar
         total_scans = sum(
             self._ml.get_number_of_scans_in_function(self._handle, f)
             for f in self._ms_functions
@@ -144,47 +189,26 @@ class WatersMetadataExtractor(MetadataExtractor):
                 n_scans = self._ml.get_number_of_scans_in_function(self._handle, func)
                 for scan in range(n_scans):
                     pbar.update(1)
+                    mzs = self._read_scan_mzs(func, scan)
+                    if mzs is not None:
+                        self._update_scan_stats(func, scan, mzs, stats)
 
-                    scan_info = self._imaging_grid.scan_map.get((func, scan))
-                    if scan_info is None or not scan_info.has_position:
-                        continue
-
-                    coords = self._imaging_grid.get_coordinates(scan_info)
-                    if coords is None:
-                        continue
-
-                    try:
-                        mzs, _ = self._ml.read_spectrum(self._handle, func, scan)
-                    except Exception as e:
-                        logger.debug(
-                            f"Failed to read spectrum func={func} scan={scan}: {e}"
-                        )
-                        continue
-
-                    n_peaks = len(mzs)
-                    if n_peaks > 0:
-                        min_mass = min(min_mass, float(mzs[0]))
-                        max_mass = max(max_mass, float(mzs[-1]))
-                        total_peaks += n_peaks
-                        n_spectra += 1
-
-                        # Store per-pixel peak count
-                        x, y, z = coords
-                        pixel_idx = z * (n_x * n_y) + y * n_x + x
-                        if 0 <= pixel_idx < n_pixels:
-                            peak_counts[pixel_idx] = n_peaks
-
-        if min_mass == float("inf"):
+        if stats["min_mass"] == float("inf"):
             logger.warning("No valid spectra found in Waters data")
-            min_mass, max_mass = 0.0, 1000.0
+            stats["min_mass"], stats["max_mass"] = 0.0, 1000.0
 
         logger.info(
-            f"Waters metadata scan complete: {n_spectra} spectra, "
-            f"mass range {min_mass:.2f}-{max_mass:.2f}, "
-            f"total peaks {total_peaks:,}"
+            f"Waters metadata scan complete: {stats['n_spectra']} spectra, "
+            f"mass range {stats['min_mass']:.2f}-{stats['max_mass']:.2f}, "
+            f"total peaks {stats['total_peaks']:,}"
         )
 
-        return (min_mass, max_mass), n_spectra, total_peaks, peak_counts
+        return (
+            (stats["min_mass"], stats["max_mass"]),
+            stats["n_spectra"],
+            stats["total_peaks"],
+            stats["peak_counts"],
+        )
 
     def _extract_comprehensive_impl(self) -> ComprehensiveMetadata:
         """Extract comprehensive metadata including Waters-specific details."""
